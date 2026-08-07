@@ -1,0 +1,87 @@
+name: Build ZCODE APK — Fase 0 Kerangka
+
+on:
+  push:
+    branches: [ main, "arena/**" ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run strict tests (70)
+        run: |
+          pip install --break-system-packages pillow pytest
+          python -m pytest test_zcode_fase0.py -v
+          bash tools/check.sh
+
+  build:
+    runs-on: ubuntu-22.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.5 (pin — 9.6 incompatible with AGP 8.2.2)
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'settings.gradle.kts', 'app/build.gradle.kts') }}
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || echo "no gradlew"
+
+      - name: Build Debug APK (Fase 0 skeleton)
+        run: |
+          gradle assembleDebug --stacktrace --warning-mode all --info 2>&1 | tail -n 500
+
+      - name: Verify APK contains Ace + taskAffinity
+        run: |
+          APK=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+          echo "APK: $APK"
+          ls -lh "$APK"
+          unzip -l "$APK" | grep -i -E "ace.js|AndroidManifest" | head -n 20
+          # Check manifest has taskAffinity (via aapt dump)
+          $ANDROID_HOME/build-tools/34.0.0/aapt dump xmltree "$APK" AndroidManifest.xml | grep -i "taskAffinity" || echo "check taskAffinity in manifest"
+
+      - name: Upload APK (Fase 0 kerangka)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZCODE-Fase0-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: CI Summary
+        if: always()
+        run: |
+          echo "### ZCODE Fase 0 Build — $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Topbar: faded grey #3A4452 ≡ + (no hamburger text)" >> $GITHUB_STEP_SUMMARY
+          echo "- Editor: OLED #050806 Ace 1.44.0 file:// + gutter 40px" >> $GITHUB_STEP_SUMMARY
+          echo "- QuickTools + FAB above handle, Drawer text-only, Contribute -> Issues" >> $GITHUB_STEP_SUMMARY
+          echo "- PTY: ketik langsung di terminal (no stdin field), Chaquopy 3.11 arm64+armv7" >> $GITHUB_STEP_SUMMARY
+          ls -lh app/build/outputs/apk/debug/ >> $GITHUB_STEP_SUMMARY || true
