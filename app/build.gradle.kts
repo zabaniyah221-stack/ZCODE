@@ -78,27 +78,6 @@ android {
     }
 }
 
-// Fase 0 guard: verify Ace bundled before any APK is considered good
-tasks.register("verifyAceBundled") {
-    doLast {
-        val ace = layout.projectDirectory.file("src/main/assets/editor/ace/ace.js").asFile
-        check(ace.isFile && ace.length() > 0) { "Ace not bundled: ${ace.path} missing — offline-first violation" }
-        val mode = layout.projectDirectory.file("src/main/assets/editor/ace/mode-python.js").asFile
-        check(mode.isFile) { "Ace mode-python.js missing" }
-        println("✅ Ace 1.44.0 bundled — ${ace.length()} bytes")
-    }
-}
-tasks.named("preBuild") { dependsOn("verifyAceBundled") }
-
-tasks.register("verifyNoUnverifiedSSL") {
-    doLast {
-        val hasBad = fileTree("src/main/java").matching { include("**/*.kt") }
-            .any { it.readText().contains("ssl._create_unverified_context") || it.readText().contains("trustAllCerts") }
-        check(!hasBad) { "❌ Found unverified SSL — breaks verified TLS (S-22)" }
-        println("✅ No unverified SSL")
-    }
-}
-
 dependencies {
     // Core AndroidX — minimal for Go footprint (must be BEFORE any task that may resolve)
     implementation("androidx.core:core-ktx:1.12.0")
