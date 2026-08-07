@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ ZCODE AndroidManifest — Fase 0 anti-regresi
+ - taskAffinity=com.zaba.zcode singleTop documentLaunchMode=intoExisting (Fix C-50 / S-27 coexistence)
+ - allowBackup=false (Fix S-21 privacy)
+ - faded grey topbar will be #3A4452 via theme, not manifest
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- No READ/WRITE_EXTERNAL_STORAGE in Fase 0 — use filesDir internal (S-20) -->
+
+    <application
+        android:name=".ZcodeApp"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="ZCODE"
+        android:theme="@style/Theme.ZCODE"
+        android:supportsRtl="false"
+        tools:targetApi="34">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.zaba.zcode"
+            android:documentLaunchMode="intoExisting"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.ZCODE">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

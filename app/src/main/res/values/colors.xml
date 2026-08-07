@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="topbar_faded_grey">#3A4452</color>
+    <color name="editor_oled">#050806</color>
+    <color name="text_bright">#39FF14</color>
+    <color name="ai_amber">#FFB000</color>
+    <color name="err_red">#FF4B4B</color>
+</resources>
