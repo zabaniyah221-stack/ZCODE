@@ -4,8 +4,9 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-parcelize")
-    id("com.google.dagger.hilt.android")
-    id("com.google.devtools.ksp")
+    // Hilt + KSP — disabled for Fase 0 kerangka to keep build minimal; enable in Fase 1 when DI needed
+    // id("com.google.dagger.hilt.android")
+    // id("com.google.devtools.ksp")
     // Chaquopy 3.11 — KEEP 3.11 for armeabi-v7a (3.12 drops 32-bit, see changelog #709)
     // id("com.chaquo.python") version "15.0.1"
 }
@@ -94,9 +95,9 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.1.2")
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // Hilt
-    implementation("com.google.dagger:hilt-android:2.48.1")
-    ksp("com.google.dagger:hilt-compiler:2.48.1")
+    // Hilt — disabled Fase 0, enable Fase 1
+    // implementation("com.google.dagger:hilt-android:2.48.1")
+    // ksp("com.google.dagger:hilt-compiler:2.48.1")
 
     // Security Crypto — EncryptedSharedPreferences (S-19 fix)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
