@@ -57,12 +57,17 @@ jobs:
 
       - name: Build Debug APK (Fase 0 skeleton)
         run: |
-          gradle assembleDebug --stacktrace --warning-mode all --info 2>&1 | tail -n 500
+          set -o pipefail
+          gradle assembleDebug --stacktrace --warning-mode all 2>&1 | tee build.log
+          echo "--- tail ---"
+          tail -n 200 build.log
 
       - name: Verify APK contains Ace + taskAffinity
         run: |
-          APK=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+          ls -R app/build 2>&1 | head -n 50 || echo "no build dir"
+          APK=$(find app/build -name "*.apk" 2>/dev/null | head -n 1)
           echo "APK: $APK"
+          if [ -z "$APK" ]; then echo "❌ No APK found — build failed"; ls -lh app/build/outputs/apk/ 2>&1 | head -n 30; exit 1; fi
           ls -lh "$APK"
           unzip -l "$APK" | grep -i -E "ace.js|AndroidManifest" | head -n 20
           # Check manifest has taskAffinity (via aapt dump)
