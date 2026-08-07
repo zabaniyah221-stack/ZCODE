@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
@@ -26,7 +27,7 @@ fun EditorScreen(
     Surface(color = androidx.compose.ui.graphics.Color(0xFF050806), modifier = Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             // Gutter 40dp — line numbers
-            Surface(color = androidx.compose.ui.graphics.Color(0xFF0A100D), modifier = Modifier.width(androidx.compose.ui.unit.dp(40f)).fillMaxHeight()) {
+            Surface(color = androidx.compose.ui.graphics.Color(0xFF0A100D), modifier = Modifier.width(40.dp).fillMaxHeight()) {
                 Column(Modifier.padding(8.dp)) {
                     (1..4).forEach { Text("$it", style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color(0xFF4D7A5A)) }
                 }
