@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -40,24 +41,18 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zaba.zcode.core.execution.ExecutionEngine
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
 
 /**
- * PipScreen — Settings → Pip: instal package Python via `python3 -m pip install`.
+ * PipScreen — Settings → Pip: instal package Python via pip.
  * - Log streaming real-time (user bisa lihat traceback & progres unduhan).
  * - Guard nama package (anti shell injection), cap log MAX_OUTPUT_CHARS.
  * - Kotak log SELALU true-black phosphor, font 12.
- *
- * Catatan jujur: di Android, python3 tersedia setelah runtime Chaquopy di-embed
- * (target device build / Fase 3). Kode ini sudah asli & teruji di lingkungan
- * dengan python3 tersedia.
+ * - Backend: pip in-process Chaquopy (Android) / python3 -m pip (desktop).
  */
 @Composable
 fun PipScreen(
+    context: android.content.Context,
     onBack: () -> Unit
 ) {
     var packageName by remember { mutableStateOf("") }
@@ -81,39 +76,24 @@ fun PipScreen(
         if (trimmed.isBlank() || isInstalling) return
         isInstalling = true
         appendLog("\n> pip install $trimmed\n")
-        scope.launch {
-            withContext(Dispatchers.IO) {
-                val process = ExecutionEngine.startPipProcess(trimmed)
-                if (process == null) {
-                    withContext(Dispatchers.Main) {
-                        appendLog("\n❌ Package name tidak valid: '$trimmed'\n")
-                        isInstalling = false
+        val ok = ExecutionEngine.startPipStream(
+            context = context,
+            packageName = trimmed,
+            onLog = { line -> scope.launch { appendLog(line) } },
+            onDone = { success, exitCode ->
+                scope.launch {
+                    if (success) {
+                        appendLog("\n✅ Package '$trimmed' installed successfully!\n")
+                    } else {
+                        appendLog("\n❌ Installation failed (exit code $exitCode).\n")
                     }
-                    return@withContext
-                }
-                try {
-                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        val l = line
-                        withContext(Dispatchers.Main) { appendLog(l + "\n") }
-                    }
-                    val exitCode = process.waitFor()
-                    withContext(Dispatchers.Main) {
-                        if (exitCode == 0) {
-                            appendLog("\n✅ Package '$trimmed' installed successfully!\n")
-                        } else {
-                            appendLog("\n❌ Installation failed (exit code $exitCode).\n")
-                        }
-                        isInstalling = false
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        appendLog("\n❌ Error: ${e.message}\n")
-                        isInstalling = false
-                    }
+                    isInstalling = false
                 }
             }
+        )
+        if (!ok) {
+            appendLog("\n❌ Package name tidak valid: '$trimmed'\n")
+            isInstalling = false
         }
     }
 

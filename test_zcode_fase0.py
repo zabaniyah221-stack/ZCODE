@@ -322,9 +322,9 @@ class TestNoAIOracleFase0:
 class TestVersion:
     def test_version_in_gradle(self):
         txt = read(BUILD_GRADLE)
-        assert "0.1.0-fase0" in txt
+        assert "0.2.0-fase2" in txt
     def test_version_in_properties(self):
-        assert "0.1.0-fase0" in read(ROOT / "gradle.properties")
+        assert "0.2.0-fase2" in read(ROOT / "gradle.properties")
 
 # ===================================================================
 # Check.sh exists and covers guards

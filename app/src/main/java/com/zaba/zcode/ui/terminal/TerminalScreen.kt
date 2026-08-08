@@ -1,5 +1,6 @@
 package com.zaba.zcode.ui.terminal
 
+import android.content.Context
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -55,22 +56,23 @@ import com.zaba.zcode.core.execution.ExecutionEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
 
 /**
- * TerminalScreen — layer Terminal PTY full-screen (pindah layer, bukan panel).
+ * TerminalScreen — layer Terminal full-screen (pindah layer, bukan panel).
  * - Ketik langsung di terminal: TextField transparan 1dp mengikat keyboard Android,
- *   Enter mengirim baris ke stdin proses python (tanpa tombol Send).
- * - Ctrl+C asli (SIGINT) lewat tombol merah di toolbar bawah.
- * - Back di pojok kiri atas untuk kembali ke Editor.
- * - Output di-cap MAX_OUTPUT_CHARS agar script `while True: print(...)` tidak membludak.
+ *   Enter mengirim baris ke stdin (tanpa tombol Send) — dual backend:
+ *   Chaquopy in-process (Android) / python3 subprocess (desktop).
+ * - Ctrl+C: deterministik untuk input() yang nge-blok (flag interrupt), best-effort
+ *   interrupt thread worker untuk loop CPU.
+ * - Back di pojok kiri atas; proses dibersihkan saat keluar.
+ * - Output di-cap MAX_OUTPUT_CHARS (S-18).
  */
 @Composable
 fun TerminalScreen(
     filename: String,
     filesDir: File,
+    context: Context,
     onBack: () -> Unit
 ) {
     var terminalText by remember { mutableStateOf("ZCODE Terminal — Running $filename\n" + "-".repeat(40) + "\n") }
@@ -93,41 +95,23 @@ fun TerminalScreen(
         }
     }
 
-    // Jalankan proses python saat terminal dibuka
+    // Jalankan proses saat terminal dibuka (callback datang dari thread background)
     LaunchedEffect(filename) {
         val targetFile = File(filesDir, filename)
         if (!targetFile.exists()) {
             append("\nError: File $filename not found!\n")
             return@LaunchedEffect
         }
+        append("\n[backend: ${ExecutionEngine.describeBackend()}]\n")
+        val activeSession = ExecutionEngine.startInteractiveSession(
+            context = context,
+            file = targetFile,
+            onOutput = { chunk -> scope.launch { append(chunk) } },
+            onExit = { code -> scope.launch { append("\n\nProcess finished with exit code $code\n") } }
+        )
+        session = activeSession
         withContext(Dispatchers.IO) {
-            try {
-                val activeSession = ExecutionEngine.startInteractiveSession(targetFile)
-                session = activeSession
-                val reader = BufferedReader(InputStreamReader(activeSession.stdout, Charsets.UTF_8))
-                val batch = StringBuilder()
-                var charCode: Int
-                while (reader.read().also { charCode = it } != -1) {
-                    batch.append(charCode.toChar())
-                    if (batch.length >= 256) {
-                        val chunk = batch.toString()
-                        batch.clear()
-                        withContext(Dispatchers.Main) { append(chunk) }
-                    }
-                }
-                if (batch.isNotEmpty()) {
-                    val chunk = batch.toString()
-                    withContext(Dispatchers.Main) { append(chunk) }
-                }
-                val exitCode = activeSession.process.waitFor()
-                withContext(Dispatchers.Main) {
-                    append("\n\nProcess finished with exit code $exitCode\n")
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    append("\nExecution error: ${e.message}\n")
-                }
-            }
+            activeSession.waitForExit()
         }
     }
 

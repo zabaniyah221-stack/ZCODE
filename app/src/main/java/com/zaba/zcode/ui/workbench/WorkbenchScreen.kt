@@ -262,6 +262,8 @@ fun WorkbenchScreen(
                     .background(OledBlack)
             ) {
                 // Tab bar — multi-file, long-press untuk close (tanpa tombol ×)
+                // Fix anti double-trigger: seleksi & close ditangani SATU combinedClickable di
+                // wrapper Box; Tab(onClick = {}) no-op sehingga tidak ada event ganda.
                 ScrollableTabRow(
                     selectedTabIndex = (vm.openedFiles.indexOf(vm.activeFile ?: "").coerceAtLeast(0)),
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -269,28 +271,28 @@ fun WorkbenchScreen(
                     edgePadding = 8.dp,
                     divider = { Divider(color = Color.White.copy(alpha = 0.05f)) }
                 ) {
-                    vm.openedFiles.forEachIndexed { _, filename ->
+                    vm.openedFiles.forEach { filename ->
                         val isActive = vm.activeFile == filename
                         Tab(
                             selected = isActive,
-                            onClick = {
-                                vm.selectFile(filename)
-                                pushCode()
-                            },
-                            modifier = Modifier.combinedClickable(
-                                onClick = {
-                                    vm.selectFile(filename)
-                                    pushCode()
-                                },
-                                onLongClick = {
-                                    vm.closeFile(filename)
-                                    pushCode()
-                                }
-                            ),
+                            onClick = { /* no-op — seleksi ditangani combinedClickable */ },
                             selectedContentColor = MaterialTheme.colorScheme.primary,
                             unselectedContentColor = Color.LightGray
                         ) {
-                            Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .combinedClickable(
+                                        onClick = {
+                                            vm.selectFile(filename)
+                                            pushCode()
+                                        },
+                                        onLongClick = {
+                                            vm.closeFile(filename)
+                                            pushCode()
+                                        }
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                            ) {
                                 Text(
                                     text = filename,
                                     fontSize = 12.sp, // font size 12 (keputusan tim)

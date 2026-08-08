@@ -1,25 +1,30 @@
 package com.zaba.zcode.core.execution
 
+import android.content.Context
+import com.chaquo.python.PyException
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.BufferedReader
 import java.io.File
-import java.io.InputStream
 import java.io.InputStreamReader
-import java.io.OutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * ExecutionEngine — eksekusi Python asli untuk ZCODE.
+ * ExecutionEngine — eksekusi Python untuk ZCODE, dual-backend.
  *
- * Fase 1: PTY interaktif — spawn `python3 -u <file>` (unbuffered), streaming output
- * real-time, input dikirim langsung ke stdin saat Enter (ketik langsung di terminal,
- * TANPA kotak stdin terpisah). Ctrl+C mengirim SIGINT asli (KeyboardInterrupt),
- * bukan destroyForcibly/SIGKILL.
- *
- * Catatan jujur (Fase 1): di Android, `python3` tersedia setelah runtime Chaquopy
- * di-embed (target Fase 3 / device build). Di sandbox/desktop, perintah ini berjalan
- * langsung. Arsitektur sengaja dibuat proses-basis agar swap ke Chaquopy mudah.
+ * 1. Chaquopy (Android / perangkat): Python 3.11 in-process via `zcode_runner.py`.
+ *    - ketik langsung: input() membaca baris dari queue Kotlin (Enter → stdin, tanpa
+ *      tombol Send — keputusan tim)
+ *    - Ctrl+C: flag interrupt → KeyboardInterrupt deterministik untuk script yang
+ *      nge-blok di input(); best-effort interrupt() thread worker
+ *    - pip runtime: `zcode_pip.py` (pip_main in-process) → log streaming
+ * 2. ProcessBuilder (desktop/sandbox/dev): `python3 -u <file>` subprocess nyata,
+ *    dipakai untuk pengujian lokal & CI logic verification.
  *
  * Guards (tidak boleh dihapus):
  * - MAX_CODE_BYTES 512KB (S-18, F-07 off-by-9 fixed: no prelude injection — kode user
@@ -37,6 +42,10 @@ object ExecutionEngine {
     const val MAX_INTERACTIVE_QUEUE = 10000
     const val MAX_IMAGE_BYTES = 8 * 1024 * 1024 // 8 MB skip (target Fase 3: matplotlib inline)
 
+    /** Folder workspace (filesDir) — di-set oleh WorkspaceViewModel, jadi cwd script = workspace. */
+    @Volatile
+    var workspaceDirPath: String = ""
+
     data class RunResult(
         val ok: Boolean,
         val stdout: String,
@@ -47,27 +56,95 @@ object ExecutionEngine {
 
     data class OutputChunk(val stream: String, val text: String)
 
-    /** Sesi interaktif: bungkus Process dengan I/O streaming + SIGINT asli. */
-    class InteractiveSession(val process: Process) {
-        val stdout: InputStream = process.inputStream
-        val stderr: InputStream = process.errorStream
-        val stdin: OutputStream = process.outputStream
+    // ------------------------------------------------------------------
+    // Backend selection
+    // ------------------------------------------------------------------
 
-        fun sendInput(text: String) {
+    /** Deteksi runtime Chaquopy (ada di APK Android; tidak ada di desktop JVM). */
+    fun isChaquopyAvailable(): Boolean = try {
+        Class.forName("com.chaquo.python.Python")
+        true
+    } catch (e: Throwable) {
+        false
+    }
+
+    fun describeBackend(): String =
+        if (isChaquopyAvailable()) "Python 3.11 (Chaquopy in-process)" else "python3 subprocess"
+
+    // ------------------------------------------------------------------
+    // Interactive session (PTY layer)
+    // ------------------------------------------------------------------
+
+    interface InteractiveSession {
+        fun sendInput(line: String)
+        fun sendCtrlC()
+        fun sendKill()
+        fun isAlive(): Boolean
+        fun waitForExit(): Int
+    }
+
+    fun startInteractiveSession(
+        context: Context?,
+        file: File,
+        onOutput: (String) -> Unit,
+        onExit: (Int) -> Unit
+    ): InteractiveSession {
+        return if (context != null && isChaquopyAvailable()) {
+            ChaquopySession(context, file, onOutput, onExit)
+        } else {
+            ProcessSession(file, onOutput, onExit)
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Backend: subprocess python3 (desktop / dev)
+    // ------------------------------------------------------------------
+
+    private class ProcessSession(
+        private val process: Process,
+        private val onOutput: (String) -> Unit,
+        private val onExit: (Int) -> Unit
+    ) : InteractiveSession {
+        private val exitValue = AtomicInteger(-1)
+        private val done = CountDownLatch(1)
+
+        init {
+            Thread {
+                try {
+                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+                    val batch = StringBuilder()
+                    var c: Int
+                    while (reader.read().also { c = it } != -1) {
+                        batch.append(c.toChar())
+                        if (batch.length >= 256) {
+                            val chunk = batch.toString()
+                            batch.clear()
+                            onOutput(chunk)
+                        }
+                    }
+                    if (batch.isNotEmpty()) onOutput(batch.toString())
+                    exitValue.set(process.waitFor())
+                } catch (e: Exception) {
+                    exitValue.set(-1)
+                } finally {
+                    onExit(exitValue.get())
+                    done.countDown()
+                }
+            }.start()
+        }
+
+        override fun sendInput(line: String) {
             if (!process.isAlive) return
             try {
-                stdin.write(text.toByteArray(Charsets.UTF_8))
-                stdin.flush()
+                val capped = line.take(MAX_INTERACTIVE_BYTES)
+                process.outputStream.write(capped.toByteArray(Charsets.UTF_8))
+                process.outputStream.flush()
             } catch (e: Exception) {
-                // proses sudah mati / pipe tertutup — abaikan
+                // pipe tertutup / proses mati — abaikan
             }
         }
 
-        /**
-         * Ctrl+C asli: kirim SIGINT ke PID proses python (KeyboardInterrupt).
-         * Fallback: SIGTERM via destroy() bila pid tidak tersedia.
-         */
-        fun sendCtrlC() {
+        override fun sendCtrlC() {
             if (!process.isAlive) return
             try {
                 val pid = process.pid()
@@ -87,8 +164,7 @@ object ExecutionEngine {
             }
         }
 
-        /** Paksa hentikan (SIGKILL) — dipakai saat keluar terminal. */
-        fun sendKill() {
+        override fun sendKill() {
             try {
                 process.destroyForcibly()
             } catch (e: Exception) {
@@ -96,22 +172,87 @@ object ExecutionEngine {
             }
         }
 
-        fun isAlive(): Boolean = process.isAlive
+        override fun isAlive(): Boolean = process.isAlive
+
+        override fun waitForExit(): Int {
+            done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
+            if (done.count > 0) {
+                sendKill()
+                done.await(5, TimeUnit.SECONDS)
+            }
+            return exitValue.get()
+        }
     }
 
-    /** Spawn proses python unbuffered untuk file script (interactive PTY). */
-    fun startInteractiveSession(file: File): InteractiveSession {
-        val pb = ProcessBuilder("python3", "-u", file.absolutePath)
-        pb.redirectErrorStream(true) // stdout+stderr satu aliran, urutan traceback utuh
-        return InteractiveSession(pb.start())
+    // ------------------------------------------------------------------
+    // Backend: Chaquopy in-process (Android)
+    // ------------------------------------------------------------------
+
+    private class ChaquopySession(
+        context: Context,
+        file: File,
+        onOutput: (String) -> Unit,
+        onExit: (Int) -> Unit
+    ) : InteractiveSession {
+        private val bridge = TerminalBridge(onOutput, onExit)
+        private val exitValue = AtomicInteger(-1)
+        private val done = CountDownLatch(1)
+
+        init {
+            val appContext = context.applicationContext
+            Thread {
+                try {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(appContext))
+                    }
+                    Python.getInstance()
+                        .getModule("zcode_runner")
+                        .callAttr("run_script", bridge, file.absolutePath)
+                } catch (e: PyException) {
+                    bridge.abort("\nPython error: ${e.message}\n")
+                } catch (e: Exception) {
+                    bridge.abort("\nRuntime error: ${e.message}\n")
+                } finally {
+                    exitValue.set(if (bridge.isExited) bridge.exitCode else -1)
+                    done.countDown()
+                }
+            }.start()
+        }
+
+        override fun sendInput(line: String) {
+            bridge.sendLine(line.take(MAX_INTERACTIVE_BYTES))
+        }
+
+        override fun sendCtrlC() {
+            bridge.interrupt()
+        }
+
+        override fun sendKill() {
+            bridge.interrupt()
+        }
+
+        override fun isAlive(): Boolean = done.count > 0
+
+        override fun waitForExit(): Int {
+            done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
+            if (done.count > 0) {
+                bridge.interrupt()
+                done.await(5, TimeUnit.SECONDS)
+            }
+            return exitValue.get()
+        }
     }
+
+    // ------------------------------------------------------------------
+    // Pip (Settings → Pip)
+    // ------------------------------------------------------------------
 
     /** Validasi nama package pip (anti shell injection). */
     fun isSafePackageName(name: String): Boolean =
         name.isNotBlank() && name.length <= 200 &&
             Regex("^[A-Za-z0-9_\\-\\[\\]=.<>!]+$").matches(name)
 
-    /** Spawn proses pip install dengan streaming log (Settings → Pip). */
+    /** Spawn proses pip install (backend desktop). */
     fun startPipProcess(packageName: String): Process? {
         if (!isSafePackageName(packageName)) return null
         return try {
@@ -123,7 +264,62 @@ object ExecutionEngine {
         }
     }
 
-    /** Run batch terisolasi (dipakai untuk eksekusi non-interaktif). */
+    /**
+     * Pip install dengan streaming log real-time. Kembalikan false bila nama invalid.
+     * `onDone(success, exitCode)` dipanggil tepat sekali setelah proses selesai.
+     * Di Android memakai pip in-process Chaquopy; di desktop memakai subprocess.
+     */
+    fun startPipStream(
+        context: Context?,
+        packageName: String,
+        onLog: (String) -> Unit,
+        onDone: (success: Boolean, exitCode: Int) -> Unit
+    ): Boolean {
+        if (!isSafePackageName(packageName)) return false
+        return if (context != null && isChaquopyAvailable()) {
+            val appContext = context.applicationContext
+            Thread {
+                try {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(appContext))
+                    }
+                    val bridge = TerminalBridge(onLog) { code -> onDone(code == 0, code) }
+                    Python.getInstance()
+                        .getModule("zcode_pip")
+                        .callAttr("install_package", bridge, packageName)
+                } catch (e: PyException) {
+                    onLog("\n❌ Error: ${e.message}\n")
+                    onDone(false, -1)
+                } catch (e: Exception) {
+                    onLog("\n❌ Error: ${e.message}\n")
+                    onDone(false, -1)
+                }
+            }.start()
+            true
+        } else {
+            val process = startPipProcess(packageName) ?: return false
+            Thread {
+                try {
+                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        onLog(line + "\n")
+                    }
+                    val exitCode = process.waitFor()
+                    onDone(exitCode == 0, exitCode)
+                } catch (e: Exception) {
+                    onLog("\n❌ Error: ${e.message}\n")
+                    onDone(false, -1)
+                }
+            }.start()
+            true
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Batch run (non-interaktif; dipakai dev/test)
+    // ------------------------------------------------------------------
+
     suspend fun runIsolated(code: String, stdin: String = ""): RunResult = withContext(Dispatchers.IO) {
         if (code.toByteArray(Charsets.UTF_8).size > MAX_CODE_BYTES) {
             return@withContext RunResult(false, "", "Source too large: >512KB", false)

@@ -3,6 +3,8 @@ pluginManagement {
         google()
         mavenCentral()
         gradlePluginPortal()
+        // Chaquopy runtime (libpython + stdlib + wheel native) — Fase 1: runtime di-embed
+        maven("https://chaquo.com/maven")
     }
 }
 
@@ -11,9 +13,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Chaquopy maven for Python runtime (when network available)
-        // maven("https://chaquo.com/maven")
-        // JitPack for Termux terminal-view (when network available)
+        // Chaquopy maven untuk Python runtime (libpython 3.11 + stdlib)
+        maven("https://chaquo.com/maven")
+        // JitPack untuk Termux terminal-view (hanya kalau dipakai nanti)
         // maven("https://jitpack.io")
     }
 }

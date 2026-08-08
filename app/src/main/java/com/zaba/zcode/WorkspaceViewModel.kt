@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.zaba.zcode.core.editor.Checker
+import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.core.plugins.PluginHost
@@ -46,10 +47,14 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private val fileDrafts = mutableMapOf<String, String>()
 
+    private var lastClosed: Pair<String, Long>? = null
+
     init {
         if (!filesDir.exists()) {
             filesDir.mkdirs()
         }
+        // backend eksekusi butuh cwd = folder workspace (plt.savefig / open() relatif)
+        ExecutionEngine.workspaceDirPath = filesDir.absolutePath
         loadSavedWorkspace()
     }
 
@@ -106,6 +111,11 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     // ------------------------------------------------------------------
 
     fun selectFile(filename: String) {
+        // guard anti double-trigger: long-press close lalu onClick re-add file yang baru ditutup
+        val now = System.currentTimeMillis()
+        val lc = lastClosed
+        if (lc != null && lc.first == filename && now - lc.second < 400) return
+
         if (filename !in openedFiles) {
             openedFiles.add(filename)
         }
@@ -142,6 +152,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (idx == -1) return
         openedFiles.removeAt(idx)
         fileDrafts.remove(filename)
+        lastClosed = filename to System.currentTimeMillis()
         if (activeFile == filename) {
             if (openedFiles.isNotEmpty()) {
                 val nextIdx = if (idx < openedFiles.size) idx else openedFiles.size - 1

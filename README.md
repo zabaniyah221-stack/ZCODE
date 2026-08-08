@@ -23,16 +23,18 @@ Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **op
 - **Rename & Delete** dengan dialog konfirmasi elegan.
 - **Workspace Recovery** — isi file tersimpan otomatis tiap perubahan + daftar tab & file aktif dipersist, sehingga alur kerja pulih walau aplikasi ditutup paksa / di-swipe dari Recent Apps.
 
-### 💻 3. Terminal PTY Interaktif Full-Screen
+### 💻 3. Terminal Interaktif Full-Screen (Python di HP — Chaquopy 3.11)
 
+- **Runtime Python di-embed (Chaquopy 3.11)** — APK kini membawa interpreter Python arm64 + armeabi-v7a, jadi `▶ Run` & `input()` **benar-benar berjalan di HP ARMv7** (dual-backend: Chaquopy in-process di Android, `python3` subprocess untuk dev/desktop).
 - **Pindah layer** — `▶` membuka terminal full-screen (bukan panel); `◀ Back` di pojok kiri atas kembali ke editor.
-- **Ketik langsung** — sentuh terminal untuk memunculkan keyboard; Enter mengirim baris ke stdin proses Python (tanpa kotak stdin / tombol Send). `input()` di script langsung berfungsi.
-- **Ctrl+C asli (SIGINT)** — tombol merah di toolbar bawah mengirim `kill -INT <pid>` → `KeyboardInterrupt` yang bisa ditangkap script (bukan SIGKILL).
-- **Guard output** — `MAX_OUTPUT_CHARS` 256KB, aliran output di-cap; proses dibersihkan saat keluar terminal.
+- **Ketik langsung** — sentuh terminal untuk memunculkan keyboard; Enter mengirim baris ke stdin (tanpa kotak stdin / tombol Send). `input()` di script langsung berfungsi.
+- **Ctrl+C** — tombol merah di toolbar bawah: deterministik untuk script yang nge-blok di `input()` (KeyboardInterrupt), best-effort interrupt thread worker untuk loop CPU.
+- **Guard output** — `MAX_OUTPUT_CHARS` 256KB, cap antrian input 10k, lifetime 120s; proses dibersihkan saat keluar terminal.
+- **cwd = folder workspace** — `plt.savefig("out.png")` / `open("data.txt")` relatif bekerja seperti di desktop.
 
 ### 📦 4. Pip Package Manager Layer
 
-- **Real-time log streaming** — `Settings → Pip` → ketik nama package → log unduhan/instalasi/traceback mengalir langsung.
+- **Real-time log streaming** — `Settings → Pip` → ketik nama package → log unduhan/instalasi/traceback mengalir langsung (pip in-process Chaquopy di Android).
 - **Guard** — validasi nama package (anti shell injection) + cap log.
 
 ### 🔍 5. Command Palette & Quick Open (Fase 2)
@@ -63,7 +65,6 @@ Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **op
 
 - [ ] **Visual Problems Panel** — daftar error sintaksis dalam panel bawah yang terorganisir (saat ini: banner warning real-time).
 - [ ] **Matplotlib Inline Image** — `plt.savefig("out.png")` tampil inline/expandable di terminal (baseline dedup + skip >8MB).
-- [ ] **Runtime Python di HP (Chaquopy 3.11 embed)** — arm64 + armeabi-v7a; saat ini eksekusi `python3` berjalan penuh di lingkungan dengan Python tersedia, runtime on-device menyusul.
 - [ ] **10 Tema lengkap + CRT Scanlines toggle**.
 - [ ] **Encrypted Keystore UI + Privacy Toggle** (persist draf teks polos off).
 - [ ] **Alpine proot terminal** (apk add, git) — Zmux pending, tidak dibundle.
@@ -83,6 +84,8 @@ gradle assembleDebug
 ```
 
 Guard yang dijaga: Ace 1.44.0 bundled asli, tanpa unverified SSL, `taskAffinity=com.zaba.zcode singleTop allowBackup=false`, `MAX_CODE_BYTES` 512KB, `MAX_INTERACTIVE_QUEUE` 10k, SIGINT asli, `≡` tiga garis (bukan kata lain), topbar faded grey `#3A4452` referensi.
+
+Catatan jujur: eksekusi Python memakai **Chaquopy 3.11 in-process** di Android (bukan PTY OS-level; terminal ini ala Pydroid — output teks + ketik langsung + Enter + Ctrl+C). PTY penuh (escape sequence, `apk add`, git) tetap menjadi target Fase 3 via ZMUX/proot. Build APK diverifikasi oleh CI (sandbox tanpa JDK/Android SDK).
 
 ---
 

@@ -12,6 +12,9 @@ import com.zaba.zcode.core.editor.Checker
  *   jadi `print("a==b")` aman dan `print(' :)')` tidak rusak.
  * - Unary minus/plus/tilde/star (`-1`, `*args`, `~x`) tidak diberi spasi.
  * - `**kwargs` / `f(**d)` / `{**d}` (unpacking) dijaga tanpa spasi setelah `**`.
+ * - Spasi antar-segmen: karakter terakhir segmen sebelumnya disambungkan (prev threading),
+ *   sehingga `"%d"%x` → `"%d" % x` (tanpa spasi dobel) dan indent baris tetap dipertahankan.
+ * - Konservatif: normalisasi spasi operator SAJA — tidak menyentuh titik/komentar/struktur.
  */
 object PluginHost {
 
@@ -159,9 +162,17 @@ object PluginHost {
         return out
     }
 
-    private fun spacingPass(text: String): String {
+    private fun lastNonSpace(text: String, default: Char): Char {
+        for (j in text.length - 1 downTo 0) {
+            val ch = text[j]
+            if (ch != ' ' && ch != '\t') return ch
+        }
+        return default
+    }
+
+    private fun spacingPass(text: String, prevBefore: Char): String {
         val sb = StringBuilder()
-        var prev = ' '
+        var prev = prevBefore
         var i = 0
         val n = text.length
         while (i < n) {
@@ -196,13 +207,13 @@ object PluginHost {
         return sb.toString()
     }
 
-    private fun beautifyLine(line: String): String {
-        val indent = line.takeWhile { it == ' ' || it == '\t' }
+    private fun beautifyLine(line: String, prevBefore: Char, preserveIndent: Boolean): String {
+        val indent = if (preserveIndent) line.takeWhile { it == ' ' || it == '\t' } else ""
         var rest = line.substring(indent.length)
         protectOps.forEach { (op, token) -> rest = rest.replace(op, token) }
-        var spaced = spacingPass(rest)
+        var spaced = spacingPass(rest, prevBefore)
         restoreOps.forEach { (token, op) -> spaced = spaced.replace(token, op) }
-        // normalisasi spasi ganda (tanpa memotong spasi trailing yang berarti)
+        // normalisasi spasi ganda (tanpa memotong spasi yang berarti)
         spaced = spaced.replace(Regex(" +"), " ")
         // unpacking ** : f(**d) / a, **d / {**d} → tanpa spasi setelah **
         spaced = spaced.replace(Regex("\\(\\s*\\*\\*\\s+"), "(**")
@@ -211,13 +222,33 @@ object PluginHost {
         return indent + spaced
     }
 
-    private fun beautifyCodeSegment(text: String): String =
-        text.split("\n").joinToString("\n") { beautifyLine(it) }
+    private fun beautifyCodeSegment(text: String, prevBefore: Char, firstIsLineStart: Boolean): String {
+        val lines = text.split("\n")
+        val out = mutableListOf<String>()
+        for ((i, line) in lines.withIndex()) {
+            val preserve = (i == 0 && firstIsLineStart) || i > 0
+            out.add(beautifyLine(line, if (i == 0) prevBefore else ' ', preserve))
+        }
+        return out.joinToString("\n")
+    }
 
     fun beautify(code: String): String {
-        return scanSegments(code).joinToString("") { seg ->
-            if (seg.isLiteral) seg.text else beautifyCodeSegment(seg.text)
+        val segments = scanSegments(code)
+        val sb = StringBuilder()
+        var prevChar = ' '
+        var atLineStart = true
+        for (seg in segments) {
+            if (seg.isLiteral) {
+                sb.append(seg.text)
+                prevChar = lastNonSpace(seg.text, prevChar)
+                atLineStart = seg.text.endsWith("\n")
+            } else {
+                sb.append(beautifyCodeSegment(seg.text, prevChar, atLineStart))
+                prevChar = lastNonSpace(seg.text, prevChar)
+                atLineStart = seg.text.endsWith("\n")
+            }
         }
+        return sb.toString()
     }
 
     /** Auto-import library standar bila dipakai tapi belum di-import (deteksi via strip string/komentar). */

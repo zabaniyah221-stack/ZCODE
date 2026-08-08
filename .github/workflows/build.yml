@@ -1,4 +1,4 @@
-name: Build ZCODE APK — Fase 0 Kerangka
+name: Build ZCODE APK — Fase 1 & 2
 
 on:
   push:
@@ -18,10 +18,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run strict tests (70)
+      - name: Run strict tests (70 + 55)
         run: |
           pip install --break-system-packages pillow pytest
-          python -m pytest test_zcode_fase0.py -v
+          python -m pytest test_zcode_fase0.py test_zcode_fase1.py -v
           bash tools/check.sh
 
   build:
@@ -55,7 +55,7 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew || echo "no gradlew"
 
-      - name: Build Debug APK (Fase 0 skeleton)
+      - name: Build Debug APK (Fase 1 & 2 — Chaquopy 3.11 embed)
         run: |
           set -o pipefail
           gradle assembleDebug --stacktrace --warning-mode all 2>&1 | tee build.log
@@ -70,22 +70,25 @@ jobs:
           if [ -z "$APK" ]; then echo "❌ No APK found — build failed"; ls -lh app/build/outputs/apk/ 2>&1 | head -n 30; exit 1; fi
           ls -lh "$APK"
           unzip -l "$APK" | grep -i -E "ace.js|AndroidManifest" | head -n 20
+          # Verify Chaquopy Python runtime embedded in APK
+          unzip -l "$APK" | grep -i -E "libpython|libchaquopy" | head -n 10 || echo "⚠️ libpython not found — check Chaquopy packaging"
           # Check manifest has taskAffinity (via aapt dump)
           $ANDROID_HOME/build-tools/34.0.0/aapt dump xmltree "$APK" AndroidManifest.xml | grep -i "taskAffinity" || echo "check taskAffinity in manifest"
 
       - name: Upload APK (Fase 0 kerangka)
         uses: actions/upload-artifact@v4
         with:
-          name: ZCODE-Fase0-APK
+          name: ZCODE-Fase2-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: CI Summary
         if: always()
         run: |
-          echo "### ZCODE Fase 0 Build — $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "### ZCODE Fase 1 & 2 Build — $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Topbar: faded grey #3A4452 ≡ + (no hamburger text)" >> $GITHUB_STEP_SUMMARY
+          echo "- Chaquopy 3.11 embed: Run waifu.py & pip di HP ARMv7 (arm64+armv7)" >> $GITHUB_STEP_SUMMARY
           echo "- Editor: OLED #050806 Ace 1.44.0 file:// + gutter 40px" >> $GITHUB_STEP_SUMMARY
           echo "- QuickTools + FAB above handle, Drawer text-only, Contribute -> Issues" >> $GITHUB_STEP_SUMMARY
           echo "- PTY: ketik langsung di terminal (no stdin field), Chaquopy 3.11 arm64+armv7" >> $GITHUB_STEP_SUMMARY

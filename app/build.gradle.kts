@@ -7,7 +7,7 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
     // Chaquopy 3.11 — KEEP 3.11 for armeabi-v7a (3.12 drops 32-bit, see changelog #709)
-    // id("com.chaquo.python") version "15.0.1"
+    id("com.chaquo.python")
 }
 
 android {
@@ -18,23 +18,16 @@ android {
         applicationId = "com.zaba.zcode"
         minSdk = 26 // 26 = EncryptedSharedPreferences stable, Zabacode minApi 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0-fase0"
+        versionCode = 2
+        versionName = "0.2.0-fase2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // Fase 0: ARMv7 (HP kamu) + ARM64 + x86_64 emulator
-            // App Bundle will split; universal APK for sideload
+            // ARMv7 (HP kamu) + ARM64 + x86_64 emulator
+            // App Bundle akan split; universal APK untuk sideload
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
-
-        // Chaquopy config (commented until network + JDK available, but contract documented)
-        // python {
-        //     version = "3.11"
-        //     pip { install("certifi==2025.8.3") }
-        //     pyc { src = false; pip = false; stdlib = false }
-        // }
     }
 
     buildTypes {
@@ -75,6 +68,16 @@ android {
             assets.srcDirs("src/main/assets")
             jniLibs.srcDir("src/main/jniLibs")
         }
+    }
+}
+
+// Chaquopy 15.0 — Python 3.11 in-process runtime (Fase 1: on-device execution).
+// - version 3.11: satu-satunya yang masih mendukung armeabi-v7a (HP user)
+// - pip build-time sengaja kosong; instalasi package lewat PipScreen saat runtime
+// - buildPython: CI menyediakan python3 (3.11) di PATH
+chaquopy {
+    defaultConfig {
+        version = "3.11"
     }
 }
 

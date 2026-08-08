@@ -51,11 +51,15 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
             TerminalScreen(
                 filename = filename,
                 filesDir = Paths.filesDir(applicationContext),
+                context = applicationContext,
                 onBack = { nav.navigateUp() }
             )
         }
         composable("pip") {
-            PipScreen(onBack = { nav.navigateUp() })
+            PipScreen(
+                context = applicationContext,
+                onBack = { nav.navigateUp() }
+            )
         }
         composable("about") {
             AboutScreen(onBack = { nav.navigateUp() })

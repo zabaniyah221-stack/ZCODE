@@ -15,6 +15,7 @@ JAVA = APP / "src/main/java/com/zaba/zcode"
 UI = JAVA / "ui"
 CORE = JAVA / "core"
 ASSETS = APP / "src/main/assets"
+BUILD_GRADLE = APP / "build.gradle.kts"
 
 
 def read(p): return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
@@ -221,3 +222,91 @@ class TestNoKnownBugPatterns:
         txt = read(ASSETS / "editor/index.html").lower()
         for bad in ["cdnjs", "unpkg", "jsdelivr", "http://", "https://"]:
             assert bad not in txt, f"index.html tidak boleh pakai CDN/remote: {bad}"
+
+
+# ===================================================================
+# Chaquopy — on-device execution (Fase 1 fix: tidak nanggung)
+# ===================================================================
+
+class TestChaquopyEmbed:
+    def test_root_build_has_chaquopy_plugin(self):
+        assert 'com.chaquo.python' in read(ROOT / "build.gradle.kts")
+
+    def test_app_build_applies_chaquopy(self):
+        txt = read(BUILD_GRADLE)
+        assert 'id("com.chaquo.python")' in txt
+
+    def test_app_build_chaquopy_block(self):
+        txt = read(BUILD_GRADLE)
+        assert "chaquopy" in txt and 'version = "3.11"' in txt
+
+    def test_settings_has_chaquo_maven(self):
+        txt = read(ROOT / "settings.gradle.kts")
+        assert "chaquo.com/maven" in txt
+
+    def test_runner_py_exists(self):
+        p = APP / "src/main/python/zcode_runner.py"
+        assert p.exists(), "zcode_runner.py missing"
+        txt = read(p)
+        for kw in ["run_script", "BridgeStdin", "runpy.run_path", "KeyboardInterrupt"]:
+            assert kw in txt, f"runner missing {kw}"
+
+    def test_pip_py_exists(self):
+        p = APP / "src/main/python/zcode_pip.py"
+        assert p.exists(), "zcode_pip.py missing"
+        assert "install_package" in read(p)
+
+    def test_terminal_bridge_exists(self):
+        txt = read(CORE / "execution/TerminalBridge.kt")
+        for kw in ["readLine", "isInterrupted", "workspaceDir", "onExit", "interrupt"]:
+            assert kw in txt, f"TerminalBridge missing {kw}"
+
+    def test_engine_dual_backend(self):
+        txt = read(CORE / "execution/ExecutionEngine.kt")
+        assert "isChaquopyAvailable" in txt
+        assert "ChaquopySession" in txt and "ProcessSession" in txt
+        assert "describeBackend" in txt
+
+    def test_engine_callback_session(self):
+        txt = read(CORE / "execution/ExecutionEngine.kt")
+        assert "onOutput" in txt and "onExit" in txt
+
+    def test_engine_start_pip_stream(self):
+        assert "startPipStream" in read(CORE / "execution/ExecutionEngine.kt")
+
+    def test_engine_workspace_dir(self):
+        assert "workspaceDirPath" in read(CORE / "execution/ExecutionEngine.kt")
+
+    def test_vm_sets_workspace_dir(self):
+        assert "workspaceDirPath" in read(JAVA / "WorkspaceViewModel.kt")
+
+
+# ===================================================================
+# Fix bug: tab double-trigger (long-press close → re-open) + versi
+# ===================================================================
+
+class TestBugFixes:
+    def test_tab_single_combined_clickable(self):
+        txt = read(UI / "workbench/WorkbenchScreen.kt")
+        assert "combinedClickable" in txt
+        assert "onLongClick" in txt
+
+    def test_vm_guard_recently_closed(self):
+        txt = read(JAVA / "WorkspaceViewModel.kt")
+        assert "lastClosed" in txt, "guard anti double-trigger missing"
+        assert "400" in txt
+
+    def test_version_bump(self):
+        assert "0.2.0-fase2" in read(BUILD_GRADLE)
+        assert "0.2.0-fase2" in read(ROOT / "gradle.properties")
+        assert "0.2.0-fase2" in read(UI / "settings/AboutScreen.kt")
+
+    def test_beautify_prev_threading(self):
+        txt = read(CORE / "plugins/PluginHost.kt")
+        assert "lastNonSpace" in txt and "atLineStart" in txt
+
+    def test_terminal_takes_context(self):
+        assert "context: Context" in read(UI / "terminal/TerminalScreen.kt")
+
+    def test_pip_takes_context(self):
+        assert "context: android.content.Context" in read(UI / "settings/PipScreen.kt")

@@ -104,7 +104,7 @@ fun AboutScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "Version 0.1.0-fase0 · Zabacode Kotlin Edition",
+                "Version 0.2.0-fase2 · Zabacode Kotlin Edition",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
