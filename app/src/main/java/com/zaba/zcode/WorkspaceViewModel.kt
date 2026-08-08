@@ -53,6 +53,11 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (!filesDir.exists()) {
             filesDir.mkdirs()
         }
+        // Hapus package pip rusak yang terinstall di disk pengguna akibat build-time pip install sebelumnya
+        val badPip = File(app.filesDir, "chaquopy/AssetFinder/requirements/pip")
+        if (badPip.exists()) {
+            badPip.deleteRecursively()
+        }
         // backend eksekusi butuh cwd = folder workspace (plt.savefig / open() relatif)
         ExecutionEngine.workspaceDirPath = filesDir.absolutePath
         loadSavedWorkspace()
