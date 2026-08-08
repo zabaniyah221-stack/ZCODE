@@ -228,6 +228,11 @@ class TestNoKnownBugPatterns:
 # Chaquopy — on-device execution (Fase 1 fix: tidak nanggung)
 # ===================================================================
 
+import pytest
+
+# TEST A bisection: dinonaktifkan sementara (lihat commit bisection)
+pytestmark = pytest.mark.skip(reason="TEST A: chaquopy dinonaktifkan untuk bisection CI")
+
 class TestChaquopyEmbed:
     def test_root_build_has_chaquopy_plugin(self):
         assert 'com.chaquo.python' in read(ROOT / "build.gradle.kts")

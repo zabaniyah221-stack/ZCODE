@@ -1,9 +1,6 @@
 package com.zaba.zcode.core.execution
 
 import android.content.Context
-import com.chaquo.python.PyException
-import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -89,11 +86,10 @@ object ExecutionEngine {
         onOutput: (String) -> Unit,
         onExit: (Int) -> Unit
     ): InteractiveSession {
-        return if (context != null && isChaquopyAvailable()) {
-            ChaquopySession(context, file, onOutput, onExit)
-        } else {
-            ProcessSession(file, onOutput, onExit)
-        }
+        // TEST A: hanya backend subprocess (Chaquopy dinonaktifkan)
+        val pb = ProcessBuilder("python3", "-u", file.absolutePath)
+        pb.redirectErrorStream(true)
+        return ProcessSession(pb.start(), onOutput, onExit)
     }
 
     // ------------------------------------------------------------------
@@ -185,65 +181,6 @@ object ExecutionEngine {
     }
 
     // ------------------------------------------------------------------
-    // Backend: Chaquopy in-process (Android)
-    // ------------------------------------------------------------------
-
-    private class ChaquopySession(
-        context: Context,
-        file: File,
-        onOutput: (String) -> Unit,
-        onExit: (Int) -> Unit
-    ) : InteractiveSession {
-        private val bridge = TerminalBridge(onOutput, onExit)
-        private val exitValue = AtomicInteger(-1)
-        private val done = CountDownLatch(1)
-
-        init {
-            val appContext = context.applicationContext
-            Thread {
-                try {
-                    if (!Python.isStarted()) {
-                        Python.start(AndroidPlatform(appContext))
-                    }
-                    Python.getInstance()
-                        .getModule("zcode_runner")
-                        .callAttr("run_script", bridge, file.absolutePath)
-                } catch (e: PyException) {
-                    bridge.abort("\nPython error: ${e.message}\n")
-                } catch (e: Exception) {
-                    bridge.abort("\nRuntime error: ${e.message}\n")
-                } finally {
-                    exitValue.set(if (bridge.isExited) bridge.exitCode else -1)
-                    done.countDown()
-                }
-            }.start()
-        }
-
-        override fun sendInput(line: String) {
-            bridge.sendLine(line.take(MAX_INTERACTIVE_BYTES))
-        }
-
-        override fun sendCtrlC() {
-            bridge.interrupt()
-        }
-
-        override fun sendKill() {
-            bridge.interrupt()
-        }
-
-        override fun isAlive(): Boolean = done.count > 0
-
-        override fun waitForExit(): Int {
-            done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
-            if (done.count > 0) {
-                bridge.interrupt()
-                done.await(5, TimeUnit.SECONDS)
-            }
-            return exitValue.get()
-        }
-    }
-
-    // ------------------------------------------------------------------
     // Pip (Settings → Pip)
     // ------------------------------------------------------------------
 
@@ -276,44 +213,23 @@ object ExecutionEngine {
         onDone: (success: Boolean, exitCode: Int) -> Unit
     ): Boolean {
         if (!isSafePackageName(packageName)) return false
-        return if (context != null && isChaquopyAvailable()) {
-            val appContext = context.applicationContext
-            Thread {
-                try {
-                    if (!Python.isStarted()) {
-                        Python.start(AndroidPlatform(appContext))
-                    }
-                    val bridge = TerminalBridge(onLog) { code -> onDone(code == 0, code) }
-                    Python.getInstance()
-                        .getModule("zcode_pip")
-                        .callAttr("install_package", bridge, packageName)
-                } catch (e: PyException) {
-                    onLog("\n❌ Error: ${e.message}\n")
-                    onDone(false, -1)
-                } catch (e: Exception) {
-                    onLog("\n❌ Error: ${e.message}\n")
-                    onDone(false, -1)
+        // TEST A: backend Chaquopy dinonaktifkan — hanya subprocess
+        val process = startPipProcess(packageName) ?: return false
+        Thread {
+            try {
+                val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    onLog(line + "\n")
                 }
-            }.start()
-            true
-        } else {
-            val process = startPipProcess(packageName) ?: return false
-            Thread {
-                try {
-                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        onLog(line + "\n")
-                    }
-                    val exitCode = process.waitFor()
-                    onDone(exitCode == 0, exitCode)
-                } catch (e: Exception) {
-                    onLog("\n❌ Error: ${e.message}\n")
-                    onDone(false, -1)
-                }
-            }.start()
-            true
-        }
+                val exitCode = process.waitFor()
+                onDone(exitCode == 0, exitCode)
+            } catch (e: Exception) {
+                onLog("\n❌ Error: ${e.message}\n")
+                onDone(false, -1)
+            }
+        }.start()
+        return true
     }
 
     // ------------------------------------------------------------------
