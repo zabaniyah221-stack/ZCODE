@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ZCODE Editor</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #050806;
+            overflow: hidden;
+        }
+        #editor {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            font-family: 'monospace';
+            font-size: 12px; /* font size 12 — keputusan tim (editor + terminal) */
+            background-color: #050806 !important;
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050806;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1B4D2E;
+            border-radius: 2px;
+        }
+        /* True-black OLED — gutter soft, bukan garis tegas */
+        .ace_gutter {
+            background: #0A100D !important;
+            color: #4D7A5A !important;
+            border-right: 1px solid #111612 !important;
+        }
+        .ace_editor {
+            background-color: #050806 !important;
+        }
+        .ace_scroller {
+            background-color: #050806 !important;
+        }
+        .ace_active-line {
+            background: rgba(27, 77, 46, 0.12) !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="editor"></div>
+    <script src="ace/ace.js"></script>
+    <script src="ace/mode-python.js"></script>
+    <script src="ace/theme-tomorrow_night_eighties.js"></script>
+    <script>
+        var editor = ace.edit("editor");
+        editor.setTheme("ace/theme/tomorrow_night_eighties");
+        editor.session.setMode("ace/mode/python");
+        editor.session.setUseWorker(false);
+
+        editor.setOptions({
+            fontSize: "12px",          // font size 12 (keputusan tim)
+            showPrintMargin: false,
+            showGutter: true,          // gutter 40px line numbers (di-set via CSS max)
+            highlightActiveLine: true,
+            wrap: true,
+            cursorStyle: "line",
+            tabSize: 4,
+            useSoftTabs: true,
+            animatedScroll: false,
+            enableBasicAutocompletion: false
+        });
+
+        var isSettingValue = false;
+
+        editor.on("change", function () {
+            if (!isSettingValue && window.ZCODE) {
+                window.ZCODE.onCodeChange(editor.getValue());
+            }
+        });
+
+        /* ---------- Kotlin bridge ---------- */
+        function setCode(code) {
+            isSettingValue = true;
+            editor.setValue(code, -1);
+            isSettingValue = false;
+        }
+        function getCode() {
+            return editor.getValue();
+        }
+        function insertText(text) {
+            editor.insert(text);
+            editor.focus();
+        }
+        function undo() {
+            editor.undo();
+        }
+        function redo() {
+            editor.redo();
+        }
+
+        /* ---------- Plugin: Duplicate Active Line(s) ---------- */
+        function duplicateRows() {
+            var doc = editor.session.getDocument();
+            var range = editor.getSelection().getRange();
+            var start = range.start.row;
+            var end = range.end.row;
+            var lines = doc.getLines(start, end);
+            if (!lines.length) return;
+            var insertRow = end + 1;
+            editor.session.insert({ row: insertRow, column: 0 }, lines.join("\n") + "\n");
+        }
+
+        /* ---------- Plugin: Toggle Line Comment ---------- */
+        function toggleCommentLines() {
+            var doc = editor.session.getDocument();
+            var range = editor.getSelection().getRange();
+            var start = range.start.row;
+            var end = range.end.row;
+            var lines = doc.getLines(start, end);
+            if (!lines.length) return;
+
+            var allCommented = lines.every(function (l) {
+                return /^\s*#/.test(l);
+            });
+
+            var out = lines.map(function (l) {
+                if (allCommented) {
+                    // uncomment: hapus satu tanda # + satu spasi opsional
+                    return l.replace(/^(\s*)#\s?/, "$1");
+                }
+                var indent = (l.match(/^(\s*)/) || ["", ""])[1];
+                return indent + "# " + l.replace(/^\s*/, "");
+            });
+
+            var last = doc.getLine(end);
+            range.end.column = last.length;
+            range.start.column = 0;
+            editor.session.replace(range, out.join("\n"));
+            editor.selection.clearSelection();
+        }
+    </script>
+</body>
+</html>

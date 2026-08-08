@@ -82,6 +82,7 @@ dependencies {
     // Core AndroidX — minimal for Go footprint (must be BEFORE any task that may resolve)
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.activity:activity-compose:1.8.2")
+    implementation("androidx.activity:activity-ktx:1.8.2")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
