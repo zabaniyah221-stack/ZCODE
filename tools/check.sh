@@ -23,13 +23,9 @@ grep -q 'singleTop' app/src/main/AndroidManifest.xml && echo "✅ singleTop" || 
 grep -q 'allowBackup="false"' app/src/main/AndroidManifest.xml && echo "✅ allowBackup false" || (echo "❌ allowBackup missing" && exit 1)
 
 echo "[4/8] Verify Topbar faded grey + three lines ≡ (user request)"
-if grep -q "TEST D" app/src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt; then
-  echo "⚠️ bisection: WorkbenchScreen di-stub — langkah ini di-skip"
-else
 grep -q "3A4452\|TopbarFadedGrey" app/src/main/java/com/zaba/zcode/ui/theme/ZcodeTheme.kt && echo "✅ Topbar faded grey" || (echo "❌ Topbar color missing" && exit 1)
 grep -q "≡" app/src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt && echo "✅ ≡ three lines" || (echo "❌ hamburger text found or ≡ missing" && exit 1)
 if grep -q "hamburger" app/src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt; then echo "❌ hamburger word should not appear (use ≡)" && exit 1; else echo "✅ no hamburger word"; fi
-fi
 
 echo "[5/8] Verify Execution guards (S-18)"
 grep -q "MAX_CODE_BYTES = 512" app/src/main/java/com/zaba/zcode/core/execution/ExecutionEngine.kt && echo "✅ MAX_CODE_BYTES" || (echo "❌ MAX_CODE_BYTES missing" && exit 1)
@@ -40,19 +36,15 @@ echo "[6/8] Verify Chaquopy 3.11 embed (on-device execution, Fase 1)"
 grep -q 'id("com.chaquo.python")' app/build.gradle.kts && echo "✅ plugin Chaquopy applied" || (echo "❌ plugin missing" && exit 1)
 grep -q 'version = "3.11"' app/build.gradle.kts && echo "✅ Python 3.11 (armv7 supported)" || (echo "❌ python version missing" && exit 1)
 test -f app/src/main/python/zcode_runner.py && echo "✅ zcode_runner.py" || (echo "❌ runner missing" && exit 1)
-if [ -f app/src/main/java/com/zaba/zcode/core/execution/TerminalBridge.kt ]; then echo "✅ TerminalBridge"; else echo "⚠️ TEST D4: TerminalBridge dihapus (bisection)"; fi
+test -f app/src/main/java/com/zaba/zcode/core/execution/TerminalBridge.kt && echo "✅ TerminalBridge" || (echo "❌ bridge missing" && exit 1)
 grep -q "isChaquopyAvailable" app/src/main/java/com/zaba/zcode/core/execution/ExecutionEngine.kt && echo "✅ dual-backend" || (echo "❌ backend missing" && exit 1)
 
 echo "[7/8] Verify Fase 1/2 wiring (WebView asli, VM, terminal, pip, themes)"
-if grep -q "TEST D2" app/src/main/java/com/zaba/zcode/ui/editor/EditorScreen.kt; then
-  echo "⚠️ bisection: UI di-stub — langkah ini di-skip"
-else
 grep -q "addJavascriptInterface" app/src/main/java/com/zaba/zcode/ui/editor/EditorScreen.kt && echo "✅ WebView bridge" || (echo "❌ bridge missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt && echo "✅ WorkspaceViewModel" || (echo "❌ VM missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/ui/terminal/TerminalScreen.kt && echo "✅ TerminalScreen" || (echo "❌ terminal missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt && echo "✅ PipScreen" || (echo "❌ pip missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/core/plugins/PluginHost.kt && echo "✅ PluginHost" || (echo "❌ plugins missing" && exit 1)
-fi
 
 echo "[8/8] Run Python strict tests (Fase 0 + Fase 1/2)"
 python3 -m pytest test_zcode_fase0.py test_zcode_fase1.py -v

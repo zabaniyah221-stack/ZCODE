@@ -9,8 +9,10 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    // TEST D6: FAIL_ON_PROJECT_REPOS dihapus — Chaquopy mendaftarkan repo
-    // level proyek saat konfigurasi; mode tsb melarangnya (penyebab build gagal)
+    // FAIL_ON_PROJECT_REPOS sengaja TIDAK dipakai: plugin Chaquopy mendaftarkan
+    // repo "chaquopy" level proyek saat konfigurasi, dan mode tersebut melarangnya
+    // ("Build was configured to prefer settings repositories over project
+    // repositories but repository 'chaquopy' was added by build file").
     repositories {
         google()
         mavenCentral()
