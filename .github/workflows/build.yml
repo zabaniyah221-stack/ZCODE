@@ -1,4 +1,4 @@
-name: Build ZCODE APK — Fase 0 Kerangka
+name: Build ZCODE APK — Fase 1 & 2 (OLED, File Manager, PTY, Pip, Themes + Chaquopy 3.11)
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run strict tests (70)
+      - name: Run strict tests (Fase 0 + Fase 1/2)
         run: |
           pip install --break-system-packages pillow pytest
           python -m pytest test_zcode_fase0.py -v
@@ -35,6 +35,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+
+      # WAJIB: Chaquopy 15 buildPython harus match major+minor versi Python app (3.11).
+      # Runner ubuntu-22.04 default python3 = 3.10 → tanpa ini gradle assembleDebug
+      # selalu gagal di task Chaquopy (akar kegagalan CI sesi sebelumnya).
+      - name: Set up Python 3.11 (buildPython Chaquopy)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -55,12 +63,19 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew || echo "no gradlew"
 
-      - name: Build Debug APK (Fase 0 skeleton)
+      - name: Build Debug APK (Fase 1 & 2)
         run: |
+          python3 --version  # sanity: harus 3.11.x untuk Chaquopy
           set -o pipefail
-          gradle assembleDebug --stacktrace --warning-mode all 2>&1 | tee build.log
-          echo "--- tail ---"
-          tail -n 200 build.log
+          if gradle assembleDebug --stacktrace --warning-mode all 2>&1 | tee build.log; then
+            echo "✅ BUILD OK"
+            tail -n 100 build.log
+          else
+            rc=${PIPESTATUS[0]}
+            echo "❌ BUILD FAILED (rc=$rc) — tail build.log:"
+            tail -n 200 build.log
+            exit $rc
+          fi
 
       - name: Verify APK contains Ace + taskAffinity
         run: |
@@ -73,17 +88,17 @@ jobs:
           # Check manifest has taskAffinity (via aapt dump)
           $ANDROID_HOME/build-tools/34.0.0/aapt dump xmltree "$APK" AndroidManifest.xml | grep -i "taskAffinity" || echo "check taskAffinity in manifest"
 
-      - name: Upload APK (Fase 0 kerangka)
+      - name: Upload APK (Fase 1 & 2)
         uses: actions/upload-artifact@v4
         with:
-          name: ZCODE-Fase0-APK
+          name: ZCODE-Fase12-APK
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: CI Summary
         if: always()
         run: |
-          echo "### ZCODE Fase 0 Build — $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "### ZCODE Fase 1 & 2 Build — $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Topbar: faded grey #3A4452 ≡ + (no hamburger text)" >> $GITHUB_STEP_SUMMARY
           echo "- Editor: OLED #050806 Ace 1.44.0 file:// + gutter 40px" >> $GITHUB_STEP_SUMMARY
