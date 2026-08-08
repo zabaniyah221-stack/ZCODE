@@ -1,17 +1,19 @@
 package com.zaba.zcode
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.zaba.zcode.core.files.Paths
-import com.zaba.zcode.ui.settings.AboutScreen
-import com.zaba.zcode.ui.settings.PipScreen
-import com.zaba.zcode.ui.terminal.TerminalScreen
+import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.theme.ZcodeTheme
 import com.zaba.zcode.ui.workbench.WorkbenchScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -19,50 +21,51 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private val vm: WorkspaceViewModel by viewModels()
+    // ZMUX lesson: debounce resize 100ms to avoid prompt jump 4-5 lines
+    private val resizeHandler = Handler(Looper.getMainLooper())
+    private val resizeRunnable = Runnable { /* terminalView.updateSize() will be called via Compose */ }
+    private val resizeDebounceMs = 100L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Fase 0: Topbar faded grey ≡ + + — see WorkbenchScreen
+        // Window soft input adjustResize is in Manifest
+
         setContent {
-            ZcodeTheme(themeType = vm.themeType) {
-                AppNavHost(vm = vm)
+            ZcodeTheme {
+                val nav = rememberNavController()
+                // Accompanist insets? Use WindowInsets.ime
+                NavHost(navController = nav, startDestination = "editor") {
+                    composable("editor") {
+                        WorkbenchScreen(
+                            onRun = { code ->
+                                // Fase 0: navigate to PTY output layer (pindah layer, not panel)
+                                nav.navigate("output")
+                            },
+                            onOpenSettings = { nav.navigate("settings") }
+                        )
+                    }
+                    composable("output") {
+                        // Fase 1 PTY will be here — for Fase 0 just placeholder with back
+                        Box(Modifier.fillMaxSize()) {
+                            Text("Output PTY — Fase 1: PTY terminal (ketik langsung, no stdin field)")
+                        }
+                    }
+                    composable("settings") {
+                        // Fase 0: Settings layer text-only (Theme, Plugin/Addon, Pip -> pip layer)
+                        Box(Modifier.fillMaxSize()) {
+                            Text("Settings — Theme / Plugin/Addon / Pip — Fase 0 skeleton")
+                        }
+                    }
+                }
             }
         }
     }
-}
 
-@Composable
-private fun AppNavHost(vm: WorkspaceViewModel) {
-    val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = "editor") {
-        composable("editor") {
-            WorkbenchScreen(
-                vm = vm,
-                onRun = { filename ->
-                    // ▶ Run → pindah layer ke Terminal PTY full-screen (bukan panel)
-                    nav.navigate("output/$filename")
-                },
-                onNavigateToPip = { nav.navigate("pip") },
-                onNavigateToAbout = { nav.navigate("about") }
-            )
-        }
-        composable("output/{filename}") { backStackEntry ->
-            val filename = backStackEntry.arguments?.getString("filename") ?: "main.py"
-            TerminalScreen(
-                filename = filename,
-                filesDir = Paths.filesDir(applicationContext),
-                context = applicationContext,
-                onBack = { nav.navigateUp() }
-            )
-        }
-        composable("pip") {
-            PipScreen(
-                context = applicationContext,
-                onBack = { nav.navigateUp() }
-            )
-        }
-        composable("about") {
-            AboutScreen(onBack = { nav.navigateUp() })
-        }
+    // Called from Compose side when layout changes
+    fun debouncedUpdateSize() {
+        resizeHandler.removeCallbacks(resizeRunnable)
+        resizeHandler.postDelayed(resizeRunnable, resizeDebounceMs)
     }
 }
