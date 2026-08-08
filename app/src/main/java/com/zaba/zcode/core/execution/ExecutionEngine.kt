@@ -1,6 +1,9 @@
 package com.zaba.zcode.core.execution
 
 import android.content.Context
+import com.chaquo.python.PyException
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -86,10 +89,14 @@ object ExecutionEngine {
         onOutput: (String) -> Unit,
         onExit: (Int) -> Unit
     ): InteractiveSession {
-        // TEST A: hanya backend subprocess (Chaquopy dinonaktifkan)
-        val pb = ProcessBuilder("python3", "-u", file.absolutePath)
-        pb.redirectErrorStream(true)
-        return ProcessSession(pb.start(), onOutput, onExit)
+        return if (context != null && isChaquopyAvailable()) {
+            ChaquopySession(context, file, onOutput, onExit)
+        } else {
+            // Backend desktop/dev: spawn subprocess python3 (bukan ProcessSession(file))
+            val pb = ProcessBuilder("python3", "-u", file.absolutePath)
+            pb.redirectErrorStream(true)
+            ProcessSession(pb.start(), onOutput, onExit)
+        }
     }
 
     // ------------------------------------------------------------------
@@ -142,16 +149,22 @@ object ExecutionEngine {
 
         override fun sendCtrlC() {
             if (!process.isAlive) return
-            try {
-                val pid = process.pid()
-                if (pid > 0) {
+            // `Process.pid()` butuh Java 9+ dan pernah gagal resolve di CI
+            // (Unresolved reference: pid) — ambil via reflection agar kompilasi
+            // aman di semua JDK; kalau gagal, fallback ke destroy().
+            val pid = runCatching {
+                val m = process.javaClass.getMethod("pid")
+                (m.invoke(process) as Number).toLong()
+            }.getOrNull()
+            if (pid != null && pid > 0) {
+                try {
                     val kill = ProcessBuilder("kill", "-INT", pid.toString())
                     kill.redirectErrorStream(true)
                     kill.start().waitFor()
                     return
+                } catch (e: Exception) {
+                    // fallback di bawah
                 }
-            } catch (e: Exception) {
-                // fallback di bawah
             }
             try {
                 process.destroy()
@@ -174,6 +187,65 @@ object ExecutionEngine {
             done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
             if (done.count > 0) {
                 sendKill()
+                done.await(5, TimeUnit.SECONDS)
+            }
+            return exitValue.get()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Backend: Chaquopy in-process (Android)
+    // ------------------------------------------------------------------
+
+    private class ChaquopySession(
+        context: Context,
+        file: File,
+        onOutput: (String) -> Unit,
+        onExit: (Int) -> Unit
+    ) : InteractiveSession {
+        private val bridge = TerminalBridge(onOutput, onExit)
+        private val exitValue = AtomicInteger(-1)
+        private val done = CountDownLatch(1)
+
+        init {
+            val appContext = context.applicationContext
+            Thread {
+                try {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(appContext))
+                    }
+                    Python.getInstance()
+                        .getModule("zcode_runner")
+                        .callAttr("run_script", bridge, file.absolutePath)
+                } catch (e: PyException) {
+                    bridge.abort("\nPython error: ${e.message}\n")
+                } catch (e: Exception) {
+                    bridge.abort("\nRuntime error: ${e.message}\n")
+                } finally {
+                    exitValue.set(if (bridge.isExited) bridge.exitCode else -1)
+                    done.countDown()
+                }
+            }.start()
+        }
+
+        override fun sendInput(line: String) {
+            bridge.sendLine(line.take(MAX_INTERACTIVE_BYTES))
+        }
+
+        override fun sendCtrlC() {
+            bridge.interrupt()
+        }
+
+        override fun sendKill() {
+            bridge.interrupt()
+        }
+
+        override fun isAlive(): Boolean = done.count > 0
+
+        override fun waitForExit(): Int {
+            done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
+            if (done.count > 0) {
+                bridge.interrupt()
                 done.await(5, TimeUnit.SECONDS)
             }
             return exitValue.get()
@@ -213,23 +285,44 @@ object ExecutionEngine {
         onDone: (success: Boolean, exitCode: Int) -> Unit
     ): Boolean {
         if (!isSafePackageName(packageName)) return false
-        // TEST A: backend Chaquopy dinonaktifkan — hanya subprocess
-        val process = startPipProcess(packageName) ?: return false
-        Thread {
-            try {
-                val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
-                var line: String?
-                while (reader.readLine().also { line = it } != null) {
-                    onLog(line + "\n")
+        return if (context != null && isChaquopyAvailable()) {
+            val appContext = context.applicationContext
+            Thread {
+                try {
+                    if (!Python.isStarted()) {
+                        Python.start(AndroidPlatform(appContext))
+                    }
+                    val bridge = TerminalBridge(onLog) { code -> onDone(code == 0, code) }
+                    Python.getInstance()
+                        .getModule("zcode_pip")
+                        .callAttr("install_package", bridge, packageName)
+                } catch (e: PyException) {
+                    onLog("\n❌ Error: ${e.message}\n")
+                    onDone(false, -1)
+                } catch (e: Exception) {
+                    onLog("\n❌ Error: ${e.message}\n")
+                    onDone(false, -1)
                 }
-                val exitCode = process.waitFor()
-                onDone(exitCode == 0, exitCode)
-            } catch (e: Exception) {
-                onLog("\n❌ Error: ${e.message}\n")
-                onDone(false, -1)
-            }
-        }.start()
-        return true
+            }.start()
+            true
+        } else {
+            val process = startPipProcess(packageName) ?: return false
+            Thread {
+                try {
+                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        onLog(line + "\n")
+                    }
+                    val exitCode = process.waitFor()
+                    onDone(exitCode == 0, exitCode)
+                } catch (e: Exception) {
+                    onLog("\n❌ Error: ${e.message}\n")
+                    onDone(false, -1)
+                }
+            }.start()
+            true
+        }
     }
 
     // ------------------------------------------------------------------

@@ -64,20 +64,17 @@ class TestFase1Files:
             assert kw in txt, f"PluginHost missing {kw}"
 
     def test_terminal_screen_exists(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "terminal/TerminalScreen.kt")
         for kw in ["sendCtrlC", "FocusRequester", "inputVal", "onBack"]:
             assert kw in txt, f"TerminalScreen missing {kw}"
 
     def test_pip_screen_exists(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "settings/PipScreen.kt")
         assert "pip" in txt.lower()
         assert "isInstalling" in txt
         assert "scrollState" in txt
 
     def test_about_screen_exists(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "settings/AboutScreen.kt")
         assert "github.com/muzape28-blip/ZCODE/issues" in txt
 
@@ -93,14 +90,12 @@ class TestFase1Files:
 
 class TestEditorWebView:
     def test_webview_bridge(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "editor/EditorScreen.kt")
         assert "addJavascriptInterface" in txt
         assert "loadUrl" in txt
         assert "onPageFinished" in txt
 
     def test_escape_js_function(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         assert "escapeJavaScriptString" in read(UI / "editor/EditorScreen.kt")
 
     def test_index_html_bridge(self):
@@ -131,12 +126,10 @@ class TestExecutionFase1:
         assert "isSafePackageName" in txt
 
     def test_terminal_caps_output(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "terminal/TerminalScreen.kt")
         assert "MAX_OUTPUT_CHARS" in txt, "terminal harus cap output (S-18)"
 
     def test_pip_caps_log(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "settings/PipScreen.kt")
         assert "MAX_OUTPUT_CHARS" in txt, "pip log harus di-cap"
 
@@ -183,34 +176,28 @@ class TestCheckerPlugin:
 
 class TestThemeWorkbenchFase1:
     def test_three_themes(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         txt = read(UI / "theme/ZcodeTheme.kt")
         for t in ["RETRO", "DRACULA", "TOKYO_NIGHT"]:
             assert t in txt, f"theme {t} missing"
 
     def test_theme_takes_type(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         assert "themeType" in read(UI / "theme/ZcodeTheme.kt")
 
     def test_workbench_wired(self):
-        if 'TEST D' in read(UI / 'workbench/WorkbenchScreen.kt'): return  # TEST D1
         txt = read(UI / "workbench/WorkbenchScreen.kt")
         for kw in ["onRun", "fileToRename", "fileToDelete", "showPalette", "combinedClickable", "insertText"]:
             assert kw in txt, f"Workbench missing wiring {kw}"
 
     def test_workbench_long_press_close(self):
-        if 'TEST D' in read(UI / 'workbench/WorkbenchScreen.kt'): return  # TEST D1
         txt = read(UI / "workbench/WorkbenchScreen.kt")
         assert "onLongClick" in txt and "closeFile" in txt
 
     def test_workbench_quicktools_wired(self):
-        if 'TEST D' in read(UI / 'workbench/WorkbenchScreen.kt'): return  # TEST D1
         txt = read(UI / "workbench/WorkbenchScreen.kt")
         assert "QuickTools" in txt or "quickTools" in txt.lower()
         assert "evaluateJavascript" in txt
 
     def test_workbench_dialogs(self):
-        if 'TEST D' in read(UI / 'workbench/WorkbenchScreen.kt'): return  # TEST D1
         txt = read(UI / "workbench/WorkbenchScreen.kt")
         assert txt.count("AlertDialog") >= 3, "rename/delete/clear-all dialog harus ada"
 
@@ -225,7 +212,6 @@ class TestNoKnownBugPatterns:
             assert "mailto" not in read(p).lower(), f"mailto ditemukan di {p}"
 
     def test_no_destroy_only_ctrlc(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         # TerminalScreen tidak boleh hanya andalkan destroyForcibly untuk Ctrl+C
         term = read(UI / "terminal/TerminalScreen.kt")
         assert "sendCtrlC" in term
@@ -259,7 +245,6 @@ class TestChaquopyEmbed:
         assert "chaquo.com/maven" in txt
 
     def test_runner_py_exists(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         p = APP / "src/main/python/zcode_runner.py"
         assert p.exists(), "zcode_runner.py missing"
         txt = read(p)
@@ -267,39 +252,32 @@ class TestChaquopyEmbed:
             assert kw in txt, f"runner missing {kw}"
 
     def test_pip_py_exists(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         p = APP / "src/main/python/zcode_pip.py"
         assert p.exists(), "zcode_pip.py missing"
         assert "install_package" in read(p)
 
     def test_terminal_bridge_exists(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         txt = read(CORE / "execution/TerminalBridge.kt")
         for kw in ["readLine", "isInterrupted", "workspaceDir", "onExit", "interrupt"]:
             assert kw in txt, f"TerminalBridge missing {kw}"
 
     def test_engine_dual_backend(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         txt = read(CORE / "execution/ExecutionEngine.kt")
         assert "isChaquopyAvailable" in txt
         assert "ChaquopySession" in txt and "ProcessSession" in txt
         assert "describeBackend" in txt
 
     def test_engine_callback_session(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         txt = read(CORE / "execution/ExecutionEngine.kt")
         assert "onOutput" in txt and "onExit" in txt
 
     def test_engine_start_pip_stream(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         assert "startPipStream" in read(CORE / "execution/ExecutionEngine.kt")
 
     def test_engine_workspace_dir(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         assert "workspaceDirPath" in read(CORE / "execution/ExecutionEngine.kt")
 
     def test_vm_sets_workspace_dir(self):
-        if not (CORE / 'execution/TerminalBridge.kt').exists(): return  # TEST D4
         assert "workspaceDirPath" in read(JAVA / "WorkspaceViewModel.kt")
 
 
@@ -309,7 +287,6 @@ class TestChaquopyEmbed:
 
 class TestBugFixes:
     def test_tab_single_combined_clickable(self):
-        if 'TEST D' in read(UI / 'workbench/WorkbenchScreen.kt'): return  # TEST D1
         txt = read(UI / "workbench/WorkbenchScreen.kt")
         assert "combinedClickable" in txt
         assert "onLongClick" in txt
@@ -320,7 +297,6 @@ class TestBugFixes:
         assert "400" in txt
 
     def test_version_bump(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         assert "0.2.0-fase2" in read(BUILD_GRADLE)
         assert "0.2.0-fase2" in read(ROOT / "gradle.properties")
         assert "0.2.0-fase2" in read(UI / "settings/AboutScreen.kt")
@@ -330,9 +306,7 @@ class TestBugFixes:
         assert "lastNonSpace" in txt and "atLineStart" in txt
 
     def test_terminal_takes_context(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         assert "context: Context" in read(UI / "terminal/TerminalScreen.kt")
 
     def test_pip_takes_context(self):
-        if any('TEST D' in read(x) for x in [UI / 'terminal/TerminalScreen.kt', UI / 'settings/PipScreen.kt', UI / 'settings/AboutScreen.kt', UI / 'editor/EditorScreen.kt', UI / 'theme/ZcodeTheme.kt']): return  # TEST D2
         assert "context: android.content.Context" in read(UI / "settings/PipScreen.kt")
