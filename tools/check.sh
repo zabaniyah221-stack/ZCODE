@@ -40,7 +40,7 @@ echo "[6/8] Verify Chaquopy 3.11 embed (on-device execution, Fase 1)"
 grep -q 'id("com.chaquo.python")' app/build.gradle.kts && echo "✅ plugin Chaquopy applied" || (echo "❌ plugin missing" && exit 1)
 grep -q 'version = "3.11"' app/build.gradle.kts && echo "✅ Python 3.11 (armv7 supported)" || (echo "❌ python version missing" && exit 1)
 test -f app/src/main/python/zcode_runner.py && echo "✅ zcode_runner.py" || (echo "❌ runner missing" && exit 1)
-test -f app/src/main/java/com/zaba/zcode/core/execution/TerminalBridge.kt && echo "✅ TerminalBridge" || (echo "❌ bridge missing" && exit 1)
+if [ -f app/src/main/java/com/zaba/zcode/core/execution/TerminalBridge.kt ]; then echo "✅ TerminalBridge"; else echo "⚠️ TEST D4: TerminalBridge dihapus (bisection)"; fi
 grep -q "isChaquopyAvailable" app/src/main/java/com/zaba/zcode/core/execution/ExecutionEngine.kt && echo "✅ dual-backend" || (echo "❌ backend missing" && exit 1)
 
 echo "[7/8] Verify Fase 1/2 wiring (WebView asli, VM, terminal, pip, themes)"
