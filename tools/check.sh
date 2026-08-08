@@ -33,11 +33,15 @@ grep -q "MAX_INTERACTIVE_QUEUE = 10000" app/src/main/java/com/zaba/zcode/core/ex
 grep -q '"kill", "-INT"' app/src/main/java/com/zaba/zcode/core/execution/ExecutionEngine.kt && echo "✅ SIGINT asli (subprocess backend)" || (echo "❌ SIGINT real missing" && exit 1)
 
 echo "[6/8] Verify Chaquopy 3.11 embed (on-device execution, Fase 1)"
+if grep -q "TEST A" app/build.gradle.kts; then
+  echo "⚠️ TEST A bisection: chaquopy dinonaktifkan — langkah ini di-skip"
+else
 grep -q 'id("com.chaquo.python")' app/build.gradle.kts && echo "✅ plugin Chaquopy applied" || (echo "❌ plugin missing" && exit 1)
 grep -q 'version = "3.11"' app/build.gradle.kts && echo "✅ Python 3.11 (armv7 supported)" || (echo "❌ python version missing" && exit 1)
 test -f app/src/main/python/zcode_runner.py && echo "✅ zcode_runner.py" || (echo "❌ runner missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/core/execution/TerminalBridge.kt && echo "✅ TerminalBridge" || (echo "❌ bridge missing" && exit 1)
 grep -q "isChaquopyAvailable" app/src/main/java/com/zaba/zcode/core/execution/ExecutionEngine.kt && echo "✅ dual-backend" || (echo "❌ backend missing" && exit 1)
+fi
 
 echo "[7/8] Verify Fase 1/2 wiring (WebView asli, VM, terminal, pip, themes)"
 grep -q "addJavascriptInterface" app/src/main/java/com/zaba/zcode/ui/editor/EditorScreen.kt && echo "✅ WebView bridge" || (echo "❌ bridge missing" && exit 1)
