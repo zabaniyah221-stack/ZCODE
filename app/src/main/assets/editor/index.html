@@ -143,6 +143,10 @@
             editor.session.replace(range, out.join("\n"));
             editor.selection.clearSelection();
         }
+
+        if (window.ZCODE && typeof window.ZCODE.onEditorReady === "function") {
+            window.ZCODE.onEditorReady();
+        }
     </script>
 </body>
 </html>

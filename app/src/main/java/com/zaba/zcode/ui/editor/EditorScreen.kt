@@ -2,6 +2,10 @@ package com.zaba.zcode.ui.editor
 
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.annotation.SuppressLint
+import android.content.Context
+import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
@@ -22,12 +26,31 @@ import androidx.compose.ui.viewinterop.AndroidView
  * - ZMUX lesson: debounce resize 100ms di MainActivity agar prompt tidak loncat 4-5 baris.
  * - Font editor 12px (keputusan tim) — di-set di index.html.
  */
+@SuppressLint("ClickableViewAccessibility")
 @Composable
 fun EditorScreen(
     code: String,
     onCodeChange: (String) -> Unit,
     webViewRef: MutableState<WebView?> = remember { mutableStateOf(null) }
 ) {
+    // Menghindari stale state capture pada factory blok AndroidView
+    val bridge = androidx.compose.runtime.remember {
+        EditorBridge(
+            onChange = { onCodeChange(it) },
+            onReady = {}
+        )
+    }
+
+    // Perbarui callback dan nilai code pada bridge setiap kali recomposition terjadi
+    bridge.onChange = onCodeChange
+    bridge.onReady = {
+        webViewRef.value?.post {
+            webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+            webViewRef.value?.requestLayout()
+            webViewRef.value?.invalidate()
+        }
+    }
+
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -40,13 +63,35 @@ fun EditorScreen(
                         allowContentAccess = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+
+                    setOnTouchListener { v, event ->
+                        if (event.action == MotionEvent.ACTION_DOWN) {
+                            v.requestFocus()
+                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                            imm?.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT)
+                        }
+                        false
+                    }
+
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             view?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+                            view?.post {
+                                view.requestLayout()
+                                view.invalidate()
+                            }
                         }
                     }
-                    addJavascriptInterface(EditorBridge(onCodeChange), "ZCODE")
+
+                    addJavascriptInterface(bridge, "ZCODE")
                     loadUrl("file:///android_asset/editor/index.html")
                     webViewRef.value = this
                 }
@@ -83,10 +128,18 @@ fun escapeJavaScriptString(value: String): String {
     return builder.toString()
 }
 
-class EditorBridge(private val onChange: (String) -> Unit) {
+class EditorBridge(
+    var onChange: (String) -> Unit,
+    var onReady: () -> Unit = {}
+) {
     @android.webkit.JavascriptInterface
     fun onCodeChange(code: String) {
         onChange(code)
+    }
+
+    @android.webkit.JavascriptInterface
+    fun onEditorReady() {
+        onReady()
     }
 
     @android.webkit.JavascriptInterface
