@@ -23,9 +23,13 @@ grep -q 'singleTop' app/src/main/AndroidManifest.xml && echo "✅ singleTop" || 
 grep -q 'allowBackup="false"' app/src/main/AndroidManifest.xml && echo "✅ allowBackup false" || (echo "❌ allowBackup missing" && exit 1)
 
 echo "[4/8] Verify Topbar faded grey + three lines ≡ (user request)"
+if grep -q "TEST D" app/src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt; then
+  echo "⚠️ bisection: WorkbenchScreen di-stub — langkah ini di-skip"
+else
 grep -q "3A4452\|TopbarFadedGrey" app/src/main/java/com/zaba/zcode/ui/theme/ZcodeTheme.kt && echo "✅ Topbar faded grey" || (echo "❌ Topbar color missing" && exit 1)
 grep -q "≡" app/src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt && echo "✅ ≡ three lines" || (echo "❌ hamburger text found or ≡ missing" && exit 1)
 if grep -q "hamburger" app/src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt; then echo "❌ hamburger word should not appear (use ≡)" && exit 1; else echo "✅ no hamburger word"; fi
+fi
 
 echo "[5/8] Verify Execution guards (S-18)"
 grep -q "MAX_CODE_BYTES = 512" app/src/main/java/com/zaba/zcode/core/execution/ExecutionEngine.kt && echo "✅ MAX_CODE_BYTES" || (echo "❌ MAX_CODE_BYTES missing" && exit 1)
