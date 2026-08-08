@@ -402,7 +402,10 @@ fun WorkbenchScreen(
 
     // ---------- Dialog: Command Palette & Quick Open ----------
     if (showPalette) {
-        val paletteCommands = listOf(
+        // Tipe eksplisit: tanpa ini, lambda `webViewRef.value?.evaluateJavascript(...)`
+        // mengembalikan Unit? sehingga list ter-infer jadi Pair<String, () -> Unit?>
+        // dan tidak cocok dengan parameter `commands: List<Pair<String, () -> Unit>>`.
+        val paletteCommands: List<Pair<String, () -> Unit>> = listOf(
             "Beautifier Pro (Format Code)" to {
                 vm.beautifyActiveFile()
                 pushCode()

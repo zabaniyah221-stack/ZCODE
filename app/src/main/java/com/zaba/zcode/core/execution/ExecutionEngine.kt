@@ -92,7 +92,10 @@ object ExecutionEngine {
         return if (context != null && isChaquopyAvailable()) {
             ChaquopySession(context, file, onOutput, onExit)
         } else {
-            ProcessSession(file, onOutput, onExit)
+            // Backend desktop/dev: spawn subprocess python3 (bukan ProcessSession(file))
+            val pb = ProcessBuilder("python3", "-u", file.absolutePath)
+            pb.redirectErrorStream(true)
+            ProcessSession(pb.start(), onOutput, onExit)
         }
     }
 
@@ -146,16 +149,22 @@ object ExecutionEngine {
 
         override fun sendCtrlC() {
             if (!process.isAlive) return
-            try {
-                val pid = process.pid()
-                if (pid > 0) {
+            // `Process.pid()` butuh Java 9+ dan pernah gagal resolve di CI
+            // (Unresolved reference: pid) — ambil via reflection agar kompilasi
+            // aman di semua JDK; kalau gagal, fallback ke destroy().
+            val pid = runCatching {
+                val m = process.javaClass.getMethod("pid")
+                (m.invoke(process) as Number).toLong()
+            }.getOrNull()
+            if (pid != null && pid > 0) {
+                try {
                     val kill = ProcessBuilder("kill", "-INT", pid.toString())
                     kill.redirectErrorStream(true)
                     kill.start().waitFor()
                     return
+                } catch (e: Exception) {
+                    // fallback di bawah
                 }
-            } catch (e: Exception) {
-                // fallback di bawah
             }
             try {
                 process.destroy()
