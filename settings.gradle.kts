@@ -9,7 +9,8 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // TEST D6: FAIL_ON_PROJECT_REPOS dihapus — Chaquopy mendaftarkan repo
+    // level proyek saat konfigurasi; mode tsb melarangnya (penyebab build gagal)
     repositories {
         google()
         mavenCentral()
