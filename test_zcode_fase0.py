@@ -25,9 +25,14 @@ BUGS = ROOT / "docs/BUGS_AUDIT_ZABACODE_FOR_ZCODE.md"
 
 def read(p): return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
 def _bisection_stub():
-    """True bila WorkbenchScreen sedang di-stub untuk bisection CI."""
-    txt = read(WORKBENCH_KT)
-    return "TEST D" in txt
+    """True bila file UI sedang di-stub untuk bisection CI."""
+    for p in [WORKBENCH_KT, EDITOR_KT, THEME_KT,
+              APP / "src/main/java/com/zaba/zcode/ui/terminal/TerminalScreen.kt",
+              APP / "src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt",
+              APP / "src/main/java/com/zaba/zcode/ui/settings/AboutScreen.kt"]:
+        if "TEST D" in read(p):
+            return True
+    return False
 
 
 
