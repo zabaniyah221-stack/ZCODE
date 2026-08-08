@@ -9,6 +9,9 @@ Alur: Kotlin memanggil `run_script(bridge, script_path)`.
   deterministik untuk script yang sedang nge-blok di input()
 - cwd = folder workspace, jadi plt.savefig("out.png") / open("data.txt")
   relatif bekerja seperti di desktop
+- sys.path menyertakan workspace + workspace/user_packages, jadi package
+  hasil `pip install` dari PipScreen (install via --target) langsung bisa
+  di-import tanpa restart aplikasi
 """
 import os
 import runpy
@@ -77,6 +80,10 @@ def run_script(bridge, script_path):
         sys.stdout = BridgeStdout(bridge)
         sys.stderr = BridgeStdout(bridge)
         sys.path.insert(0, bridge.workspaceDir())
+        # user_packages: target `pip install` dari zcode_pip (--target <workspace>/user_packages)
+        user_pkg = os.path.join(bridge.workspaceDir(), "user_packages")
+        if user_pkg not in sys.path:
+            sys.path.insert(0, user_pkg)
 
         # best-effort: daftarkan thread worker agar Kotlin bisa coba interrupt()
         worker = threading.current_thread()
