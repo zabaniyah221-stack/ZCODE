@@ -1,5 +1,6 @@
-package com.zaba.zcode.ui.workbench
+package com.zaba.zcode.ui.terminal
 
+import android.content.Context
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -9,19 +10,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
-import com.zaba.zcode.WorkspaceViewModel
+import java.io.File
 
-// TEST D5 marker
+// TEST D2 marker
 @Composable
-fun WorkbenchScreen(
-    vm: WorkspaceViewModel,
-    onRun: (String) -> Unit,
-    onNavigateToPip: () -> Unit,
-    onNavigateToAbout: () -> Unit
+fun TerminalScreen(
+    filename: String,
+    filesDir: File,
+    context: Context,
+    onBack: () -> Unit
 ) {
     Scaffold { padding ->
         Surface(modifier = Modifier.fillMaxSize().padding(padding), color = MaterialTheme.colorScheme.background) {
-            Text("stub WorkbenchScreen", fontSize = 14.sp)
+            Text("stub TerminalScreen", fontSize = 14.sp)
         }
     }
 }

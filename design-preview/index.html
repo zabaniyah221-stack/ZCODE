@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZCODE — Design Preview (Fase 1 &amp; 2)</title>
+<style>
+  :root {
+    /* Retro (default) */
+    --bg: #050806;
+    --panel: #0A100D;
+    --panel2: #0F1712;
+    --primary: #39FF14;
+    --on-primary: #050806;
+    --on-surface: #E6E6E6;
+    --muted: #8A938C;
+    --soft-border: rgba(255,255,255,0.07);
+    --soft-border-strong: rgba(255,255,255,0.12);
+    --error: #FF4B4B;
+    --error-soft: rgba(255,75,75,0.12);
+    --tab-bg: #0A100D;
+    --editor-bg: #050806;
+  }
+  html[data-theme="dracula"] {
+    --bg: #282A36;
+    --panel: #21222C;
+    --panel2: #31323E;
+    --primary: #BD93F9;
+    --on-primary: #282A36;
+    --on-surface: #F8F8F2;
+    --muted: #8D8FA5;
+    --soft-border: rgba(255,255,255,0.08);
+    --soft-border-strong: rgba(255,255,255,0.15);
+    --error: #FF5555;
+    --error-soft: rgba(255,85,85,0.14);
+    --tab-bg: #21222C;
+    --editor-bg: #050806;
+  }
+  html[data-theme="tokyo"] {
+    --bg: #1A1B26;
+    --panel: #16161E;
+    --panel2: #1F2030;
+    --primary: #7AA2F7;
+    --on-primary: #1A1B26;
+    --on-surface: #A9B1D6;
+    --muted: #565F89;
+    --soft-border: rgba(255,255,255,0.08);
+    --soft-border-strong: rgba(255,255,255,0.15);
+    --error: #F7768E;
+    --error-soft: rgba(247,118,142,0.14);
+    --tab-bg: #16161E;
+    --editor-bg: #050806;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0B0D0C;
+    color: var(--on-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+    gap: 18px;
+  }
+  .topbar-note {
+    color: #9aa7a0;
+    font-size: 13px;
+    text-align: center;
+    max-width: 640px;
+    line-height: 1.6;
+  }
+  .topbar-note b { color: #ffd54f; }
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .controls button {
+    background: #141816;
+    color: #d7e3db;
+    border: 1px solid #2a332d;
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .controls button.active { background: #1B4D2E; color: #39FF14; border-color: #2a6b3f; }
+  .controls button.screen { border-radius: 10px; }
+
+  /* ============ Phone frame ============ */
+  .phone {
+    width: 400px;
+    max-width: 96vw;
+    background: var(--bg);
+    border: 1px solid var(--soft-border-strong);
+    border-radius: 28px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+    display: flex;
+    flex-direction: column;
+    height: 820px;
+    position: relative;
+    transition: background 0.25s ease;
+  }
+  .screen { display: none; flex-direction: column; height: 100%; }
+  .screen.active { display: flex; }
+
+  /* ============ Topbar ============ */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 8px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--soft-border);
+  }
+  .topbar .btn {
+    font-size: 20px;
+    color: var(--on-surface);
+    padding: 6px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .topbar .btn:hover { background: rgba(255,255,255,0.08); }
+  .topbar .title { text-align: center; line-height: 1.25; }
+  .topbar .title .name { font-size: 13px; font-family: monospace; }
+  .topbar .title .sub { font-size: 10px; color: var(--muted); }
+  .topbar .right { display: flex; gap: 2px; }
+
+  /* ============ Tab bar ============ */
+  .tabbar {
+    display: flex;
+    background: var(--tab-bg);
+    border-bottom: 1px solid var(--soft-border);
+    overflow-x: auto;
+  }
+  .tabbar::-webkit-scrollbar { display: none; }
+  .tab {
+    padding: 11px 14px;
+    font-size: 12px;
+    font-family: monospace;
+    color: #9aa39c;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+  /* ============ Syntax banner ============ */
+  .banner {
+    margin: 8px 10px 0;
+    background: var(--error-soft);
+    border: 1px solid rgba(255,75,75,0.25);
+    color: #ff9d9d;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 11px;
+    display: none;
+  }
+  .banner.show { display: block; }
+
+  /* ============ Editor ============ */
+  .editor {
+    flex: 1;
+    background: var(--editor-bg);
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+  }
+  .gutter {
+    width: 44px;
+    background: #0A100D;
+    color: #4D7A5A;
+    text-align: right;
+    padding: 10px 8px 0 0;
+    border-right: 1px solid #111612;
+    user-select: none;
+    line-height: 1.55;
+  }
+  .code { padding: 10px 14px 0; white-space: pre; color: #B9F5C4; flex: 1; overflow: hidden; }
+  .code .k { color: #ff79c6; }   /* keyword */
+  .code .s { color: #8be9fd; }   /* string */
+  .code .f { color: #50fa7b; }   /* function */
+  .code .c { color: #6272a4; }   /* comment */
+  .code .n { color: #ffb86c; }   /* number */
+  .cursor { display: inline-block; width: 8px; height: 14px; background: #39FF14; animation: blink 1s infinite; vertical-align: text-bottom; }
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.15; } }
+
+  /* ============ QuickTools ============ */
+  .quicktools {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px;
+    background: var(--panel2);
+    border-top: 1px solid var(--soft-border);
+    overflow-x: auto;
+  }
+  .quicktools::-webkit-scrollbar { display: none; }
+  .chip {
+    background: var(--panel);
+    border: 1px solid var(--soft-border);
+    color: var(--on-surface);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: monospace;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .chip:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* ============ FAB ============ */
+  .fab {
+    position: absolute;
+    right: 18px;
+    bottom: 118px;
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+    background: var(--primary);
+    color: var(--on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(57,255,20,0.25);
+    z-index: 5;
+    transition: transform 0.15s;
+  }
+  .fab:hover { transform: scale(1.06); }
+
+  /* ============ Drawer ============ */
+  .drawer-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 20;
+    display: none;
+  }
+  .drawer-backdrop.open { display: block; }
+  .drawer {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 300px;
+    background: var(--bg);
+    z-index: 21;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--soft-border-strong);
+  }
+  .drawer.open { transform: translateX(0); }
+  .drawer .dhead {
+    padding: 18px 20px;
+    background: var(--panel2);
+    border-bottom: 1px solid var(--soft-border);
+  }
+  .drawer .dhead .t { font-family: monospace; font-weight: 700; font-size: 17px; color: var(--primary); }
+  .drawer .dhead .s { font-size: 11px; color: var(--muted); }
+  .dsec { font-size: 10px; letter-spacing: 1px; color: var(--primary); padding: 12px 16px 6px; font-weight: 600; }
+  .ditem {
+    padding: 12px 16px;
+    font-size: 14px;
+    color: var(--on-surface);
+    cursor: pointer;
+    border-radius: 8px;
+    margin: 0 6px;
+  }
+  .ditem:hover { background: rgba(255,255,255,0.06); }
+  .dsep { border: 0; border-top: 1px solid var(--soft-border); margin: 8px 16px; }
+  .theme-row { display: flex; gap: 8px; padding: 4px 16px; }
+  .theme-btn {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--soft-border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 8px 4px;
+    font-size: 10px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .theme-btn.active { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+  .files { flex: 1; overflow-y: auto; }
+  .file {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .file.active { background: rgba(57,255,20,0.10); }
+  .file .fname { font-family: monospace; font-size: 13px; }
+  .file.active .fname { color: var(--primary); }
+  .file .fmeta { font-size: 10px; color: var(--muted); }
+  .file .fops { display: flex; gap: 10px; font-size: 11px; }
+  .file .fops .rn { color: #b8c2bb; }
+  .file .fops .dl { color: #ff9d9d; }
+
+  /* ============ Terminal ============ */
+  .term-body {
+    flex: 1;
+    background: #050806;
+    padding: 14px;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #39FF14;
+    overflow-y: auto;
+    cursor: text;
+  }
+  .term-body .prompt-line { color: #fff; }
+  .term-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #1E1F29;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .ctrlc {
+    background: #B3261E;
+    color: #fff;
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .term-bar .hint { font-size: 11px; color: #888; }
+
+  /* ============ Pip ============ */
+  .pip-body { flex: 1; background: var(--bg); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .pip-input-row { display: flex; gap: 8px; }
+  .pip-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--soft-border-strong);
+    color: var(--on-surface);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    outline: none;
+  }
+  .pip-input:focus { border-color: var(--primary); }
+  .pip-install {
+    background: var(--primary);
+    color: var(--on-primary);
+    border: 0;
+    border-radius: 8px;
+    padding: 0 22px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .pip-label { font-size: 10px; letter-spacing: 1px; color: var(--primary); font-weight: 600; }
+  .pip-log {
+    flex: 1;
+    background: #050806;
+    border-radius: 8px;
+    padding: 12px;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #39FF14;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+
+  /* ============ About ============ */
+  .about-body {
+    flex: 1;
+    background: var(--bg);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+  .logo {
+    width: 84px; height: 84px;
+    border-radius: 18px;
+    background: var(--primary);
+    color: var(--on-primary);
+    display: flex; align-items: center; justify-content: center;
+    font-family: monospace; font-weight: 700; font-size: 32px;
+    margin-top: 10px;
+  }
+  .about-title { font-size: 24px; font-weight: 700; color: var(--primary); font-family: monospace; }
+  .about-ver { font-size: 12px; color: var(--muted); }
+  .about-desc { font-size: 13px; color: #b6bdb8; max-width: 300px; line-height: 1.6; }
+  .about-sub { font-size: 11px; color: var(--muted); max-width: 300px; line-height: 1.6; }
+  .contribute {
+    margin-top: auto;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--soft-border);
+    border-radius: 14px;
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 10px; align-items: center;
+  }
+  .contribute .ct { font-size: 13px; color: var(--primary); font-weight: 600; }
+  .contribute .cd { font-size: 11px; color: var(--muted); }
+  .contribute .cbtn {
+    background: var(--primary); color: var(--on-primary);
+    border: 0; border-radius: 8px;
+    padding: 10px 20px; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+
+  .footnote { color: #5c6a62; font-size: 11px; max-width: 480px; text-align: center; line-height: 1.6; }
+</style>
+</head>
+<body data-theme="retro">
+  <div class="topbar-note">
+    <b>DESIGN PREVIEW — statis</b> · bukan APK asli (ZCODE native Android tidak bisa dijalankan di browser).
+    Layout, warna, font 12px, dan interaksi meniru <b>WorkbenchScreen / TerminalScreen / PipScreen / AboutScreen</b> Compose.
+  </div>
+
+  <div class="controls">
+    <button data-theme-btn="retro" class="active" onclick="setTheme('retro')">Retro</button>
+    <button data-theme-btn="dracula" onclick="setTheme('dracula')">Dracula</button>
+    <button data-theme-btn="tokyo" onclick="setTheme('tokyo')">Tokyo Night</button>
+    <span style="width:12px"></span>
+    <button class="screen active" onclick="showScreen('workbench')">1 · Workbench</button>
+    <button class="screen" onclick="showScreen('terminal')">2 · Terminal PTY</button>
+    <button class="screen" onclick="showScreen('pip')">3 · Pip Layer</button>
+    <button class="screen" onclick="showScreen('about')">4 · About</button>
+  </div>
+
+  <div class="phone" id="phone">
+
+    <!-- ================= WORKBENCH ================= -->
+    <div class="screen active" id="screen-workbench">
+      <div class="topbar">
+        <div class="btn" onclick="openDrawer()">≡</div>
+        <div class="title">
+          <div class="name">main.py</div>
+          <div class="sub">internal filesDir · Python 3.11</div>
+        </div>
+        <div class="right">
+          <div class="btn" title="Command Palette / Quick Open">🔍</div>
+          <div class="btn" title="New File">+</div>
+        </div>
+      </div>
+      <div class="tabbar">
+        <div class="tab active" title="long-press untuk close">main.py</div>
+        <div class="tab" title="long-press untuk close">waifu.py</div>
+        <div class="tab" title="long-press untuk close">calculator.py</div>
+        <div class="tab" title="long-press untuk close">untitled_4.py</div>
+      </div>
+      <div class="banner show">⚠ Syntax: Unbalanced brackets: '(' on line 3 has no matching closed bracket</div>
+      <div class="editor">
+        <div class="gutter">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15</div>
+        <div class="code"><span class="c"># waifu.py — chatbot sederhana</span>
+<span class="k">def</span> <span class="f">waifu</span>():
+    nama = <span class="f">input</span>(<span class="s">"you: "</span>)
+    <span class="k">print</span>(<span class="s">f"waifu: hai {nama}!"</span>)
+    <span class="k">if</span> nama == <span class="s">"halo"</span>:<span class="cursor"> </span>
+        <span class="k">print</span>(<span class="s">"waifu: hai!"</span>)
+
+<span class="k">def</span> <span class="f">add</span>(a, b) -&gt; <span class="k">int</span>:
+    <span class="k">return</span> a + b
+
+<span class="c"># print("a==b") tidak pernah rusak oleh beautifier</span></div>
+      </div>
+      <div class="quicktools">
+        <div class="chip">Tab</div><div class="chip">:</div><div class="chip">;</div><div class="chip">'</div>
+        <div class="chip">#</div><div class="chip">(</div><div class="chip">)</div><div class="chip">[</div>
+        <div class="chip">]</div><div class="chip">def</div><div class="chip">return</div><div class="chip">import</div>
+      </div>
+      <div class="fab" onclick="showScreen('terminal')" title="▶ Run → pindah layer Terminal PTY">▶</div>
+    </div>
+
+    <!-- ================= TERMINAL ================= -->
+    <div class="screen" id="screen-terminal">
+      <div class="topbar">
+        <div class="btn" onclick="showScreen('workbench')">◀ Back</div>
+        <div class="title"><div class="name">Terminal: waifu.py</div></div>
+        <div style="width:60px"></div>
+      </div>
+      <div class="term-body">
+ZCODE Terminal — Running waifu.py
+----------------------------------------
+waifu: hai! nama kamu siapa?
+<span class="prompt-line">you: <span class="cursor"></span></span>
+      </div>
+      <div class="term-bar">
+        <button class="ctrlc" onclick="this.textContent='^C — Interrupted ✓'">Ctrl+C</button>
+        <div class="hint">Tap terminal untuk mengetik langsung</div>
+      </div>
+    </div>
+
+    <!-- ================= PIP ================= -->
+    <div class="screen" id="screen-pip">
+      <div class="topbar">
+        <div class="btn" onclick="showScreen('workbench')">◀ Back</div>
+        <div class="title"><div class="name">Pip Package Manager</div></div>
+        <div style="width:60px"></div>
+      </div>
+      <div class="pip-body">
+        <div class="pip-input-row">
+          <input class="pip-input" placeholder="e.g. requests" value="requests">
+          <button class="pip-install" onclick="pipInstall(this)">Install</button>
+        </div>
+        <div class="pip-label">INSTALLATION LOG:</div>
+        <div class="pip-log" id="pip-log">ZCODE Pip Installer Layer — Chaquopy 3.11
+---------------------------------------------
+Ketik nama package di atas, lalu tap Install.
+</div>
+      </div>
+    </div>
+
+    <!-- ================= ABOUT ================= -->
+    <div class="screen" id="screen-about">
+      <div class="topbar">
+        <div class="btn" onclick="showScreen('workbench')">◀ Back</div>
+        <div class="title"><div class="name">About ZCODE</div></div>
+        <div style="width:60px"></div>
+      </div>
+      <div class="about-body">
+        <div class="logo">ZC</div>
+        <div class="about-title">ZCODE</div>
+        <div class="about-ver">Version 0.2.0-fase2 · Zabacode Kotlin Edition</div>
+        <div class="about-desc">Kesederhanaan Pydroid × Detail VS Code × Kelincahan Acode.</div>
+        <div class="about-sub">Editor Python offline-first: cepat, efisien, aman, bebas iklan & telemetri.</div>
+        <div class="contribute">
+          <div class="ct">Support &amp; Contribution</div>
+          <div class="cd">Laporkan bug / saran langsung lewat GitHub Issues.</div>
+          <button class="cbtn" onclick="this.textContent='github.com/muzape28-blip/ZCODE/issues ✓'">Open Issues / Contribute</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= DRAWER ================= -->
+    <div class="drawer-backdrop" id="drawer-backdrop" onclick="closeDrawer()"></div>
+    <div class="drawer" id="drawer">
+      <div class="dhead">
+        <div class="t">ZCODE</div>
+        <div class="s">Zabacode Kotlin Edition — offline-first</div>
+      </div>
+      <div class="dsec">NAVIGATION</div>
+      <div class="ditem">Pip Package Manager</div>
+      <div class="ditem">About &amp; Contribute</div>
+      <hr class="dsep">
+      <div class="dsec">CODE TRANSFORMS</div>
+      <div class="ditem">Beautifier Pro (Format Code)</div>
+      <div class="ditem">Optimize Auto-Imports</div>
+      <div class="ditem">Duplicate Active Line</div>
+      <div class="ditem">Toggle Line Comment</div>
+      <div class="ditem">Clear All Drafts &amp; Files</div>
+      <hr class="dsep">
+      <div class="dsec">SELECT THEME</div>
+      <div class="theme-row">
+        <div class="theme-btn active" onclick="setTheme('retro')">Retro</div>
+        <div class="theme-btn" onclick="setTheme('dracula')">Dracula</div>
+        <div class="theme-btn" onclick="setTheme('tokyo')">Tokyo</div>
+      </div>
+      <hr class="dsep">
+      <div class="dsec">FILES MANAGER</div>
+      <div class="files">
+        <div class="file active">
+          <div><div class="fname">main.py</div><div class="fmeta">0.1 KB</div></div>
+          <div class="fops"><span class="rn">Rename</span><span class="dl">Delete</span></div>
+        </div>
+        <div class="file">
+          <div><div class="fname">waifu.py</div><div class="fmeta">0.4 KB</div></div>
+          <div class="fops"><span class="rn">Rename</span><span class="dl">Delete</span></div>
+        </div>
+        <div class="file">
+          <div><div class="fname">calculator.py</div><div class="fmeta">0.3 KB</div></div>
+          <div class="fops"><span class="rn">Rename</span><span class="dl">Delete</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footnote">
+    Klik tombol tema untuk melihat sinkronisasi warna dekoratif (editor &amp; terminal tetap true-black #050806).
+    ▶ = pindah ke Terminal PTY full-screen · ◀ Back = kembali ke editor · Ctrl+C = SIGINT asli.
+    Font editor/terminal 12px. Drawer: long-press tab = close (tanpa tombol ×).
+  </div>
+
+<script>
+  var currentScreen = 'workbench';
+  function showScreen(name) {
+    currentScreen = name;
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+    document.getElementById('screen-' + name).classList.add('active');
+    document.querySelectorAll('button.screen').forEach(function (b) {
+      b.classList.toggle('active', b.textContent.trim().startsWith(screenLabel(name)));
+    });
+    closeDrawer();
+  }
+  function screenLabel(name) {
+    return { workbench: '1', terminal: '2', pip: '3', about: '4' }[name];
+  }
+  function setTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    document.querySelectorAll('[data-theme-btn]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-theme-btn') === t);
+    });
+    var tb = document.querySelectorAll('.theme-btn');
+    tb[0].classList.toggle('active', t === 'retro');
+    tb[1].classList.toggle('active', t === 'dracula');
+    tb[2].classList.toggle('active', t === 'tokyo');
+  }
+  function openDrawer() { document.getElementById('drawer').classList.add('open'); document.getElementById('drawer-backdrop').classList.add('open'); }
+  function closeDrawer() { document.getElementById('drawer').classList.remove('open'); document.getElementById('drawer-backdrop').classList.remove('open'); }
+  function pipInstall(btn) {
+    var log = document.getElementById('pip-log');
+    btn.disabled = true;
+    log.textContent += '\n> pip install requests\nCollecting requests\n  Downloading requests-2.32.3-py3-none-any.whl (64 kB)\nInstalling collected packages: requests\nSuccessfully installed requests\n\n✅ Package \'requests\' installed successfully!\n';
+    log.scrollTop = log.scrollHeight;
+    setTimeout(function () { btn.disabled = false; btn.textContent = 'Install ✓'; }, 600);
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDrawer();
+  });
+</script>
+</body>
+</html>

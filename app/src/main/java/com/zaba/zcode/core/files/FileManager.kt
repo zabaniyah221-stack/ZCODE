@@ -47,4 +47,15 @@ object FileManager {
             Result.failure(e)
         }
     }
+
+    /** Hapus file dengan path aman (E-01: OSError di-catch). */
+    fun deleteFileIfExists(filesDir: File, filename: String): Boolean {
+        val secured = secureFilename(filename) ?: return false
+        return try {
+            val file = File(filesDir, secured)
+            file.exists() && file.delete()
+        } catch (e: Exception) {
+            false
+        }
+    }
 }
