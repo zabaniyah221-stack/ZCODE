@@ -6,7 +6,8 @@ plugins {
     id("kotlin-parcelize")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
-    // TEST A: Chaquopy dinonaktifkan sementara (bisection CI)
+    // Chaquopy 3.11 — KEEP 3.11 for armeabi-v7a (3.12 drops 32-bit, see changelog #709)
+    id("com.chaquo.python")
 }
 
 android {
@@ -67,6 +68,16 @@ android {
             assets.srcDirs("src/main/assets")
             jniLibs.srcDir("src/main/jniLibs")
         }
+    }
+}
+
+// Chaquopy 15.0 — Python 3.11 in-process runtime (Fase 1: on-device execution).
+// - version 3.11: satu-satunya yang masih mendukung armeabi-v7a (HP user)
+// - pip build-time sengaja kosong; instalasi package lewat PipScreen saat runtime
+// - buildPython: CI menyediakan python3 (3.11) di PATH
+chaquopy {
+    defaultConfig {
+        version = "3.11"
     }
 }
 

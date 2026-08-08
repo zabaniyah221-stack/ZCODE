@@ -1,5 +1,4 @@
 """
-TEST C bisection: MODULE SKIPPED (Java Fase 0)
 ZCODE Fase 1 & 2 Strict Tests — honest & aware
 Covers: file manager + persistensi, PTY terminal interaktif, pip layer, 3 tema,
 WebView Ace asli, Checker, PluginHost (beautifier aman), Command Palette, semua tombol wired.
@@ -228,11 +227,6 @@ class TestNoKnownBugPatterns:
 # ===================================================================
 # Chaquopy — on-device execution (Fase 1 fix: tidak nanggung)
 # ===================================================================
-
-import pytest
-
-# TEST A bisection: dinonaktifkan sementara (lihat commit bisection)
-pytestmark = pytest.mark.skip(reason="TEST A: chaquopy dinonaktifkan untuk bisection CI")
 
 class TestChaquopyEmbed:
     def test_root_build_has_chaquopy_plugin(self):

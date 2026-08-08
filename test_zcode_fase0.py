@@ -24,12 +24,6 @@ DESIGN = ROOT / "docs/DESIGN_ZCODE.md"
 BUGS = ROOT / "docs/BUGS_AUDIT_ZABACODE_FOR_ZCODE.md"
 
 def read(p): return p.read_text(encoding="utf-8", errors="replace") if p.exists() else ""
-def _bisection_stub():
-    """True bila WorkbenchScreen sedang di-stub untuk bisection CI."""
-    txt = read(WORKBENCH_KT)
-    return "TEST B" in txt
-
-
 
 # ===================================================================
 # Docs existence
@@ -120,10 +114,7 @@ class TestGradleManifest:
         assert "armeabi-v7a" in txt and "arm64-v8a" in txt and "x86_64" in txt
 
     def test_gradle_chaquopy_311(self):
-        # TEST A bisection: chaquopy dinonaktifkan sementara
         txt = read(BUILD_GRADLE)
-        if 'TEST A' in txt:
-            return  # skip selama bisection
         assert '3.11' in txt
         assert 'chaquopy' in txt.lower() or 'Chaquo' in txt
 
@@ -171,7 +162,6 @@ class TestAceBundled:
 
 class TestUISpec:
     def test_workbench_has_three_lines(self):
-        if _bisection_stub(): return  # TEST B1
         txt = read(WORKBENCH_KT)
         assert "≡" in txt, "Workbench should have ≡ three lines"
 
@@ -181,36 +171,29 @@ class TestUISpec:
         assert "hamburger" not in txt.lower(), "Code should use ≡, not word hamburger"
 
     def test_workbench_has_add_tab_plus(self):
-        if _bisection_stub(): return  # TEST B1
         txt = read(WORKBENCH_KT)
         assert '"+"' in txt or "add tab" in txt.lower() or "add_tab" in txt.lower() or "+" in txt
 
     def test_theme_has_faded_grey(self):
-        if _bisection_stub(): return  # TEST B2
         txt = read(THEME_KT)
         assert "3A4452" in txt or "TopbarFadedGrey" in txt
 
     def test_theme_has_oled(self):
-        if _bisection_stub(): return  # TEST B2
         assert "050806" in read(THEME_KT)
 
     def test_editor_has_gutter(self):
-        if _bisection_stub(): return  # TEST B2
         txt = read(EDITOR_KT).lower()
         assert "gutter" in txt or "40" in txt  # 40dp gutter
 
     def test_editor_no_loopback(self):
-        if _bisection_stub(): return  # TEST B2
         txt = read(EDITOR_KT).lower()
         assert "127.0.0.1" not in txt and "5000" not in txt
         assert "file://" in txt or "file:///" in txt
 
     def test_editor_has_debounce_note(self):
-        if _bisection_stub(): return  # TEST B2
         assert "debounce" in read(EDITOR_KT).lower() or "100ms" in read(EDITOR_KT)
 
     def test_workbench_has_fab_above_handle(self):
-        if _bisection_stub(): return  # TEST B1
         txt = read(WORKBENCH_KT).lower()
         assert "floatingactionbutton" in txt or "fab" in txt
 
@@ -314,7 +297,6 @@ class TestPTY:
         assert "stdin input field" not in txt.lower() or "no stdin field" in txt.lower() or "ketik langsung" in read(EXEC_KT).lower()
 
     def test_workbench_navigates_to_output(self):
-        if _bisection_stub(): return  # TEST B1
         txt = read(WORKBENCH_KT).lower()
         assert "output" in txt and "navigate" in txt
 
@@ -350,8 +332,6 @@ class TestVersion:
 
 class TestCheckSh:
     def test_check_sh_exists(self):
-        if "TEST C" in read(ROOT / "tools/check.sh"):
-            return  # bisection
         p = ROOT / "tools/check.sh"
         assert p.exists() and p.stat().st_size > 0
         assert "verifyAceBundled" in read(p) or "Ace" in read(p)
