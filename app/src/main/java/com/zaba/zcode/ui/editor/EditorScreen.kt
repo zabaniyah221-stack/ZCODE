@@ -1,19 +1,18 @@
 package com.zaba.zcode.ui.editor
 
-import android.annotation.SuppressLint
-import android.content.Context
-import android.view.MotionEvent
-import android.view.inputmethod.InputMethodManager
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.annotation.SuppressLint
+import android.view.MotionEvent
 import android.webkit.WebViewClient
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
@@ -30,15 +29,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 fun EditorScreen(
     code: String,
     onCodeChange: (String) -> Unit,
-    webViewRef: androidx.compose.runtime.MutableState<WebView?> = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(null) }
+    webViewRef: MutableState<WebView?> = remember { mutableStateOf(null) }
 ) {
-    val focusManager = LocalFocusManager.current
-
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {
         AndroidView(
-            modifier = Modifier
-                .fillMaxSize()
-                .focusable(), // Memberi tahu Compose bahwa area ini focusable secara hirarki
+            modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
                     settings.apply {
@@ -48,20 +43,12 @@ fun EditorScreen(
                         allowContentAccess = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
-
-                    // Mengaktifkan fokus penuh pada WebView agar keyboard virtual Android bisa dipicu saat tap
                     isFocusable = true
                     isFocusableInTouchMode = true
 
                     setOnTouchListener { v, event ->
                         if (event.action == MotionEvent.ACTION_DOWN) {
-                            // Lepaskan fokus dari komponen Compose agar input connection didelegasikan langsung ke WebView
-                            focusManager.clearFocus()
                             v.requestFocus()
-
-                            // Meminta InputMethodManager memunculkan keyboard secara eksplisit pada input target
-                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                            imm?.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT)
                         }
                         false
                     }
@@ -69,8 +56,6 @@ fun EditorScreen(
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            // Tetap dipanggil demi kompatibilitas dan pengujian,
-                            // namun pengisian kode utama dilakukan secara aman via onEditorReady
                             view?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
                         }
                     }
