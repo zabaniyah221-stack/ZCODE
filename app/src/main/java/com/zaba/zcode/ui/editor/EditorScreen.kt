@@ -1,5 +1,7 @@
 package com.zaba.zcode.ui.editor
 
+import android.annotation.SuppressLint
+import android.view.MotionEvent
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -22,6 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
  * - ZMUX lesson: debounce resize 100ms di MainActivity agar prompt tidak loncat 4-5 baris.
  * - Font editor 12px (keputusan tim) — di-set di index.html.
  */
+@SuppressLint("ClickableViewAccessibility")
 @Composable
 fun EditorScreen(
     code: String,
@@ -40,13 +43,41 @@ fun EditorScreen(
                         allowContentAccess = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
+
+                    // Mengaktifkan fokus penuh pada WebView agar keyboard virtual Android bisa dipicu saat tap
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+
+                    setOnTouchListener { v, event ->
+                        if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_UP) {
+                            if (!v.hasFocus()) {
+                                v.requestFocus()
+                            }
+                        }
+                        false
+                    }
+
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
+                            // Tetap dipanggil demi kompatibilitas dan pengujian,
+                            // namun pengisian kode utama dilakukan secara aman via onEditorReady
                             view?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
                         }
                     }
-                    addJavascriptInterface(EditorBridge(onCodeChange), "ZCODE")
+
+                    addJavascriptInterface(
+                        EditorBridge(
+                            onChange = onCodeChange,
+                            onReady = {
+                                post {
+                                    evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+                                }
+                            }
+                        ),
+                        "ZCODE"
+                    )
+
                     loadUrl("file:///android_asset/editor/index.html")
                     webViewRef.value = this
                 }
@@ -83,10 +114,18 @@ fun escapeJavaScriptString(value: String): String {
     return builder.toString()
 }
 
-class EditorBridge(private val onChange: (String) -> Unit) {
+class EditorBridge(
+    private val onChange: (String) -> Unit,
+    private val onReady: () -> Unit = {}
+) {
     @android.webkit.JavascriptInterface
     fun onCodeChange(code: String) {
         onChange(code)
+    }
+
+    @android.webkit.JavascriptInterface
+    fun onEditorReady() {
+        onReady()
     }
 
     @android.webkit.JavascriptInterface
