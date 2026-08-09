@@ -169,6 +169,13 @@
             enableBasicAutocompletion: false
         });
 
+        /* Audit lazy-load (tanpa tebakan — dicek dari source): satu-satunya perintah
+           palette yang ext-nya tidak ke-bundle adalah "showSettingsMenu"
+           (target loadModule ace/ext/settings_menu). Fungsinya duplikat dengan
+           tema/font yang diatur aplikasi → disedikin dari palette agar SEMUA item
+           yang tertampil 100% berfungsi. */
+        editor.commands.removeCommand("showSettingsMenu");
+
         var isSettingValue = false;
 
         editor.on("change", function () {
