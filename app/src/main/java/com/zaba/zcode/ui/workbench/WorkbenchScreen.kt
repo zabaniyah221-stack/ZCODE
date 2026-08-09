@@ -1,6 +1,9 @@
 package com.zaba.zcode.ui.workbench
 
+import android.net.Uri
 import android.webkit.WebView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -14,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,12 +32,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -73,6 +74,7 @@ import com.zaba.zcode.core.plugins.PluginRegistry
 import com.zaba.zcode.core.plugins.SnippetLibrary
 import com.zaba.zcode.core.plugins.TodoExtractor
 import com.zaba.zcode.core.plugins.TodoItem
+import com.zaba.zcode.ui.components.ZIcons
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
 import com.zaba.zcode.ui.theme.ZcodeThemeType
@@ -86,12 +88,17 @@ import kotlinx.coroutines.launch
  *   long-press = close) → banner syntax → Editor CodeMirror 6 OLED → QuickTools/Symbol
  *   bar (opsional, toggle di drawer) → FAB ▶.
  *
- * Drawer: Navigasi (Pip/About), Code Transforms (5 plugin), Editor (toggle
- * Symbol bar), Theme (3 tema), Files Manager (rename/delete dialog konfirmasi).
+ * Drawer (redesign 2026-08, hasil diskusi user — lihat docs/RENCANA_UPDATE_2026_08.md):
+ * INSTALL MODULES → SAMPLES (halaman baru) → TOOLS expandable (plugin + Symbol bar +
+ * THEME cycle satu tombol + Clear All) → About & Contribute (paling bawah).
+ * Seksi NAVIGATION / EDITOR / SELECT THEME / FILES MANAGER dibuang total.
+ *
+ * Topbar: ≡ | nama file (tap → dialog Rename/Delete) | folder (import dari file
+ * manager HP, SAF text/*) | kaca pembesar polos (palette: Line & Find) | plus.
+ * Ikon vektor polos ZIcons (di-tint mengikuti tema) menggantikan emoji topbar.
  *
  * Anti-regresi:
  * - "≡" = tiga garis (ikon menu teks — jangan ganti dengan kata lain)
- * - "+" tambah file, "🔍" Command Palette di topbar
  * - Semua tombol ter-wire ke WorkspaceViewModel / onRun / navigate ke layer output
  */
 
@@ -103,7 +110,8 @@ fun WorkbenchScreen(
     vm: WorkspaceViewModel,
     onRun: (String) -> Unit,
     onNavigateToPip: () -> Unit,
-    onNavigateToAbout: () -> Unit
+    onNavigateToAbout: () -> Unit,
+    onNavigateToSamples: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -115,8 +123,10 @@ fun WorkbenchScreen(
     var fileToDelete by remember { mutableStateOf<String?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
     var showPalette by remember { mutableStateOf(false) }
-    // Batch anti-sepi: drawer PLUGINS expandable, dialog TODO, dialog Snippets
-    var pluginsExpanded by remember { mutableStateOf(false) }
+    // Tap nama file aktif di topbar → dialog Rename/Delete (pengganti FILES MANAGER)
+    var showFileActions by remember { mutableStateOf(false) }
+    // Redesign 2026-08: drawer TOOLS expandable (plugin + settings satu kotak)
+    var toolsExpanded by remember { mutableStateOf(false) }
     var showSnippets by remember { mutableStateOf(false) }
     var showTodoResults by remember { mutableStateOf(false) }
     var todoItems by remember { mutableStateOf<List<TodoItem>>(emptyList()) }
@@ -126,6 +136,18 @@ fun WorkbenchScreen(
 
     fun pushCode() {
         webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
+    }
+
+    // 📁 Ikon folder topbar → file manager HP (SAF), filter text/* (keputusan user).
+    // File yang dipilih di-IMPORT COPY ke workspace oleh VM (file asli tidak diubah);
+    // uri null = user batal memilih → tidak ada toast mengganggu.
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val (ok, msg) = vm.importExternalFile(uri)
+        toast(msg)
+        if (ok) pushCode()
     }
 
     fun gotoLine(n: Int) {
@@ -208,160 +230,146 @@ fun WorkbenchScreen(
                     )
                 }
 
-                DrawerSectionTitle("NAVIGATION")
-                DrawerItem("Pip Package Manager") {
+                // ---------- tujuan aplikasi (tanpa label "NAVIGATION" — redesign 2026-08) ----------
+                DrawerItem("INSTALL MODULES") {
                     scope.launch { drawerState.close() }
                     onNavigateToPip()
                 }
-                DrawerItem("About & Contribute") {
+                DrawerItem("SAMPLES") {
                     scope.launch { drawerState.close() }
-                    onNavigateToAbout()
+                    onNavigateToSamples()
                 }
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
 
-                // ---------- PLUGINS (batch anti-sepi S1/S2) ----------
-                // Header tap → kotak berborder expand ke bawah (±3 baris visible,
-                // scrollable). Tap badan baris = eksekusi; Switch = aktif/nonaktif.
-                val activePluginCount = PluginRegistry.plugins.count { vm.isPluginEnabled(it.id) }
+                // ---------- TOOLS (redesign 2026-08: kotak expandable tunggal) ----------
+                // Satu kotak: plugin (scroll ~3 baris) + Symbol bar + THEME cycle +
+                // Clear All. Nama polos "TOOLS" tanpa emoji (keputusan user).
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { pluginsExpanded = !pluginsExpanded }
+                        .clickable { toolsExpanded = !toolsExpanded }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "🧩 PLUGINS ($activePluginCount aktif)",
+                        "TOOLS",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        if (pluginsExpanded) "▾" else "▸",
+                        if (toolsExpanded) "▾" else "▸",
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                AnimatedVisibility(visible = pluginsExpanded) {
-                    LazyColumn(
+                AnimatedVisibility(visible = toolsExpanded) {
+                    Column(
                         modifier = Modifier
                             .padding(horizontal = 12.dp)
-                            .heightIn(max = 176.dp) // ≈3 baris — sisanya scroll di dalam
                             .border(1.dp, Color(0xFF1B4D2E), RoundedCornerShape(10.dp))
                             .padding(vertical = 2.dp)
                     ) {
-                        items(PluginRegistry.plugins) { plugin ->
-                            PluginRow(
-                                plugin = plugin,
-                                enabled = vm.isPluginEnabled(plugin.id),
-                                onToggle = { vm.setPluginEnabled(plugin.id, !vm.isPluginEnabled(plugin.id)) },
-                                onRun = { pluginAction(plugin)() }
-                            )
-                        }
-                    }
-                }
-                DrawerItem("Clear All Drafts & Files") {
-                    scope.launch { drawerState.close() }
-                    confirmClearAll = true
-                }
-
-                Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
-
-                DrawerSectionTitle("EDITOR")
-                // Toggle Symbol bar (QuickTools) — wiring ke VM, persist di SharedPreferences
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { vm.setSymbolBar(!vm.symbolBarEnabled) }
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        "Symbol bar",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = vm.symbolBarEnabled,
-                        onCheckedChange = { vm.setSymbolBar(it) }
-                    )
-                }
-
-                Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
-
-                DrawerSectionTitle("SELECT THEME")
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    ZcodeThemeType.values().forEach { tType ->
-                        val isSelected = vm.themeType == tType
-                        Button(
-                            onClick = { vm.themeType = tType },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary
-                                else Color.LightGray
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 8.dp),
-                            modifier = Modifier.weight(1f)
+                        // Plugin di area scroll sendiri; Symbol bar/THEME/Clear All
+                        // selalu terlihat di luar scroll (anti scroll-dalam-scroll).
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 176.dp) // ≈3 baris — sisanya scroll di dalam
                         ) {
-                            Text(tType.name.replace('_', ' '), fontSize = 10.sp)
+                            items(PluginRegistry.plugins) { plugin ->
+                                PluginRow(
+                                    plugin = plugin,
+                                    enabled = vm.isPluginEnabled(plugin.id),
+                                    onToggle = { vm.setPluginEnabled(plugin.id, !vm.isPluginEnabled(plugin.id)) },
+                                    onRun = { pluginAction(plugin)() }
+                                )
+                            }
                         }
+                        Divider(color = Color.White.copy(alpha = 0.06f))
+
+                        // Toggle Symbol bar (QuickTools) — persist SharedPreferences via VM
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { vm.setSymbolBar(!vm.symbolBarEnabled) }
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Symbol bar",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Switch(
+                                checked = vm.symbolBarEnabled,
+                                onCheckedChange = { vm.setSymbolBar(it) }
+                            )
+                        }
+                        Divider(color = Color.White.copy(alpha = 0.06f))
+
+                        // THEME — satu tombol cycle: tap-tap sampai cocok (keputusan user).
+                        // Nama tema aktif selalu terlihat agar user tidak menebak-nebak.
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { vm.cycleTheme() }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "THEME",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                vm.themeType.name.replace('_', ' '),
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Divider(color = Color.White.copy(alpha = 0.06f))
+
+                        // Clear All — aksi destruktif: merah + dialog konfirmasi tetap wajib
+                        Text(
+                            "Clear All Drafts & Files",
+                            fontSize = 14.sp,
+                            color = Color(0xFFFFB4AB),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch { drawerState.close() }
+                                    confirmClearAll = true
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        )
                     }
                 }
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
 
-                DrawerSectionTitle("FILES MANAGER")
-                val files = vm.getAllFiles()
-                if (files.isEmpty()) {
-                    Text(
-                        "Belum ada file .py — tap + di topbar",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        color = Color.Gray
-                    )
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        files.forEach { fileMap ->
-                            val name = fileMap["name"] as String
-                            val size = fileMap["size"] as? Long ?: 0L
-                            val isActive = vm.activeFile == name
-                            FileRow(
-                                name = name,
-                                sizeKb = size / 1024f,
-                                isActive = isActive,
-                                onClick = {
-                                    vm.selectFile(name)
-                                    scope.launch { drawerState.close() }
-                                    pushCode()
-                                },
-                                onRename = {
-                                    fileToRename = name
-                                    renameNewName = name
-                                },
-                                onDelete = { fileToDelete = name }
-                            )
-                        }
-                    }
+                // About — warga paling bontot di sidebar (permintaan user, redesign 2026-08)
+                DrawerItem("About & Contribute") {
+                    scope.launch { drawerState.close() }
+                    onNavigateToAbout()
                 }
             }
         }
     ) {
         Scaffold(
-            topBar = { WorkbenchTopBar(vm, webViewRef, onOpenDrawer = { scope.launch { drawerState.open() } }, onOpenPalette = { showPalette = true }) },
+            topBar = {
+                WorkbenchTopBar(
+                    vm, webViewRef,
+                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                    onOpenPalette = { showPalette = true },
+                    onPickFile = { importLauncher.launch(arrayOf("text/*")) },
+                    onOpenFileActions = { if (vm.activeFile != null) showFileActions = true }
+                )
+            },
             floatingActionButton = {
                 // ▶ Run → onRun(filename) → MainActivity navigate ke layer output full-screen (pindah layer)
                 // padding bawah menyesuaikan: 52dp saat symbol bar tampil agar tidak tertutup
@@ -381,7 +389,12 @@ fun WorkbenchScreen(
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.padding(bottom = if (vm.symbolBarEnabled) 52.dp else 8.dp)
                 ) {
-                    Text("▶", fontSize = 20.sp)
+                    // ▶ FAB — ikon vektor polos (bukan emoji), tint ikut contentColor tema
+                    Icon(
+                        imageVector = ZIcons.Play,
+                        contentDescription = "Run",
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         ) { padding ->
@@ -515,6 +528,46 @@ fun WorkbenchScreen(
         )
     }
 
+    // ---------- Dialog: File Actions (tap nama file aktif di topbar) ----------
+    // Pengganti FILES MANAGER drawer (redesign 2026-08): rename/delete tetap
+    // reach-able tanpa nambah ikon di topbar.
+    if (showFileActions) {
+        val active = vm.activeFile
+        AlertDialog(
+            onDismissRequest = { showFileActions = false },
+            title = {
+                Text(
+                    active ?: "No Active File",
+                    fontSize = 16.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                Column {
+                    Text("Mau ngapain sama file ini?", fontSize = 13.sp, color = Color.Gray)
+                    TextButton(
+                        onClick = {
+                            showFileActions = false
+                            fileToRename = active
+                            renameNewName = active ?: ""
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Rename", fontSize = 14.sp) }
+                    TextButton(
+                        onClick = {
+                            showFileActions = false
+                            fileToDelete = active
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Delete", fontSize = 14.sp, color = Color(0xFFFFB4AB)) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFileActions = false }) { Text("Batal") }
+            }
+        )
+    }
+
     // ---------- Dialog: Clear All ----------
     if (confirmClearAll) {
         AlertDialog(
@@ -580,16 +633,10 @@ fun WorkbenchScreen(
                 "Open About" to { onNavigateToAbout() }
             )
         PaletteDialog(
-            files = vm.getAllFiles().map { it["name"] as String },
             activeCode = vm.activeCode,
             onGotoLine = { n -> gotoLine(n) },
             commands = paletteCommands,
             onDismiss = { showPalette = false },
-            onOpenFile = { name ->
-                showPalette = false
-                vm.selectFile(name)
-                pushCode()
-            },
             onRunCommand = { action ->
                 showPalette = false
                 action()
@@ -608,7 +655,9 @@ private fun WorkbenchTopBar(
     vm: WorkspaceViewModel,
     webViewRef: androidx.compose.runtime.MutableState<WebView?>,
     onOpenDrawer: () -> Unit,
-    onOpenPalette: () -> Unit
+    onOpenPalette: () -> Unit,
+    onPickFile: () -> Unit,
+    onOpenFileActions: () -> Unit
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
@@ -628,7 +677,8 @@ private fun WorkbenchTopBar(
                     .padding(10.dp)
             )
 
-            // Judul file persis di samping ≡ (tanpa subtitle — permintaan user)
+            // Judul file di samping ≡ — TAP membuka dialog Rename/Delete
+            // (pengganti FILES MANAGER drawer, keputusan redesign 2026-08)
             Text(
                 vm.activeFile ?: "No Active File",
                 style = MaterialTheme.typography.titleSmall,
@@ -636,30 +686,45 @@ private fun WorkbenchTopBar(
                 fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onOpenFileActions)
+                    .padding(vertical = 8.dp)
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 🔍 Command Palette & Quick Open (akses jempol di topbar)
-                Text(
-                    "🔍",
-                    fontSize = 16.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                // 📁 ikon folder → file manager HP (import copy ke workspace; SAF text/*)
+                Icon(
+                    imageVector = ZIcons.Folder,
+                    contentDescription = "Buka file dari file manager",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .clickable(onClick = onPickFile)
+                        .padding(10.dp)
+                        .size(20.dp)
+                )
+                // 🔍 lama → kaca pembesar polos (palette: Line & Find) — ikut warna tema
+                Icon(
+                    imageVector = ZIcons.Search,
+                    contentDescription = "Go to line & find",
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .clickable(onClick = onOpenPalette)
                         .padding(10.dp)
+                        .size(20.dp)
                 )
-                // + tambah file (untitled_N.py)
-                Text(
-                    "+",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                // + lama → ikon plus polos (tambah file untitled_N.py)
+                Icon(
+                    imageVector = ZIcons.Add,
+                    contentDescription = "File baru",
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier
                         .clickable {
                             vm.createNewFile()
                             webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
                         }
                         .padding(10.dp)
+                        .size(20.dp)
                 )
             }
         }
@@ -707,19 +772,25 @@ private fun QuickToolsBar(webViewRef: androidx.compose.runtime.MutableState<WebV
 // =====================================================================
 
 @Composable
+/**
+ * Palette 🔍 (redesign 2026-08) — dua fungsi saja sesuai keputusan user:
+ *  1) Line: input nomor → OK → loncat; validasi jelas + pesan receh di bawah input
+ *     (dialog TIDAK ditutup saat error — user bisa langsung koreksi).
+ *  2) Find: cari kata di file aktif (hasil tap → loncat ke baris).
+ * Prefix power-user tetap hidup: ">" = perintah (plugin ENABLED), ":" = goto line
+ * Mode File (quick-open) dibuang — pindah file via tab bar / ikon folder topbar.
+ */
 private fun PaletteDialog(
-    files: List<String>,
     activeCode: String,
     onGotoLine: (Int) -> Unit,
     commands: List<Pair<String, () -> Unit>>,
     onDismiss: () -> Unit,
-    onOpenFile: (String) -> Unit,
     onRunCommand: (() -> Unit) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    // Mode default mengikuti chips; prefix power-user tetap hidup:
-    // ">" = perintah, ":" = goto line (S3)
-    var chipMode by remember { mutableStateOf("file") }
+    var chipMode by remember { mutableStateOf("line") }
+    var lineError by remember { mutableStateOf<String?>(null) }
+
     val isCommandMode = query.startsWith(">")
     val isLinePrefix = query.startsWith(":")
     val mode = if (isCommandMode) "command" else if (isLinePrefix) "line" else chipMode
@@ -729,9 +800,8 @@ private fun PaletteDialog(
         else -> query.trim()
     }
 
-    val fileResults = if (mode == "file") files.filter { it.contains(filter, ignoreCase = true) } else emptyList()
     val commandResults = if (mode == "command") commands.filter { it.first.contains(filter, ignoreCase = true) } else emptyList()
-    // Mode Find (ala Pydroid): cari kata di file aktif, maks 100 hasil
+    // Mode Find: cari kata di file aktif, maks 100 hasil
     val findResults: List<Pair<Int, String>> = if (mode == "find" && filter.isNotBlank()) {
         val out = mutableListOf<Pair<Int, String>>()
         activeCode.split('\n').forEachIndexed { idx, line ->
@@ -740,29 +810,51 @@ private fun PaletteDialog(
         }
         out
     } else emptyList()
-    val lineTarget = if (mode == "line") filter.toIntOrNull() else null
+
+    // Go to Line — jumlah baris file aktif (dipakai validasi 1..N)
+    val totalLines = activeCode.split('\n').size
+    fun attemptJump() {
+        val target = filter.toIntOrNull()
+        lineError = when {
+            filter.isBlank() -> "Ketik nomor barisnya dulu ya 😅"
+            target == null -> "Itu bukan angka — isi nomor baris ya (1..$totalLines)"
+            target !in 1..totalLines -> "Baris $target nggak ada njiir — file lo cuma $totalLines baris 😭"
+            else -> {
+                onGotoLine(target)
+                onDismiss()
+                null
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Column {
-                // Chips mode (S3) — discoverable ala Pydroid, tanpa perlu hafal prefix
+                // Chips mode — label polos tanpa emoji (keputusan ikon monokrom)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PaletteModeChip("📁 File", mode == "file") { chipMode = "file" }
-                    PaletteModeChip("🔎 Find", mode == "find") { chipMode = "find" }
-                    PaletteModeChip("#️ Line", mode == "line") { chipMode = "line" }
+                    PaletteModeChip("Line", mode == "line") {
+                        chipMode = "line"
+                        lineError = null
+                    }
+                    PaletteModeChip("Find", mode == "find") {
+                        chipMode = "find"
+                        lineError = null
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = {
+                        query = it
+                        lineError = null // koreksi user langsung membersihkan error
+                    },
                     placeholder = {
                         Text(
                             when (mode) {
-                                "command" -> "Perintah… (> Beautifier)"
+                                "command" -> "Perintah… (contoh: > Beautifier)"
                                 "find" -> "Cari kata di file aktif…"
-                                "line" -> "Nomor baris… (mis. 42)"
-                                else -> "Cari file… (> perintah, : baris)"
+                                else -> "Nomor baris… (mis. 42)"
                             }
                         )
                     },
@@ -770,6 +862,15 @@ private fun PaletteDialog(
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+                // Pesan error Go to Line — muncul DI BAWAH input, dialog tetap kebuka
+                lineError?.let { err ->
+                    Text(
+                        err,
+                        fontSize = 12.sp,
+                        color = Color(0xFFFFB4AB),
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
             }
         },
         text = {
@@ -820,39 +921,21 @@ private fun PaletteDialog(
                             Text("Tidak ditemukan: $filter", fontSize = 12.sp, color = Color.Gray)
                         }
                     }
-                    "line" -> {
-                        if (lineTarget != null && lineTarget >= 1) {
-                            Text(
-                                "→ Lompat ke baris $lineTarget",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onGotoLine(lineTarget)
-                                        onDismiss()
-                                    }
-                                    .padding(horizontal = 4.dp, vertical = 10.dp)
-                            )
-                        } else {
-                            Text("Ketik nomor baris (angka ≥ 1)", fontSize = 12.sp, color = Color.Gray)
-                        }
-                    }
                     else -> {
-                        fileResults.forEach { name ->
-                            Text(
-                                name,
-                                fontSize = 13.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onOpenFile(name) }
-                                    .padding(horizontal = 4.dp, vertical = 10.dp)
-                            )
-                        }
-                        if (fileResults.isEmpty()) {
-                            Text("Tidak ada file cocok", fontSize = 12.sp, color = Color.Gray)
+                        // "line": tombol OK tegas (flow keputusan user: input → OK → loncat)
+                        Text(
+                            "File ini punya $totalLines baris. Ketik nomor lalu tap OK.",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                        )
+                        TextButton(
+                            onClick = { attemptJump() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text("OK — Lompat Ke Baris", fontSize = 14.sp)
                         }
                     }
                 }
@@ -996,19 +1079,9 @@ private fun SnippetsDialog(
 }
 
 // =====================================================================
-// Komponen kecil drawer
+// Komponen kecil drawer (label seksi era lama dihapus — redesign 2026-08:
+// drawer hanya berisi item + kotak TOOLS)
 // =====================================================================
-
-@Composable
-private fun DrawerSectionTitle(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    )
-}
 
 @Composable
 private fun DrawerItem(label: String, onClick: () -> Unit) {
@@ -1023,63 +1096,4 @@ private fun DrawerItem(label: String, onClick: () -> Unit) {
     )
 }
 
-@Composable
-private fun FileRow(
-    name: String,
-    sizeKb: Float,
-    isActive: Boolean,
-    onClick: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (isActive) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-                    else Color.Transparent
-                )
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    fontSize = 13.sp,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = String.format("%.1f KB", sizeKb),
-                    fontSize = 10.sp,
-                    color = Color.Gray
-                )
-            }
-            Row {
-                Text(
-                    "Rename",
-                    fontSize = 11.sp,
-                    color = Color.LightGray,
-                    modifier = Modifier
-                        .clickable(onClick = onRename)
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                )
-                Text(
-                    "Delete",
-                    fontSize = 11.sp,
-                    color = Color(0xFFFFB4AB),
-                    modifier = Modifier
-                        .clickable(onClick = onDelete)
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                )
-            }
-        }
-        Divider(
-            color = Color.White.copy(alpha = 0.04f),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
-    }
-}
+

@@ -2,6 +2,8 @@
 
 ZCODE adalah Zabacode yang dibangun ulang dengan **Kotlin + Android Native**.
 
+**Filosofi:** *full free, tanpa premium lock* — untuk pelajar, pemburu hobi coding, dan developer dengan perangkat terbatas & budget tipis. Semua fitur bebas dipakai siapa saja, offline-first, dan sebisanya tetap ringan di HP kentang. 💚
+
 Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **optimasi touch Acode** menjadi editor Python mobile offline-first dengan true-black OLED. Referensi proyek: [muzape28-blip/ZABACODE](https://github.com/muzape28-blip/ZABACODE).
 
 ---
@@ -14,7 +16,7 @@ Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **op
 - **3 Tema Sinkron** — Retro Green (default, identitas Zabacode), Dracula, Tokyo Night. Tema menyentuh bagian dekoratif (topbar, drawer, dialog, tombol) secara harmonis; pembatas visual dibuat soft (opacity rendah), bukan garis tegas.
 - **Tab Bar Multi-File** — font 12, **long-press/hold tab untuk menutup file** (tanpa tombol × yang rawan salah pencet).
 - **QuickTools & FAB ▶** — chips bulat (`Tab`, `:`, `;`, `'`, `#`, `(`, `)`, `[`, `]`, `def`, `return`, `import`) di atas handle, FAB Run melayang di atasnya.
-- **Topbar** — `≡` (drawer), nama file + lokasi, `🔍` (Command Palette), `+` (file baru).
+- **Topbar (redesign 2026-08)** — `≡` (drawer), nama file (tap → dialog Rename/Delete), ikon folder (import file dari file manager HP via SAF, salin ke workspace), kaca pembesar polos (palette), plus (file baru). Ikon topbar kini **vektor polos ber-tint mengikuti tema** (bukan emoji — seragam di semua merk HP); FAB ▶ idem.
 
 ### 📁 2. File Manager & Persistensi Workspace
 
@@ -63,11 +65,11 @@ Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **op
 
 Dokumen lengkap: `docs/PLAN_BATCH_ANTI_SEPI.md`.
 
-- **Drawer PLUGINS expandable** — tap header → kotak berborder (±3 baris, scrollable); tap baris = eksekusi, switch = aktif/nonaktif (persist SharedPreferences, satu sumber — anti state-terbelah ala Zabacode). Semantik rapi: Aksi vs Behavior; **warn-only never block**.
+- **Drawer TOOLS expandable (redesign 2026-08)** — satu kotak: 10 plugin (±3 baris scrollable, tap baris = eksekusi, switch = aktif/nonaktif, persist SharedPreferences satu sumber) + toggle **Symbol bar** + **THEME** cycle satu tombol (tap-tap berganti tema, nama tema aktif selalu terlihat) + **Clear All** (merah, konfirmasi). Di luarnya: INSTALL MODULES, SAMPLES (halaman baru 2 level, 11 contoh yang pasti jalan), About & Contribute di paling bawah. Seksi NAVIGATION / EDITOR / SELECT THEME / FILES MANAGER dipangkas (lihat `docs/RENCANA_UPDATE_2026_08.md`).
 - **3 transform port ZABACODE** (GPLv3, same author — header provenance di `zcode_plugins.py`): Smart Docstring Generator, Type Hint Generator, Find Duplicate Lines — via Python/Chaquopy in-process (dual-backend subprocess untuk dev).
 - **TODO Extractor** — kumpulkan TODO/FIXME/HACK, tap → lompat ke baris.
 - **Snippet Pack** — Flask / BS4 / AsyncIO / REST → file baru (template Zabacode).
-- **🔍 multi-mode ala Pydroid** — chips `[📁 File][🔎 Find][#️ Line]`: cari kata di file aktif (hasil `L<n>:`, tap → lompat) & goto line; prefix power-user `>` / `:` tetap hidup.
+- **🔍 dua fungsi (redesign 2026-08)** — chips `[Line][Find]`: **Go to Line** ber-validasi (input → OK → loncat; nomor melebihi jumlah baris → peringatan receh muncul di bawah input, dialog tetap kebuka) & **Find** cari kata di file aktif (hasil `L<n>:`, tap → lompat). Prefix power-user `>` (perintah plugin) & `:` tetap hidup.
 - **Autocomplete kasta 1+2** — kata dalam dokumen + keyword + builtins Python + item snippet; OLED; maks 5 kandidat; nol kandidat = nol popup. (Kasta 3 jedi/LSP = backlog.)
 - **FAB ▶ syntax-aware** — merah `#FF4B4B` saat ada error syntax tapi **tetap bisa run** (sinyal tanpa otoriter).
 - **Bridge baru `gotoLine(n)`** — satu fungsi tiga pemakai (mode Line, hasil Find, TODO).
@@ -76,12 +78,16 @@ Dokumen lengkap: `docs/PLAN_BATCH_ANTI_SEPI.md`.
 
 ## 🎯 Target Pengembangan Masa Depan (Roadmap)
 
+> 📘 **Rencana Update terkini & keputusan desain (2026-08): lihat [`docs/RENCANA_UPDATE_2026_08.md`](docs/RENCANA_UPDATE_2026_08.md)** — berisi redesign sidebar/topbar/palette (batch ini), halaman SAMPLES, strategi "App Mode" (GUI via Flask+WebView, terbukti di ZABACODE/ZABAWHEELS), catatan jujur keterbatasan GUI native (Pintu A), dan ide fork **ZPLAY** (pygame/kivy lewat buildozer) yang diarsip untuk masa depan.
+
+- [ ] **App Mode (GUI via Flask + WebView)** — script `# ZCODE:WEBAPP` → preview web app full-screen di dalam ZCODE; flag UAT: **Kalkulator Modern**. [batch berikutnya]
 - [ ] **Visual Problems Panel** — daftar error sintaksis dalam panel bawah yang terorganisir (saat ini: banner warning real-time).
 - [ ] **Matplotlib Inline Image** — `plt.savefig("out.png")` tampil inline/expandable di terminal (baseline dedup + skip >8MB).
 - [ ] **10 Tema lengkap + CRT Scanlines toggle**.
 - [ ] **Encrypted Keystore UI + Privacy Toggle** (persist draf teks polos off).
 - [ ] **Alpine proot terminal** (apk add, git) — Zmux pending, tidak dibundle.
 - [ ] **LSP Python (jedi) → autocomplete ala VS Code**.
+- [ ] *(Garasi — jujur tanpa janji jadwal)* **ZPLAY**: saudari ZCODE berbasis buildozer/p4a untuk menjalankan sampel pygame/kivy (tkinter & Qt tetap tidak memungkinkan, bahkan di situ).
 
 ---
 
@@ -90,7 +96,7 @@ Dokumen lengkap: `docs/PLAN_BATCH_ANTI_SEPI.md`.
 ```bash
 # Test struktural + anti-regresi (tanpa JDK/SDK)
 bash tools/check.sh
-python -m pytest test_zcode_fase0.py test_zcode_fase1.py -v
+python -m pytest test_zcode_fase0.py test_zcode_fase1.py test_zcode_fase3.py -v
 
 # Build APK (butuh JDK 17 + Android SDK; CI mengerjakan ini)
 gradle assembleDebug

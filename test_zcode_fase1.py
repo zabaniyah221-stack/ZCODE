@@ -406,7 +406,9 @@ class TestPluginKotlin:
 class TestBatchUI:
     def test_drawer_plugins_expandable(self):
         txt = read(UI / "workbench/WorkbenchScreen.kt")
-        assert "🧩 PLUGINS" in txt
+        # Redesign 2026-08 (Fase 3): header "🧩 PLUGINS" → "TOOLS" (polos, tanpa emoji);
+        # isi kotak tetap plugin + switch, ditambah Symbol bar / THEME / Clear All.
+        assert "TOOLS" in txt
         assert "AnimatedVisibility" in txt and "PluginRow" in txt
 
     def test_fab_syntax_aware(self):

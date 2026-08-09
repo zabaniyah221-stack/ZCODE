@@ -1,6 +1,7 @@
 package com.zaba.zcode
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -10,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.ui.samples.SamplesScreen
 import com.zaba.zcode.ui.settings.AboutScreen
 import com.zaba.zcode.ui.settings.PipScreen
 import com.zaba.zcode.ui.terminal.TerminalScreen
@@ -47,7 +49,20 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                     nav.navigate("output/$filename")
                 },
                 onNavigateToPip = { nav.navigate("pip") },
-                onNavigateToAbout = { nav.navigate("about") }
+                onNavigateToAbout = { nav.navigate("about") },
+                onNavigateToSamples = { nav.navigate("samples") }
+            )
+        }
+        // SAMPLES (redesign 2026-08): halaman 2 level; tap sample → file baru
+        // dibuat dari assets → balik ke editor dengan tab baru terbuka (keputusan user)
+        composable("samples") {
+            SamplesScreen(
+                onBack = { nav.navigateUp() },
+                onPick = { entry ->
+                    val (ok, msg) = vm.createSampleFromAsset(entry.assetPath, entry.id)
+                    Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
+                    if (ok) nav.navigateUp() // balik ke editor — vm.selectFile sudah aktif
+                }
             )
         }
         composable("output/{filename}") { backStackEntry ->
