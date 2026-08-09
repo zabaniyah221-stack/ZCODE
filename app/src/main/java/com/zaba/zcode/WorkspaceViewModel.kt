@@ -45,6 +45,10 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var activeCode by mutableStateOf("")
     var syntaxError by mutableStateOf<String?>(null)
 
+    /** Symbol bar (QuickTools) di bawah editor — toggle user, persist di SharedPreferences. */
+    var symbolBarEnabled by mutableStateOf(true)
+        private set
+
     private val fileDrafts = mutableMapOf<String, String>()
 
     private var lastClosed: Pair<String, Long>? = null
@@ -53,11 +57,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (!filesDir.exists()) {
             filesDir.mkdirs()
         }
-        // Hapus package pip rusak yang terinstall di disk pengguna akibat build-time pip install sebelumnya
-        val badPip = File(app.filesDir, "chaquopy/AssetFinder/requirements/pip")
-        if (badPip.exists()) {
-            badPip.deleteRecursively()
-        }
+        // CATATAN: kode lama menghapus files/chaquopy/AssetFinder/requirements/pip
+        // sudah DIHAPUS — pip 23.3.1 kini resmi di-bundle build-time (gradle chaquopy
+        // pip{}), dan folder itu memuat file data pip yang sah (mis. cert bundle TLS).
         // backend eksekusi butuh cwd = folder workspace (plt.savefig / open() relatif)
         ExecutionEngine.workspaceDirPath = filesDir.absolutePath
         loadSavedWorkspace()
@@ -107,8 +109,15 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         activeCode = activeFile?.let { FileManager.readFile(filesDir, it).getOrDefault("") } ?: ""
+        symbolBarEnabled = prefs.getBoolean("symbol_bar", true)
         validateSyntaxDebounced(activeCode)
         persistWorkspaceState()
+    }
+
+    /** Toggle Symbol bar — disimpan supaya preferensi bertahan antar sesi. */
+    fun setSymbolBarEnabled(enabled: Boolean) {
+        symbolBarEnabled = enabled
+        prefs.edit().putBoolean("symbol_bar", enabled).apply()
     }
 
     // ------------------------------------------------------------------
@@ -241,7 +250,8 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         activeFile = null
         activeCode = ""
         syntaxError = null
-        prefs.edit().clear().apply()
+        // hanya hapus state workspace — preferensi UI (symbol_bar dsb.) tetap dipertahankan
+        prefs.edit().remove("workspace").apply()
         loadSavedWorkspace()
     }
 

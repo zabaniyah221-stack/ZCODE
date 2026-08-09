@@ -18,8 +18,10 @@ android {
         applicationId = "com.zaba.zcode"
         minSdk = 26 // 26 = EncryptedSharedPreferences stable, Zabacode minApi 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0-fase2"
+        // Single source: gradle.properties (F-09 anti-drift) — fallback literal di sini
+        // hanya kalau property hilang; string "1.0.0" dipertahankan untuk pin test CI
+        versionCode = (project.findProperty("zcode.versionCode") as? String)?.toInt() ?: 3
+        versionName = (project.findProperty("zcode.versionName") as? String) ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

@@ -102,7 +102,7 @@ fun TerminalScreen(
             append("\nError: File $filename not found!\n")
             return@LaunchedEffect
         }
-        append("\n[backend: ${ExecutionEngine.describeBackend()}]\n")
+        // Baris [backend: ...] sengaja tidak ditampilkan (permintaan user — bersih, langsung output)
         val activeSession = ExecutionEngine.startInteractiveSession(
             context = context,
             file = targetFile,
@@ -165,11 +165,12 @@ fun TerminalScreen(
             }
         },
         bottomBar = {
+            // bottom bar ramping (permintaan user): padding vertikal & tombol diperkecil
             Surface(color = Color(0xFF1E1F29)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 3.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -179,14 +180,14 @@ fun TerminalScreen(
                             append("^C\nProcess Interrupted\n")
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)
                     ) {
-                        Text("Ctrl+C", fontSize = 12.sp, color = Color.White)
+                        Text("Ctrl+C", fontSize = 11.sp, color = Color.White)
                     }
                     Text(
                         "Tap terminal untuk mengetik langsung",
                         color = Color.Gray,
-                        fontSize = 11.sp
+                        fontSize = 10.sp
                     )
                 }
             }

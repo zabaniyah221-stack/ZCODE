@@ -40,6 +40,15 @@
             color: #4D7A5A !important;
             border-right: 1px solid #111612 !important;
         }
+        /* Gutter ramping (permintaan user): pangkas padding sel — Ace mengukur
+           lebar gutter dari DOM (digit + padding), jadi padding kecil = kolom sempit */
+        .ace_gutter-cell {
+            padding-left: 6px !important;
+            padding-right: 3px !important;
+        }
+        .ace_gutter-layer {
+            min-width: 0 !important;
+        }
         .ace_editor {
             background-color: #050806 !important;
         }
@@ -65,7 +74,8 @@
         editor.setOptions({
             fontSize: "12px",          // font size 12 (keputusan tim)
             showPrintMargin: false,
-            showGutter: true,          // gutter 40px line numbers (di-set via CSS max)
+            showGutter: true,          // gutter dirampingkan via CSS .ace_gutter-cell + tanpa fold widgets
+            showFoldWidgets: false,    // fold widget memperlebar gutter — dimatikan agar leluasa (permintaan user)
             highlightActiveLine: true,
             wrap: true,
             cursorStyle: "line",
