@@ -5,4 +5,6 @@
     <color name="text_bright">#39FF14</color>
     <color name="ai_amber">#FFB000</color>
     <color name="err_red">#FF4B4B</color>
+    <!-- adaptive icon background — sama persis dengan bg artwork logo {Z} -->
+    <color name="ic_launcher_background">#242A3D</color>
 </resources>

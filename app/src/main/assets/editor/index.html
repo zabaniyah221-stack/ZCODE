@@ -58,6 +58,16 @@
         .ace_active-line {
             background: rgba(27, 77, 46, 0.12) !important;
         }
+        /* Handle "..." menu mobile Ace: dibuat semi-transparan agar tidak
+           menutupi kode; menu yang terbuka tetap opacity penuh */
+        .ace_mobile-menu .ace_mobile-button[action="more"] {
+            opacity: 0.5;
+        }
+        /* Menu seleksi Ace (Select All/Find/Palette) mengikuti true-black OLED */
+        .ace_mobile-menu {
+            background: #101613 !important;
+            border: 1px solid #1B4D2E !important;
+        }
     </style>
 </head>
 <body>
@@ -65,6 +75,11 @@
     <script src="ace/ace.js"></script>
     <script src="ace/mode-python.js"></script>
     <script src="ace/theme-tomorrow_night_eighties.js"></script>
+    <!-- ext v1.44.0 offline (offline-first): tanpa file ini tombol Find & Palette
+         di menu seleksi mobile Ace mati — find loadModule("ace/ext/searchbox"),
+         editor.prompt loadModule("ace/ext/prompt"). Nol overlap dengan ace.js core. -->
+    <script src="ace/ext-searchbox.js"></script>
+    <script src="ace/ext-prompt.js"></script>
     <script>
         var editor = ace.edit("editor");
         editor.setTheme("ace/theme/tomorrow_night_eighties");
