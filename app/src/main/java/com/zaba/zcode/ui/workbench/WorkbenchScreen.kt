@@ -183,7 +183,7 @@ fun WorkbenchScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { vm.setSymbolBarEnabled(!vm.symbolBarEnabled) }
+                        .clickable { vm.setSymbolBar(!vm.symbolBarEnabled) }
                         .padding(horizontal = 16.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -195,7 +195,7 @@ fun WorkbenchScreen(
                     )
                     Switch(
                         checked = vm.symbolBarEnabled,
-                        onCheckedChange = { vm.setSymbolBarEnabled(it) }
+                        onCheckedChange = { vm.setSymbolBar(it) }
                     )
                 }
 

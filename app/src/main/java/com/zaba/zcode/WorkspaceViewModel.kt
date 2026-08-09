@@ -114,8 +114,11 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         persistWorkspaceState()
     }
 
-    /** Toggle Symbol bar — disimpan supaya preferensi bertahan antar sesi. */
-    fun setSymbolBarEnabled(enabled: Boolean) {
+    /** Toggle Symbol bar — disimpan supaya preferensi bertahan antar sesi.
+     *  CATATAN: namanya BUKAN setSymbolBarEnabled — property var di atas tetap
+     *  membangkitkan method JVM setSymbolBarEnabled(Z)V (walau private set),
+     *  sehingga nama itu bentrok (platform declaration clash, CI compile error). */
+    fun setSymbolBar(enabled: Boolean) {
         symbolBarEnabled = enabled
         prefs.edit().putBoolean("symbol_bar", enabled).apply()
     }
