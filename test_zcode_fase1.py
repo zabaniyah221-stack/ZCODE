@@ -316,3 +316,131 @@ class TestBugFixes:
 
     def test_pip_takes_context(self):
         assert "context: android.content.Context" in read(UI / "settings/PipScreen.kt")
+
+
+# ===================================================================
+# Batch Anti-Sepi (2026-08) — plugins, search multi-mode, autocomplete,
+# snippets, FAB syntax-aware. Lihat docs/PLAN_BATCH_ANTI_SEPI.md.
+# ===================================================================
+
+import subprocess
+
+PY_PLUGINS = APP / "src/main/python/zcode_plugins.py"
+BUNDLE = ASSETS / "editor/codemirror.bundle.js"
+
+
+class TestZcodePluginsBackend:
+    def test_zcode_plugins_py_exists(self):
+        assert PY_PLUGINS.exists() and PY_PLUGINS.stat().st_size > 5_000
+
+    def test_zcode_plugins_provenance_header(self):
+        # Kejujuran lisensi (PLAN §2.5): port dari Zabacode GPLv3 wajib tercatat
+        assert "PORTED FROM ZABACODE (GPLv3)" in read(PY_PLUGINS)
+
+    def test_zcode_plugins_three_transforms(self):
+        txt = read(PY_PLUGINS)
+        for cls in ["SmartCommentGenerator", "VariableTypeHintGenerator", "DuplicateLineDetector"]:
+            assert cls in txt, f"kelas port {cls} hilang"
+
+    def test_zcode_plugins_run_json_interface(self):
+        assert "def run_json" in read(PY_PLUGINS)
+
+    def test_zcode_plugins_behavioral_docstring(self):
+        # Behavioral test nyata via interpreter (pola dual-backend desktop)
+        import tempfile, json
+        src = "def tambah(a, b=1):\n    return a + b\n"
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write(src)
+            tmp = f.name
+        r = subprocess.run(
+            ["python3", str(PY_PLUGINS), "docstring_generator", tmp],
+            capture_output=True, text=True, timeout=30,
+        )
+        d = json.loads(r.stdout.strip().splitlines()[-1])
+        assert d["ok"] is True
+        assert '"""Docstring for tambah.' in d["code"]
+        assert "Args:" in d["code"]
+
+    def test_zcode_plugins_behavioral_unknown_plugin(self):
+        import tempfile, json
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
+            f.write("x = 1\n")
+            tmp = f.name
+        r = subprocess.run(
+            ["python3", str(PY_PLUGINS), "plugin_palsu", tmp],
+            capture_output=True, text=True, timeout=30,
+        )
+        d = json.loads(r.stdout.strip().splitlines()[-1])
+        assert d["ok"] is False  # graceful, tidak crash
+
+
+class TestPluginKotlin:
+    def test_plugin_runner_dual_backend(self):
+        txt = read(JAVA / "core/plugins/PluginRunner.kt")
+        assert "Chaquopy" in txt and "ZCODE_PLUGINS_PY" in txt
+        assert "TIMEOUT_MS" in txt
+
+    def test_todo_extractor_tags(self):
+        txt = read(JAVA / "core/plugins/TodoExtractor.kt")
+        for tag in ["TODO", "FIXME", "HACK", "XXX"]:
+            assert tag in txt
+
+    def test_plugin_registry_ids_lengkap(self):
+        txt = read(JAVA / "core/plugins/PluginRegistry.kt")
+        for pid in ["beautifier", "optimize_imports", "duplicate_line", "toggle_comment",
+                    "docstring_generator", "type_hint_generator", "find_duplicates",
+                    "todo_extractor", "snippets", "auto_trim_on_run"]:
+            assert f'"{pid}"' in txt, f"plugin id {pid} hilang dari registry"
+
+    def test_snippet_library_empat_template(self):
+        txt = read(JAVA / "core/plugins/SnippetLibrary.kt")
+        for sid in ["flask_app", "web_scraper", "async_fetch", "rest_api"]:
+            assert sid in txt, f"snippet {sid} hilang"
+
+    def test_vm_plugin_state_satu_sumber(self):
+        # Anti state-terbelah ala Zabacode: flag plugin hidup di ViewModel/prefs
+        txt = read(JAVA / "WorkspaceViewModel.kt")
+        assert "pluginFlags" in txt and "plugin_enabled_" in txt
+
+
+class TestBatchUI:
+    def test_drawer_plugins_expandable(self):
+        txt = read(UI / "workbench/WorkbenchScreen.kt")
+        assert "🧩 PLUGINS" in txt
+        assert "AnimatedVisibility" in txt and "PluginRow" in txt
+
+    def test_fab_syntax_aware(self):
+        # S6: merah saat syntax error, tapi TETAP bisa run (tanpa blokir)
+        txt = read(UI / "workbench/WorkbenchScreen.kt")
+        assert "0xFFFF4B4B" in txt and "vm.syntaxError != null" in txt
+        assert "applyAutoTrimIfEnabled" in txt  # behavior F5 ke-run
+
+    def test_palette_multi_mode(self):
+        txt = read(UI / "workbench/WorkbenchScreen.kt")
+        assert "PaletteModeChip" in txt
+        assert '"find"' in txt and '"line"' in txt
+        assert "onGotoLine" in txt
+
+    def test_goto_line_bridge_contract(self):
+        assert "gotoLine" in read(BUNDLE)
+        assert "gotoLine" in read(ASSETS / "editor/index.html")
+        assert "gotoLine" in read(UI / "workbench/WorkbenchScreen.kt")
+
+    def test_autocomplete_terbundle(self):
+        txt = read(BUNDLE)
+        # bukti konten: builtins + styling popup OLED + snippet (minify rename id)
+        assert "frozenset" in txt
+        assert "cm-tooltip-autocomplete" in txt
+        assert "web_scraper" in txt
+
+    def test_snippet_sync_js_kotlin(self):
+        # Konten snippet HARUS identik di bundle (JS) & SnippetLibrary.kt
+        bundle = read(BUNDLE)
+        kt = read(JAVA / "core/plugins/SnippetLibrary.kt")
+        for sid in ["flask_app", "web_scraper", "async_fetch", "rest_api"]:
+            assert sid in bundle and sid in kt, f"snippet {sid} tidak sinkron JS/Kotlin"
+
+    def test_editor_src_autocomplete_source(self):
+        src = read(ROOT / "editor-src/src/editor.js")
+        assert "zcodeCompletions" in src and "PY_BUILTINS" in src
+        assert "activateOnTyping" in src

@@ -59,6 +59,19 @@ Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **op
 - **CodeMirror 6 bundled offline** (migrasi penuh dari Ace 1.44.0, 2026-08 — `docs/MIGRASI_CM6.md`; tanpa CDN, single-file bundle esbuild target es2018, armv7/arm64/x86_64 aman) di WebView `file://` — font 12px, gutter line numbers, tema tomorrow-night-eighties deklaratif di atas OLED, Python syntax via Lezer parser, panel Find built-in. Sumber bundle: `editor-src/` (`npm ci && npm run build`).
 - **Bridge `addJavascriptInterface`** — tanpa loopback HTTP (kelas bug F-01/S-27/C-50 dari Zabacode terhapus).
 
+### 🧩 Batch Anti-Sepi (2026-08) — plugins, pencarian, autocomplete
+
+Dokumen lengkap: `docs/PLAN_BATCH_ANTI_SEPI.md`.
+
+- **Drawer PLUGINS expandable** — tap header → kotak berborder (±3 baris, scrollable); tap baris = eksekusi, switch = aktif/nonaktif (persist SharedPreferences, satu sumber — anti state-terbelah ala Zabacode). Semantik rapi: Aksi vs Behavior; **warn-only never block**.
+- **3 transform port ZABACODE** (GPLv3, same author — header provenance di `zcode_plugins.py`): Smart Docstring Generator, Type Hint Generator, Find Duplicate Lines — via Python/Chaquopy in-process (dual-backend subprocess untuk dev).
+- **TODO Extractor** — kumpulkan TODO/FIXME/HACK, tap → lompat ke baris.
+- **Snippet Pack** — Flask / BS4 / AsyncIO / REST → file baru (template Zabacode).
+- **🔍 multi-mode ala Pydroid** — chips `[📁 File][🔎 Find][#️ Line]`: cari kata di file aktif (hasil `L<n>:`, tap → lompat) & goto line; prefix power-user `>` / `:` tetap hidup.
+- **Autocomplete kasta 1+2** — kata dalam dokumen + keyword + builtins Python + item snippet; OLED; maks 5 kandidat; nol kandidat = nol popup. (Kasta 3 jedi/LSP = backlog.)
+- **FAB ▶ syntax-aware** — merah `#FF4B4B` saat ada error syntax tapi **tetap bisa run** (sinyal tanpa otoriter).
+- **Bridge baru `gotoLine(n)`** — satu fungsi tiga pemakai (mode Line, hasil Find, TODO).
+
 ---
 
 ## 🎯 Target Pengembangan Masa Depan (Roadmap)

@@ -3,7 +3,10 @@
 // Kontrak bridge dipertahankan 1:1 dengan versi Ace (lihat docs/MIGRASI_CM6.md §3):
 //   setCode, getCode, insertText, undo, redo, duplicateRows,
 //   toggleCommentLines, onEditorReady (JS→Kotlin), ZCODE.onCodeChange
-//   BARU: openFind() — pengganti akses Find yang tadinya via mobile-menu Ace.
+//   openFind()  — pengganti akses Find yang tadinya via mobile-menu Ace.
+//   gotoLine(n) — batch anti-sepi: dipakai 🔍 mode Line/Find & TODO Extractor.
+// Batch anti-sepi (PLAN_BATCH_ANTI_SEPI.md): autocomplete kasta 1+2
+//   (kata dokumen + keyword + builtins + snippet) — kasta 3 (jedi) nanti.
 // Prinsip: jujur & teliti — semantik fungsi harus identik dengan versi Ace.
 // =====================================================================
 
@@ -34,8 +37,98 @@ import {
   HighlightStyle,
 } from "@codemirror/language";
 import { search, searchKeymap, openSearchPanel } from "@codemirror/search";
+import { autocompletion } from "@codemirror/autocomplete";
 import { tags } from "@lezer/highlight";
 import { python } from "@codemirror/lang-python";
+
+// ---------------------------------------------------------------------
+// Autocomplete kasta 1+2 (batch anti-sepi S4) — offline, deterministik.
+// Sumber: kata dalam dokumen + keyword Python + builtins + snippet.
+// Kasta 3 (jedi/LSP) = batch terpisah, lihat backlog.
+// ---------------------------------------------------------------------
+
+const PY_KEYWORDS = [
+  "False", "None", "True", "and", "as", "assert", "async", "await",
+  "break", "class", "continue", "def", "del", "elif", "else", "except",
+  "finally", "for", "from", "global", "if", "import", "in", "is",
+  "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+  "while", "with", "yield",
+];
+
+const PY_BUILTINS = [
+  "abs", "all", "any", "bin", "bool", "bytearray", "bytes", "callable",
+  "chr", "classmethod", "compile", "complex", "delattr", "dict", "dir",
+  "divmod", "enumerate", "eval", "exec", "filter", "float", "format",
+  "frozenset", "getattr", "globals", "hasattr", "hash", "help", "hex",
+  "id", "input", "int", "isinstance", "issubclass", "iter", "len",
+  "list", "locals", "map", "max", "min", "next", "object", "oct",
+  "open", "ord", "pow", "print", "property", "range", "repr", "reversed",
+  "round", "set", "setattr", "slice", "sorted", "staticmethod", "str",
+  "sum", "super", "tuple", "type", "vars", "zip", "__init__", "__name__",
+];
+
+// Snippet Pack (S5) — konten IDENTIK dengan SnippetLibrary.kt + template
+// ZABACODE (provenance GPLv3, same author). Jaga sinkron bila diedit!
+const SNIPPETS = [
+  {
+    label: "flask_app",
+    detail: "Flask Web App",
+    body: "from flask import Flask, jsonify\n\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef index():\n    return jsonify({\"message\": \"Hello from ZCODE!\"})\n\n@app.route(\"/api/data\")\ndef get_data():\n    return jsonify({\"items\": []})\n\nif __name__ == \"__main__\":\n    app.run(host=\"127.0.0.1\", port=5000)\n",
+  },
+  {
+    label: "web_scraper",
+    detail: "Web Scraper (BS4)",
+    body: "import requests\nfrom bs4 import BeautifulSoup\n\nurl = \"https://example.com\"\nresponse = requests.get(url, timeout=10)\n\nif response.status_code == 200:\n    soup = BeautifulSoup(response.text, \"html.parser\")\n    titles = soup.find_all(\"h1\")\n    for title in titles:\n        print(title.get_text(strip=True))\nelse:\n    print(f\"Error: {response.status_code}\")\n",
+  },
+  {
+    label: "async_fetch",
+    detail: "Async HTTP Fetcher",
+    body: "import asyncio\nimport urllib.request\n\nasync def fetch(url):\n    loop = asyncio.get_event_loop()\n    req = urllib.request.Request(url)\n    response = await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=10))\n    data = response.read().decode(\"utf-8\", errors=\"replace\")\n    print(f\"Fetched {len(data)} bytes from {url}\")\n    return data\n\nasync def main():\n    urls = [\"https://httpbin.org/get\", \"https://httpbin.org/ip\"]\n    results = await asyncio.gather(*[fetch(u) for u in urls])\n    for r in results:\n        print(r[:200])\n\nasyncio.run(main())\n",
+  },
+  {
+    label: "rest_api",
+    detail: "REST API Client",
+    body: "import json\nimport urllib.request\n\ndef api_get(url, headers=None):\n    req = urllib.request.Request(url, headers=headers or {})\n    with urllib.request.urlopen(req, timeout=10) as resp:\n        return json.loads(resp.read())\n\ndef api_post(url, data, headers=None):\n    body = json.dumps(data).encode()\n    hdrs = {\"Content-Type\": \"application/json\"}\n    if headers:\n        hdrs.update(headers)\n    req = urllib.request.Request(url, data=body, headers=hdrs)\n    with urllib.request.urlopen(req, timeout=10) as resp:\n        return json.loads(resp.read())\n\n# Example\nresult = api_get(\"https://httpbin.org/get\")\nprint(json.dumps(result, indent=2))\n",
+  },
+];
+
+function zcodeCompletions(context) {
+  // Trigger: saat mengetik kata, setelah '.', atau eksplisit (Ctrl-Space).
+  const afterDot = context.matchBefore(/\.\w*$/);
+  const word = afterDot
+    ? context.matchBefore(/\w*$/)
+    : context.matchBefore(/\w+$/);
+  if (!afterDot && !word && !context.explicit) return null;
+
+  const options = [];
+  const seen = new Set();
+  const push = (label, type, detail, apply) => {
+    if (seen.has(label)) return;
+    seen.add(label);
+    const o = { label, type };
+    if (detail) o.detail = detail;
+    if (apply) o.apply = apply;
+    options.push(o);
+  };
+
+  // Kasta 1: kata-kata dalam dokumen (≥2 char, maks ~60 pool)
+  const docWords =
+    context.state.doc.toString().match(/[A-Za-z_][A-Za-z0-9_]{1,}/g) || [];
+  let collected = 0;
+  for (const w of docWords) {
+    if (collected >= 60) break;
+    if (seen.size < 120) { push(w, "variable"); collected++; }
+  }
+  // Kasta 2: keyword + builtins Python
+  for (const k of PY_KEYWORDS) push(k, "keyword");
+  for (const b of PY_BUILTINS) push(b, "function", "builtin");
+  // Snippet sebagai item autocomplete (hanya jika tidak setelah '.')
+  if (!afterDot) {
+    for (const s of SNIPPETS) push(s.label, "text", s.detail, s.body);
+  }
+
+  return { from: word ? word.from : context.pos, options };
+}
 
 // ---------------------------------------------------------------------
 // Tema OLED + Tomorrow-Night-Eighties — port 1:1 dari:
@@ -122,6 +215,29 @@ const zcodeTheme = EditorView.theme(
       outline: "1px solid #4D7A5A",
     },
     ".cm-selectionMatch": { outline: "1px solid #515151" },
+    // Popup autocomplete (batch anti-sepi) — OLED penuh, maks 5 baris
+    ".cm-tooltip.cm-tooltip-autocomplete": {
+      backgroundColor: "#101613",
+      border: "1px solid #1B4D2E",
+      borderRadius: "8px",
+      overflow: "hidden",
+    },
+    ".cm-tooltip-autocomplete ul": { maxHeight: "9.5em" },
+    ".cm-tooltip-autocomplete ul li": {
+      padding: "3px 8px",
+      color: "#D7DBE0",
+      fontSize: "12px",
+    },
+    ".cm-tooltip-autocomplete ul li[aria-selected]": {
+      backgroundColor: "rgba(27, 77, 46, 0.55)",
+      color: "#E6EDF3",
+    },
+    ".cm-completionDetail": { color: "#8A9A90", fontStyle: "normal" },
+    ".cm-completionMatchedText": {
+      textDecoration: "none",
+      color: "#9ECE6A",
+      fontWeight: "bold",
+    },
   },
   { dark: true }
 );
@@ -180,6 +296,13 @@ function buildState(doc) {
       ]),
       python(),
       syntaxHighlighting(tneHighlight),
+      // Autocomplete kasta 1+2 (S4): kata dokumen + keyword + builtins + snippet
+      autocompletion({
+        override: [zcodeCompletions],
+        activateOnTyping: true,
+        maxRenderedOptions: 5, // popup ringkas di layar HP
+        optionClass: () => "zcode-completion-option",
+      }),
       zcodeTheme,
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !isSettingValue && window.ZCODE) {
@@ -189,8 +312,9 @@ function buildState(doc) {
       // Catatan konfigurasi vs Ace lama:
       // - showFoldWidgets: false  → foldGutter memang TIDAK dipasang
       // - showPrintMargin: false  → CM6 tidak punya print margin
-      // - enableBasicAutocompletion: false → paket autocomplete sengaja
-      //   tidak di-import (fase LSP nanti, lihat docs/MIGRASI_CM6.md §10)
+      // - autocomplete: KASTA 1+2 AKTIF sejak batch anti-sepi (lihat
+      //   autocompletion() di atas); paket lint tetap belum dipasang
+      //   (fase Problems Panel nanti)
       // - animatedScroll: false → default CM6 memang tanpa animasi
     ],
   });
@@ -291,6 +415,18 @@ function openFind() {
   if (view) openSearchPanel(view);
 }
 
+// BARU (batch anti-sepi F2): lompat ke baris n (1-based, di-clamp).
+// Dipakai 🔍 mode Line, hasil mode Find, dan TODO Extractor — 1 fungsi
+// 3 pemakai (lihat PLAN_BATCH_ANTI_SEPI.md §3 F2).
+function gotoLine(n) {
+  if (!view) return;
+  const lineCount = view.state.doc.lines;
+  const line = Math.max(1, Math.min(lineCount, Math.floor(Number(n)) || 1));
+  const l = view.state.doc.line(line);
+  view.dispatch({ selection: { anchor: l.from }, scrollIntoView: true });
+  view.focus();
+}
+
 // ---------------------------------------------------------------------
 // Init + handshake onEditorReady (fix PR #5 — WAJIB dipertahankan)
 // ---------------------------------------------------------------------
@@ -323,6 +459,7 @@ window.redo = redo;
 window.duplicateRows = duplicateRows;
 window.toggleCommentLines = toggleCommentLines;
 window.openFind = openFind;
+window.gotoLine = gotoLine;
 
 // Handshake — dipanggil bahkan jika init gagal, agar Kotlin tidak hang
 // menunggu (setCode dkk. aman sebagai no-op).
