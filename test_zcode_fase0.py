@@ -210,10 +210,17 @@ class TestUISpec:
             assert "premium" not in read(p).lower(), f"Premium should be Contribute in {p.name}"
 
     def test_no_icon_in_fase0(self):
-        # Fase 0 iconless — no icon vector in workbench/editor (except ≡ and + text, comments may mention it)
-        txt = read(WORKBENCH_KT).lower()
-        # Allow Text("≡") and Text("+") but not painterResource icon; comments mentioning 'icon' are ok up to 5
-        assert "icon" not in txt or txt.count("icon") <= 5, "Fase 0 should be iconless (text only)"
+        # EVOLUSI RESMI (redesign 2026-08, docs/RENCANA_UPDATE_2026_08.md): filosofi
+        # "text-only" Fase 0 digantikan oleh "ikon polos vektor tunggal" sesuai
+        # keputusan pengguna — ikon BOLEH ada, tapi hanya dari ZIcons (path manual,
+        # tanpa dependensi material-icons), bukan emoji/painter acak di chrome atas.
+        txt = read(WORKBENCH_KT)
+        assert "ZIcons." in txt, "ikon polos ZIcons hilang dari topbar/FAB"
+        low = txt.lower()
+        assert "icons.outlined" not in low and "icons.filled" not in low
+        # painter dikecualikan hanya untuk logo drawer era lama (≤1 pemakaian
+        # call-site; tanda "(" membedakan pemakaian dari baris import-nya)
+        assert low.count("painterresource(") <= 1
 
 # ===================================================================
 # Execution guards — S-18, F-07

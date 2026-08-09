@@ -2,6 +2,8 @@ package com.zaba.zcode
 
 import android.app.Application
 import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -209,6 +211,18 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("symbol_bar", enabled).apply()
     }
 
+    /**
+     * Cycle tema satu tombol (redesign 2026-08): tap-tap sampai cocok.
+     * Urutan mengikuti enum ZcodeThemeType: RETRO → DRACULA → TOKYO_NIGHT → RETRO…
+     * CATATAN JUJUR: pilihan tema belum dipersist antar-restart proses (perilaku
+     * lama dipertahankan; tercatat di docs/RENCANA_UPDATE_2026_08.md §7).
+     */
+    fun cycleTheme() {
+        val order = ZcodeThemeType.values()
+        val next = (order.indexOf(themeType) + 1) % order.size
+        themeType = order[next]
+    }
+
     // ------------------------------------------------------------------
     // Navigasi file
     // ------------------------------------------------------------------
@@ -248,6 +262,98 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         }
         FileManager.saveFile(filesDir, newName, "# New python script\n")
         selectFile(newName)
+    }
+
+    // ------------------------------------------------------------------
+    // Import file dari file manager HP (SAF, ikon folder di topbar) —
+    // keputusan redesign 2026-08: IMPORT COPY ke workspace internal
+    // (file asli TIDAK diubah) + filter file teks.
+    // ------------------------------------------------------------------
+
+    /**
+     * Baca file dari URI SAF → salin ke workspace → buka langsung di editor.
+     * Rule #1 & #2 (honest + meticulous):
+     * - Cap 512KB (guard FileManager) — file raksasa ditolak sopan, tidak OOM.
+     * - Konten biner (ada NUL byte / UTF-8 rusak) → pesan jelas, bukan crash.
+     * - Nama bentrok → suffix unik (main.py → main_2.py), file lama TIDAK ditimpa.
+     * Return: (sukses, pesan untuk toast user).
+     */
+    fun importExternalFile(uri: Uri): Pair<Boolean, String> {
+        val resolver = getApplication<Application>().contentResolver
+        return try {
+            val input = resolver.openInputStream(uri)
+                ?: return false to "File tidak bisa dibaca 😢"
+            val bytes = input.use { readCapped(it, FileManager.MAX_FILE_BYTES) }
+                ?: return false to "File terlalu besar (maks 512 KB)"
+            if (bytes.isEmpty()) return false to "File kosong — tidak ada yang diimport"
+            if (bytes.contains(0.toByte())) {
+                return false to "Itu file biner, bukan file teks 🙈"
+            }
+            val text = String(bytes, Charsets.UTF_8)
+            // UTF-8 decode Kotlin tidak melempar error tapi menyisipkan U+FFFD
+            // untuk byte rusak — tolak agar source code tidak corrupt diam-diam.
+            if ('�' in text) return false to "Encoding file bukan UTF-8 🙈"
+
+            val displayName = resolver.query(uri, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+            }
+            val finalName = uniqueFileName(displayName ?: "imported")
+            FileManager.saveFile(filesDir, finalName, text)
+            selectFile(finalName)
+            true to "Diimport: $finalName"
+        } catch (e: Exception) {
+            false to "Gagal import: ${e.message ?: "error tidak dikenal"}"
+        }
+    }
+
+    /** Baca stream dengan batas keras — return null bila melebihi max. */
+    private fun readCapped(input: java.io.InputStream, max: Int): ByteArray? {
+        val buffer = ByteArray(8192)
+        val out = java.io.ByteArrayOutputStream()
+        var total = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            total += read
+            if (total > max) return null
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
+    }
+
+    /**
+     * Nama file unik & aman via FileManager.secureFilename. Bila nama mentah
+     * ilegal (mis. "_secret.py", "catatan gue.txt") → fallback "imported".
+     * Bentrok dengan file lama → "nama_N.py" (N mulai 2).
+     */
+    private fun uniqueFileName(requested: String): String {
+        val secured = FileManager.secureFilename(requested)
+            ?: FileManager.secureFilename("imported")
+            ?: "imported.py"
+        val existing = FileManager.listFiles(filesDir).map { it["name"] as String }.toSet()
+        if (secured !in existing) return secured
+        val stem = secured.removeSuffix(".py")
+        var i = 2
+        while ("${stem}_$i.py" in existing) i++
+        return "${stem}_$i.py"
+    }
+
+    /**
+     * SAMPLES (FASE E): bikin file dari sample di assets/samples/ lalu buka.
+     * Return: (sukses, pesan) — pesan berisi nama file final bila sukses.
+     */
+    fun createSampleFromAsset(assetPath: String, sampleId: String): Pair<Boolean, String> {
+        return try {
+            val code = getApplication<Application>().assets.open(assetPath)
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val finalName = uniqueFileName(sampleId)
+            FileManager.saveFile(filesDir, finalName, code)
+            selectFile(finalName)
+            true to "Sample kebuka: $finalName"
+        } catch (e: Exception) {
+            false to "Gagal buka sample: ${e.message ?: "asset hilang"}"
+        }
     }
 
     fun closeFile(filename: String) {
