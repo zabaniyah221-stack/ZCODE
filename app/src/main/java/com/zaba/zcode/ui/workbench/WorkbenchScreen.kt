@@ -563,8 +563,11 @@ fun WorkbenchScreen(
         // Eksekusi via pluginAction() — satu logika dengan drawer PLUGINS.
         val paletteCommands: List<Pair<String, () -> Unit>> =
             PluginRegistry.enabledActions { vm.isPluginEnabled(it) }
-                .map { p -> p.name to pluginAction(p) } + listOf(
-                // Migrasi CM6: panel search @codemirror/search via bridge
+                .map { p -> p.name to pluginAction(p) } + listOf<Pair<String, () -> Unit>>(
+                // Migrasi CM6: panel search @codemirror/search via bridge.
+                // Tipe eksplisit listOf<Pair<String, () -> Unit>>: tanpa ini,
+                // lambda ber-akhir `?.evaluateJavascript(...)` (Unit?) merusak
+                // inferensi — kelas bug yang sama dengan PR #3 (WorkbenchScreen).
                 "Find in File (panel search)" to {
                     webViewRef.value?.evaluateJavascript("openFind();", null)
                 },
