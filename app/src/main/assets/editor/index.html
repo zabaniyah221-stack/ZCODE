@@ -40,6 +40,15 @@
             color: #4D7A5A !important;
             border-right: 1px solid #111612 !important;
         }
+        /* Gutter ramping (permintaan user): pangkas padding sel — Ace mengukur
+           lebar gutter dari DOM (digit + padding), jadi padding kecil = kolom sempit */
+        .ace_gutter-cell {
+            padding-left: 6px !important;
+            padding-right: 3px !important;
+        }
+        .ace_gutter-layer {
+            min-width: 0 !important;
+        }
         .ace_editor {
             background-color: #050806 !important;
         }
@@ -49,6 +58,85 @@
         .ace_active-line {
             background: rgba(27, 77, 46, 0.12) !important;
         }
+        /* Handle "..." menu mobile Ace: dibuat semi-transparan agar tidak
+           menutupi kode; menu yang terbuka tetap opacity penuh */
+        .ace_mobile-menu .ace_mobile-button[action="more"] {
+            opacity: 0.5;
+        }
+        /* Menu seleksi Ace (Select All/Find/Palette) mengikuti true-black OLED */
+        .ace_mobile-menu {
+            background: #101613 !important;
+            border: 1px solid #1B4D2E !important;
+        }
+
+        /* ===== Fix gelap-di-gelap ext-prompt (Palette) + ext-searchbox (Find) =====
+           Default ext-prompt: container `background: white`, editor batin default
+           theme textmate (terang) → teks tak terbaca di atas OLED. Paksa gelap. */
+        .ace_prompt_container {
+            background: #101613 !important;
+            border: 1px solid #1B4D2E !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.65) !important;
+        }
+        .ace_prompt_container .ace_editor,
+        .ace_prompt_container .ace_scroller,
+        .ace_prompt_container .ace_content,
+        .ace_prompt_container .ace_text-layer {
+            background: #0A100D !important;
+            color: #E6EDF3 !important;
+        }
+        .ace_prompt_container .ace_line,
+        .ace_prompt_container .ace_line span {
+            color: #E6EDF3 !important;
+        }
+        .ace_prompt_container .ace_cursor {
+            color: #39FF14 !important;
+        }
+        .ace_prompt_container .ace_selected,
+        .ace_autocomplete .ace_selected {
+            background: rgba(27, 77, 46, 0.55) !important;
+        }
+        .ace_prompt_container .ace_completion-highlight,
+        .ace_autocomplete .ace_completion-highlight {
+            color: #9ECE6A !important;
+        }
+        /* Popup autocomplete generik (di luar prompt container) */
+        .ace_autocomplete {
+            background: #101613 !important;
+            border: 1px solid #1B4D2E !important;
+            color: #D7DBE0 !important;
+        }
+        .ace_autocomplete .ace_editor,
+        .ace_autocomplete .ace_content,
+        .ace_autocomplete .ace_text-layer,
+        .ace_autocomplete .ace_line,
+        .ace_autocomplete .ace_line span {
+            background: transparent !important;
+            color: #D7DBE0 !important;
+        }
+        .ace_autocomplete .ace_emptyMessage {
+            color: #8A9A90 !important;
+        }
+        /* Search box (Find) — default #ddd terang, selaraskan OLED */
+        .ace_search {
+            background-color: #101613 !important;
+            color: #D7DBE0 !important;
+            border: 1px solid #1B4D2E !important;
+        }
+        .ace_search_field,
+        .ace_replace_field {
+            background: #050806 !important;
+            color: #E6EDF3 !important;
+            border: 1px solid #1B4D2E !important;
+        }
+        .ace_searchbtn,
+        .ace_replacebtn,
+        .ace_button {
+            color: #D7DBE0 !important;
+        }
+        .ace_nomatch {
+            outline-color: #FF4B4B !important;
+        }
     </style>
 </head>
 <body>
@@ -56,6 +144,11 @@
     <script src="ace/ace.js"></script>
     <script src="ace/mode-python.js"></script>
     <script src="ace/theme-tomorrow_night_eighties.js"></script>
+    <!-- ext v1.44.0 offline (offline-first): tanpa file ini tombol Find & Palette
+         di menu seleksi mobile Ace mati — find loadModule("ace/ext/searchbox"),
+         editor.prompt loadModule("ace/ext/prompt"). Nol overlap dengan ace.js core. -->
+    <script src="ace/ext-searchbox.js"></script>
+    <script src="ace/ext-prompt.js"></script>
     <script>
         var editor = ace.edit("editor");
         editor.setTheme("ace/theme/tomorrow_night_eighties");
@@ -65,7 +158,8 @@
         editor.setOptions({
             fontSize: "12px",          // font size 12 (keputusan tim)
             showPrintMargin: false,
-            showGutter: true,          // gutter 40px line numbers (di-set via CSS max)
+            showGutter: true,          // gutter dirampingkan via CSS .ace_gutter-cell + tanpa fold widgets
+            showFoldWidgets: false,    // fold widget memperlebar gutter — dimatikan agar leluasa (permintaan user)
             highlightActiveLine: true,
             wrap: true,
             cursorStyle: "line",
@@ -74,6 +168,13 @@
             animatedScroll: false,
             enableBasicAutocompletion: false
         });
+
+        /* Audit lazy-load (tanpa tebakan — dicek dari source): satu-satunya perintah
+           palette yang ext-nya tidak ke-bundle adalah "showSettingsMenu"
+           (target loadModule ace/ext/settings_menu). Fungsinya duplikat dengan
+           tema/font yang diatur aplikasi → disedikin dari palette agar SEMUA item
+           yang tertampil 100% berfungsi. */
+        editor.commands.removeCommand("showSettingsMenu");
 
         var isSettingValue = false;
 

@@ -2,6 +2,7 @@ package com.zaba.zcode.ui.workbench
 
 import android.webkit.WebView
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,11 +51,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zaba.zcode.R
 import com.zaba.zcode.WorkspaceViewModel
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
@@ -63,11 +70,12 @@ import kotlinx.coroutines.launch
  * WorkbenchScreen — workspace utama ZCODE (Fase 1 + Fase 2).
  *
  * Tata letak (dari atas ke bawah):
- *   Topbar (soft, theme-aware) → Tab bar (long-press = close) → banner syntax
- *   → Editor Ace OLED → QuickTools (chips bulat) → FAB ▶ di atas handle.
+ *   Topbar (judul file di samping ≡, tanpa subtitle) → Tab bar (tanpa underline,
+ *   long-press = close) → banner syntax → Editor Ace OLED → QuickTools/Symbol
+ *   bar (opsional, toggle di drawer) → FAB ▶.
  *
- * Drawer: Navigasi (Pip/About), Code Transforms (5 plugin), Theme (3 tema),
- * Files Manager (rename/delete dengan dialog konfirmasi).
+ * Drawer: Navigasi (Pip/About), Code Transforms (5 plugin), Editor (toggle
+ * Symbol bar), Theme (3 tema), Files Manager (rename/delete dialog konfirmasi).
  *
  * Anti-regresi:
  * - "≡" = tiga garis (ikon menu teks — jangan ganti dengan kata lain)
@@ -107,27 +115,29 @@ fun WorkbenchScreen(
                 drawerContainerColor = MaterialTheme.colorScheme.background,
                 modifier = Modifier.width(300.dp)
             ) {
-                // Header drawer — soft, tanpa garis tegas
-                Box(
+                // Header drawer — "ZCODE" + logo app baru di kanan (tanpa subtitle, permintaan user)
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 20.dp, vertical = 18.dp)
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text(
-                            "ZCODE",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Zabacode Kotlin Edition — offline-first",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.LightGray
-                        )
-                    }
+                    Text(
+                        "ZCODE",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Image(
+                        painter = painterResource(id = R.drawable.zcode_logo),
+                        contentDescription = "Logo ZCODE",
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                    )
                 }
 
                 DrawerSectionTitle("NAVIGATION")
@@ -164,6 +174,29 @@ fun WorkbenchScreen(
                 DrawerItem("Clear All Drafts & Files") {
                     scope.launch { drawerState.close() }
                     confirmClearAll = true
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
+
+                DrawerSectionTitle("EDITOR")
+                // Toggle Symbol bar (QuickTools) — wiring ke VM, persist di SharedPreferences
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.setSymbolBar(!vm.symbolBarEnabled) }
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Symbol bar",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = vm.symbolBarEnabled,
+                        onCheckedChange = { vm.setSymbolBar(it) }
+                    )
                 }
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
@@ -241,6 +274,7 @@ fun WorkbenchScreen(
             topBar = { WorkbenchTopBar(vm, webViewRef, onOpenDrawer = { scope.launch { drawerState.open() } }, onOpenPalette = { showPalette = true }) },
             floatingActionButton = {
                 // ▶ Run → onRun(filename) → MainActivity navigate ke layer output full-screen (pindah layer)
+                // padding bawah menyesuaikan: 52dp saat symbol bar tampil agar tidak tertutup
                 FloatingActionButton(
                     onClick = {
                         val active = vm.activeFile ?: "main.py"
@@ -249,7 +283,7 @@ fun WorkbenchScreen(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.padding(bottom = 52.dp)
+                    modifier = Modifier.padding(bottom = if (vm.symbolBarEnabled) 52.dp else 8.dp)
                 ) {
                     Text("▶", fontSize = 20.sp)
                 }
@@ -269,7 +303,9 @@ fun WorkbenchScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     contentColor = MaterialTheme.colorScheme.primary,
                     edgePadding = 8.dp,
-                    divider = { Divider(color = Color.White.copy(alpha = 0.05f)) }
+                    divider = { Divider(color = Color.White.copy(alpha = 0.05f)) },
+                    // tanpa underline indikator (permintaan user): tab aktif cukup dibedakan warna teks
+                    indicator = {}
                 ) {
                     vm.openedFiles.forEach { filename ->
                         val isActive = vm.activeFile == filename
@@ -330,8 +366,10 @@ fun WorkbenchScreen(
                     )
                 }
 
-                // QuickTools — chips bulat, scroll horizontal
-                QuickToolsBar(webViewRef)
+                // QuickTools / symbol bar — bisa dimatikan user lewat drawer (EDITOR → Symbol bar)
+                if (vm.symbolBarEnabled) {
+                    QuickToolsBar(webViewRef)
+                }
             }
         }
     }
@@ -458,8 +496,7 @@ private fun WorkbenchTopBar(
                 .fillMaxWidth()
                 .height(48.dp)
                 .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // ≡ tiga garis — buka drawer
             Text(
@@ -471,19 +508,16 @@ private fun WorkbenchTopBar(
                     .padding(10.dp)
             )
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    vm.activeFile ?: "No Active File",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    "internal filesDir · Python 3.11",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
-                )
-            }
+            // Judul file persis di samping ≡ (tanpa subtitle — permintaan user)
+            Text(
+                vm.activeFile ?: "No Active File",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // 🔍 Command Palette & Quick Open (akses jempol di topbar)

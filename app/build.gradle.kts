@@ -18,8 +18,10 @@ android {
         applicationId = "com.zaba.zcode"
         minSdk = 26 // 26 = EncryptedSharedPreferences stable, Zabacode minApi 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0-fase2"
+        // Single source: gradle.properties (F-09 anti-drift) — fallback literal di sini
+        // hanya kalau property hilang; string "1.0.0" dipertahankan untuk pin test CI
+        versionCode = (project.findProperty("zcode.versionCode") as? String)?.toInt() ?: 3
+        versionName = (project.findProperty("zcode.versionName") as? String) ?: "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -73,11 +75,23 @@ android {
 
 // Chaquopy 15.0 — Python 3.11 in-process runtime (Fase 1: on-device execution).
 // - version 3.11: satu-satunya yang masih mendukung armeabi-v7a (HP user)
-// - pip build-time sengaja kosong; instalasi package lewat PipScreen saat runtime
+// - pip WAJIB di-bundle di sini: Chaquopy TIDAK menyertakan pip secara default.
+//   Tanpa blok pip{} runtime selalu gagal: ModuleNotFoundError: No module named 'pip'
+//   (akar bug PipScreen "no module name pip"). Komentar lama "pip build-time sengaja
+//   kosong" salah kaprah — pip runtime butuh interpreter pip di assets.
+// - Pin pip 23.3.1: pip 24+ crash di Chaquopy karena importlib.metadata memindai
+//   distribution via AssetFinder → AssetPath tidak punya .parent → AttributeError.
+//   Lapis kedua monkey-patch tetap ada di zcode_pip.py (belt-and-suspenders).
+// - setuptools/wheel: fallback build sdist paket pure-Python tanpa build backend.
 // - buildPython: CI menyediakan python3 (3.11) di PATH
 chaquopy {
     defaultConfig {
         version = "3.11"
+        pip {
+            install("pip==23.3.1")     // jangan latest 24+ (bug AssetPath.parent)
+            install("setuptools==68.2.2")
+            install("wheel==0.41.2")
+        }
     }
 }
 

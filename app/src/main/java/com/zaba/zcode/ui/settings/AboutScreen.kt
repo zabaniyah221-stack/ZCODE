@@ -2,6 +2,7 @@ package com.zaba.zcode.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,11 +16,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -27,16 +31,45 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zaba.zcode.R
 
 /**
- * AboutScreen — identitas ZCODE + Contribute.
+ * AboutScreen — identitas ZCODE + Lisensi (MIT) + Contribute.
  * Contribute → GitHub Issues (keputusan tim: langsung ke repo, tanpa email).
+ * Deskripsi lama diganti teks lisensi (permintaan user): ramah kontribusi, mengisi
+ * ruang kosong, telusur penuh bisa discroll dengan pembatas.
  */
+
+private const val MIT_LICENSE_TEXT = """MIT License
+
+Copyright (c) 2026 ZCODE contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE."""
+
 @Composable
 fun AboutScreen(
     onBack: () -> Unit
@@ -78,25 +111,18 @@ fun AboutScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-            // Logo
-            Surface(
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(18.dp),
-                modifier = Modifier.size(84.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        "ZC",
-                        fontSize = 34.sp,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                    )
-                }
-            }
+            // Logo aplikasi baru (konsep {Z} — sama dengan icon launcher)
+            Image(
+                painter = painterResource(id = R.drawable.zcode_logo),
+                contentDescription = "Logo ZCODE",
+                modifier = Modifier
+                    .size(92.dp)
+                    .clip(RoundedCornerShape(22.dp))
+            )
 
             Text(
                 "ZCODE",
@@ -104,23 +130,45 @@ fun AboutScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "Version 0.2.0-fase2 · Zabacode Kotlin Edition",
+                "v1.0.0",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
 
+            // ---------- License (MIT) — pembatas + scrollable (permintaan user) ----------
+            Divider(color = Color.White.copy(alpha = 0.08f))
+
             Text(
-                "Kesederhanaan Pydroid × Detail VS Code × Kelincahan Acode.",
-                style = MaterialTheme.typography.bodyMedium,
+                "License — MIT",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "ZCODE itu open source. Siapa pun bebas membaca, memakai, fork, dan " +
+                    "berkontribusi — tidak perlu izin, tidak perlu sungkan.",
+                style = MaterialTheme.typography.bodySmall,
                 color = Color.LightGray,
                 textAlign = TextAlign.Center
             )
-            Text(
-                "Editor Python offline-first: cepat, efisien, aman, bebas iklan & telemetri.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray,
-                textAlign = TextAlign.Center
-            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        RoundedCornerShape(10.dp)
+                    )
+                    .verticalScroll(rememberScrollState())
+                    .padding(12.dp)
+            ) {
+                Text(
+                    MIT_LICENSE_TEXT,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = Color.LightGray
+                )
+            }
 
             Spacer(modifier = Modifier.weight(1f))
 

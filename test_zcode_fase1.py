@@ -297,9 +297,9 @@ class TestBugFixes:
         assert "400" in txt
 
     def test_version_bump(self):
-        assert "0.2.0-fase2" in read(BUILD_GRADLE)
-        assert "0.2.0-fase2" in read(ROOT / "gradle.properties")
-        assert "0.2.0-fase2" in read(UI / "settings/AboutScreen.kt")
+        assert "1.0.0" in read(BUILD_GRADLE)
+        assert "1.0.0" in read(ROOT / "gradle.properties")
+        assert "1.0.0" in read(UI / "settings/AboutScreen.kt")
 
     def test_beautify_prev_threading(self):
         txt = read(CORE / "plugins/PluginHost.kt")
