@@ -18,13 +18,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
 
 /**
- * EditorScreen — WebView file:// + Ace 1.44.0 bundled (offline-first, tanpa CDN).
+ * EditorScreen — WebView file:// + CodeMirror 6 bundled (offline-first, tanpa CDN).
  *
- * - True-black OLED #050806; gutter line numbers 40px dikonfigurasi di Ace (index.html).
+ * - True-black OLED #050806; gutter line numbers + tema dikonfigurasi deklaratif
+ *   di bundle CM6 (editor-src/src/editor.js → assets/editor/codemirror.bundle.js).
  * - Bridge: addJavascriptInterface "ZCODE" — TANPA loopback HTTP (file:// murni,
  *   tanpa localhost/port), menghapus kelas bug F-01/S-27/C-50 dari Zabacode selamanya.
+ * - Kontrak bridge JS identik dengan era Ace (setCode/getCode/insertText/undo/redo/
+ *   duplicateRows/toggleCommentLines + onEditorReady handshake PR #5) — lihat
+ *   docs/MIGRASI_CM6.md §3.
  * - ZMUX lesson: debounce resize 100ms di MainActivity agar prompt tidak loncat 4-5 baris.
- * - Font editor 12px (keputusan tim) — di-set di index.html.
+ * - Font editor 12px (keputusan tim) — di-set di bundle CM6.
  */
 @SuppressLint("ClickableViewAccessibility")
 @Composable

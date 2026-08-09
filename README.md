@@ -51,12 +51,12 @@ Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **op
 
 - **Beautifier Pro** — spasi operator rapi dengan prioritas longest-first (`->`, `**`, `//=`, `<<`, ...); string & komentar tidak pernah disentuh; unary (`-1`, `*args`, `~x`) & unpacking (`**kwargs`) aman.
 - **Optimize Auto-Imports** — mendeteksi pemakaian `os, sys, math, json, time, random, datetime` dan menambahkan import bila belum ada.
-- **Duplicate Active Line** & **Toggle Line Comment** — dieksekusi langsung di Ace editor.
+- **Duplicate Active Line** & **Toggle Line Comment** — dieksekusi langsung di editor (CodeMirror 6).
 - **Clear All Drafts & Files** — dengan dialog konfirmasi.
 
 ### 🧩 Editor
 
-- **Ace Editor 1.44.0 asli, bundled offline** (tanpa CDN) di WebView `file://` — font 12px, gutter line numbers, theme tomorrow-night-eighties di atas OLED.
+- **CodeMirror 6 bundled offline** (migrasi penuh dari Ace 1.44.0, 2026-08 — `docs/MIGRASI_CM6.md`; tanpa CDN, single-file bundle esbuild target es2018, armv7/arm64/x86_64 aman) di WebView `file://` — font 12px, gutter line numbers, tema tomorrow-night-eighties deklaratif di atas OLED, Python syntax via Lezer parser, panel Find built-in. Sumber bundle: `editor-src/` (`npm ci && npm run build`).
 - **Bridge `addJavascriptInterface`** — tanpa loopback HTTP (kelas bug F-01/S-27/C-50 dari Zabacode terhapus).
 
 ---
@@ -83,7 +83,7 @@ python -m pytest test_zcode_fase0.py test_zcode_fase1.py -v
 gradle assembleDebug
 ```
 
-Guard yang dijaga: Ace 1.44.0 bundled asli, tanpa unverified SSL, `taskAffinity=com.zaba.zcode singleTop allowBackup=false`, `MAX_CODE_BYTES` 512KB, `MAX_INTERACTIVE_QUEUE` 10k, SIGINT asli, `≡` tiga garis (bukan kata lain), topbar faded grey `#3A4452` referensi.
+Guard yang dijaga: CodeMirror 6 bundled asli (bukan stub, kontrak bridge lengkap), tanpa unverified SSL, `taskAffinity=com.zaba.zcode singleTop allowBackup=false`, `MAX_CODE_BYTES` 512KB, `MAX_INTERACTIVE_QUEUE` 10k, SIGINT asli, `≡` tiga garis (bukan kata lain), topbar faded grey `#3A4452` referensi.
 
 Catatan jujur: eksekusi Python memakai **Chaquopy 3.11 in-process** di Android (bukan PTY OS-level; terminal ini ala Pydroid — output teks + ketik langsung + Enter + Ctrl+C). PTY penuh (escape sequence, `apk add`, git) tetap menjadi target Fase 3 via ZMUX/proot. Build APK diverifikasi oleh CI (sandbox tanpa JDK/Android SDK).
 

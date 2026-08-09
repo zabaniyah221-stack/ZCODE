@@ -71,7 +71,7 @@ import kotlinx.coroutines.launch
  *
  * Tata letak (dari atas ke bawah):
  *   Topbar (judul file di samping ≡, tanpa subtitle) → Tab bar (tanpa underline,
- *   long-press = close) → banner syntax → Editor Ace OLED → QuickTools/Symbol
+ *   long-press = close) → banner syntax → Editor CodeMirror 6 OLED → QuickTools/Symbol
  *   bar (opsional, toggle di drawer) → FAB ▶.
  *
  * Drawer: Navigasi (Pip/About), Code Transforms (5 plugin), Editor (toggle
@@ -357,7 +357,7 @@ fun WorkbenchScreen(
                     }
                 }
 
-                // Editor (Ace WebView)
+                // Editor (CodeMirror 6 WebView)
                 Box(modifier = Modifier.weight(1f)) {
                     EditorScreen(
                         code = vm.activeCode,
@@ -457,6 +457,11 @@ fun WorkbenchScreen(
             },
             "Toggle Line Comment" to {
                 webViewRef.value?.evaluateJavascript("toggleCommentLines();", null)
+            },
+            // Migrasi CM6: Find dulu hanya bisa via mobile-menu Ace (yang kini
+            // tidak ada). Panel search @codemirror/search dibuka via bridge.
+            "Find in File" to {
+                webViewRef.value?.evaluateJavascript("openFind();", null)
             },
             "Open Pip Manager" to { onNavigateToPip() },
             "Open About" to { onNavigateToAbout() }

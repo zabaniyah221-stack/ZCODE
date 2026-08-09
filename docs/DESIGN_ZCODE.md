@@ -5,7 +5,7 @@
 
 **Tanggal:** 2026-08-08  
 **Acuan warna:** `zabacode/themes/definitions.py` (12 tema) + `templates/index.html` CSS vars (`--bg #050806`, `--text-bright #39FF14`, `--ai #FFB000`, `--err #FF4B4B`) + `assets/logo.png` + `assets/presplash.png`  
-**Prinsip:** Pydroid simple (1-tap), VS Code detail (Workbench), Acode touch (QuickTools) — tapi semua **Compose native + Ace 1.44.0 bundled**.
+**Prinsip:** Pydroid simple (1-tap), VS Code detail (Workbench), Acode touch (QuickTools) — tapi semua **Compose native + CodeMirror 6 bundled** (migrasi 2026-08 dari Ace 1.44.0 — `docs/MIGRASI_CM6.md`).
 
 ---
 
@@ -44,7 +44,7 @@ ZABACODE sekarang pakai **12 tema** — kita pertahankan semua, tapi rapikan jad
 ```
 [Topbar 44px: ☰ ZABACODE ● ● Ln 12]
 [Tab bar 32px: untitled_1.py x  test.py x  +]
-[Code Editor (Ace) flex:1]
+[Code Editor (CodeMirror 6) flex:1]
 [Mobile Symbol Bar (TAB : ( ) [ ] ...) — muncul kalau plugin symbol_bar aktif]
 [Run/Clear bar 8px]
 [Sidebar 280px overlay dari kiri: Files / Plugins / Settings]
@@ -124,13 +124,13 @@ ZABACODE sekarang pakai **12 tema** — kita pertahankan semua, tapi rapikan jad
 - **Command Palette `Ctrl+Shift+P` / `> `** — `ModalBottomSheet` + `SearchBar`, list dari `get_command_palette_items(q)` (copy Zabacode `/api/palette`).
 - **Quick Open `Ctrl+P`** — `Quick Open: files + symbols` (`/api/quickopen`).
 - **Go to Line `Ctrl+G`** — dialog `line:column`.
-- **Find `Ctrl+F` / floating Find** — `ext-searchbox.js` Ace tetap, plus Compose Find bar.
+- **Find `Ctrl+F` / floating Find** — panel `@codemirror/search` (via palette "Find in File" / `openFind()`), di-style OLED.
 - **Outline `Ctrl+Shift+O`** — `DocumentSymbol` tree dari `editor_intelligence.get_symbol_outline`.
 
 ### 4.3 Acode Touch
 - **QuickTools scroll horizontal** — `isHorizontalScrollBarEnabled=false`, `HorizontalScrollView` (copy ZMUX `KeyCapView` fix).
 - **Tab swipe + close `×`** — `swipe to close` + `long-press → close others`.
-- **Multi-cursor** `Ctrl+Click` (Ace `multiSelect` tetap).
+- **Multi-cursor** `Ctrl+Click` — CM6 belum punya true multi-caret (hanya rectangular selection); kalau dibutuhkan, pola Acode `multiCursorSelectionExtension` bisa di-port (backlog, lihat docs/MIGRASI_CM6.md §5).
 
 ---
 

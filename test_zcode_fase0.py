@@ -1,6 +1,6 @@
 """
 ZCODE Fase 0 Strict Tests — honest & aware
-Covers: docs, plan, design, gradle, manifest, ace, execution guards, UI spec, PTY, no-icons, contribute
+Covers: docs, plan, design, gradle, manifest, editor CM6, execution guards, UI spec, PTY, no-icons, contribute
 Run: pytest test_zcode_fase0.py -v  &&  bash tools/check.sh
 """
 import re
@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 APP = ROOT / "app"
 MANIFEST = APP / "src/main/AndroidManifest.xml"
-ACE_JS = APP / "src/main/assets/editor/ace/ace.js"
+CM6_BUNDLE = APP / "src/main/assets/editor/codemirror.bundle.js"
 THEME_KT = APP / "src/main/java/com/zaba/zcode/ui/theme/ZcodeTheme.kt"
 WORKBENCH_KT = APP / "src/main/java/com/zaba/zcode/ui/workbench/WorkbenchScreen.kt"
 EDITOR_KT = APP / "src/main/java/com/zaba/zcode/ui/editor/EditorScreen.kt"
@@ -56,8 +56,11 @@ class TestPlanContent:
     def test_plan_faded_grey(self):
         assert "#3A4452" in read(PLAN) or "faded grey" in read(PLAN).lower()
 
-    def test_plan_ace_144(self):
-        assert "1.44.0" in read(PLAN)
+    def test_plan_cm6_migration(self):
+        # Migrasi 2026-08: Ace → CodeMirror 6 harus terdokumentasi (PLAN_ZCODE.md
+        # tetap ada sebagai dokumen sejarah).
+        mig = ROOT / "docs/MIGRASI_CM6.md"
+        assert mig.exists() and "CodeMirror" in read(mig)
 
     def test_plan_chaquopy_311(self):
         txt = read(PLAN)
@@ -144,16 +147,21 @@ class TestGradleManifest:
         assert "premium" not in txt
 
 # ===================================================================
-# Ace bundled — offline-first (S-26 fix)
+# CodeMirror 6 bundled — offline-first (S-26 fix; migrasi 2026-08 dari Ace)
 # ===================================================================
 
-class TestAceBundled:
-    def test_ace_exists(self): assert ACE_JS.exists() and ACE_JS.stat().st_size > 0
-    def test_ace_is_144(self): assert "1.44.0" in read(ACE_JS)
-    def test_ace_mode_python_exists(self): assert (APP / "src/main/assets/editor/ace/mode-python.js").exists()
-    def test_ace_no_cdn(self):
-        # No cdn reference in ace.js placeholder
-        txt = read(ACE_JS).lower()
+class TestCM6Bundled:
+    def test_cm6_exists(self): assert CM6_BUNDLE.exists() and CM6_BUNDLE.stat().st_size > 0
+    def test_cm6_real_not_stub(self):
+        # Bundle asli (CM6 + lang-python + search) ~400KB; stub pasti < 100KB
+        assert CM6_BUNDLE.stat().st_size > 100_000, "codemirror.bundle.js masih stub?"
+    def test_cm6_python_lang(self):
+        # 'nonlocal' hanya ada di grammar Lezer-python — bukti lang-python terbundle
+        assert "nonlocal" in read(CM6_BUNDLE)
+    def test_cm6_no_cdn(self):
+        # No CDN reference in bundle (catatan: 'http://www.w3.org/2000/svg'
+        # adalah namespace XML untuk createElementNS — bukan network request).
+        txt = read(CM6_BUNDLE).lower()
         assert "cdnjs" not in txt and "unpkg" not in txt and "jsdelivr" not in txt
 
 # ===================================================================
@@ -334,6 +342,6 @@ class TestCheckSh:
     def test_check_sh_exists(self):
         p = ROOT / "tools/check.sh"
         assert p.exists() and p.stat().st_size > 0
-        assert "verifyAceBundled" in read(p) or "Ace" in read(p)
+        assert "codemirror" in read(p).lower()
         assert "taskAffinity" in read(p)
         assert "≡" in read(p) or "three lines" in read(p).lower()

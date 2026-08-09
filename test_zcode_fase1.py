@@ -1,9 +1,9 @@
 """
 ZCODE Fase 1 & 2 Strict Tests — honest & aware
 Covers: file manager + persistensi, PTY terminal interaktif, pip layer, 3 tema,
-WebView Ace asli, Checker, PluginHost (beautifier aman), Command Palette, semua tombol wired.
+WebView CodeMirror 6 asli (bundle), Checker, PluginHost (beautifier aman), Command Palette, semua tombol wired.
 Catatan: sandbox tanpa JDK/Android SDK, jadi test ini struktural (menjaga kontrak anti-regresi).
-Behavioral test di sandbox: bash tools/check.sh + python (lihat test_ace_real).
+Behavioral test di sandbox: bash tools/check.sh + python (lihat test_cm6_real_not_stub).
 Run: python -m pytest test_zcode_fase1.py -v
 """
 import re
@@ -28,19 +28,23 @@ def read(p): return p.read_text(encoding="utf-8", errors="replace") if p.exists(
 class TestFase1Files:
     def test_index_html_exists(self):
         p = ASSETS / "editor/index.html"
-        assert p.exists(), "index.html Ace missing"
+        assert p.exists(), "index.html editor missing"
 
-    def test_ace_real_not_stub(self):
-        # Ace asli 1.44.0 berukuran ~900KB; stub Fase 0 hanya ~300 byte
-        ace = ASSETS / "editor/ace/ace.js"
-        assert ace.exists() and ace.stat().st_size > 100_000, "ace.js masih stub?"
+    def test_cm6_real_not_stub(self):
+        # Bundle CM6 asli (CM6 + lang-python + search) ~400KB; stub pasti kecil
+        bundle = ASSETS / "editor/codemirror.bundle.js"
+        assert bundle.exists() and bundle.stat().st_size > 100_000, "codemirror.bundle.js masih stub?"
 
-    def test_ace_version_144(self):
-        assert "1.44.0" in read(ASSETS / "editor/ace/ace.js")
+    def test_cm6_bridge_contract(self):
+        # Kontrak bridge identik dengan era Ace + openFind baru (docs/MIGRASI_CM6.md §3)
+        txt = read(ASSETS / "editor/codemirror.bundle.js")
+        for kw in ["setCode", "getCode", "insertText", "undo", "redo",
+                   "duplicateRows", "toggleCommentLines", "openFind", "onEditorReady"]:
+            assert kw in txt, f"bundle CM6 kehilangan kontrak bridge {kw}"
 
-    def test_ace_mode_python_real(self):
-        mode = ASSETS / "editor/ace/mode-python.js"
-        assert mode.exists() and mode.stat().st_size > 1_000, "mode-python.js masih stub?"
+    def test_cm6_python_lang(self):
+        # 'nonlocal' hanya ada di grammar Lezer-python — bukti lang-python terbundle
+        assert "nonlocal" in read(ASSETS / "editor/codemirror.bundle.js")
 
     def test_workspace_viewmodel_exists(self):
         p = JAVA / "WorkspaceViewModel.kt"
@@ -99,12 +103,14 @@ class TestEditorWebView:
         assert "escapeJavaScriptString" in read(UI / "editor/EditorScreen.kt")
 
     def test_index_html_bridge(self):
+        # Migrasi CM6: index.html kini hanya me-load bundle; implementasi bridge
+        # (onCodeChange/setCode) hidup di dalam bundle (test_cm6_bridge_contract).
         txt = read(ASSETS / "editor/index.html")
-        for kw in ["ace.edit", "onCodeChange", "setCode", "12px", "#050806"]:
+        for kw in ["codemirror.bundle.js", "12px", "#050806"]:
             assert kw in txt, f"index.html missing {kw}"
 
-    def test_index_html_plugins(self):
-        txt = read(ASSETS / "editor/index.html")
+    def test_bundle_plugins(self):
+        txt = read(ASSETS / "editor/codemirror.bundle.js")
         assert "duplicateRows" in txt and "toggleCommentLines" in txt
 
 
