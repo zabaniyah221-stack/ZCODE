@@ -146,6 +146,11 @@ pernah menebak**.
 
 ## 7. Keterbatasan yang diketahui (jujur, bukan PR berikutnya kecuali ada suara)
 
+- Insiden & pelajaran (2026-08-09): CI `kspDebugKotlin` gagal "Unclosed comment"
+  karena glob MIME bintang ditulis apa adanya di dalam doc comment — Kotlin block
+  comment BERSARANG, tidak seperti Java/C. Diperbaiki di WorkbenchScreen.kt dan
+  kini dijaga permanen oleh `tools/kotlin_sanity_check.py` (langkah 2 `check.sh`).
+  Sandbox tetap tanpa JDK, jadi kompilasi Kotlin penuh hanya dinilai oleh CI.
 - Pilihan tema belum dipersist antar-restart proses (perilaku lama dipertahankan;
   perubahan sengaja dibatasi sesuai ruang diskusi).
 - Judul di dalam layar Pip tetap "Pip Package Manager"; hanya label sidebar yang

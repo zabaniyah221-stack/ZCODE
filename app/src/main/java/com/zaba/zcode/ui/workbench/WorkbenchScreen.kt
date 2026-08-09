@@ -94,12 +94,17 @@ import kotlinx.coroutines.launch
  * Seksi NAVIGATION / EDITOR / SELECT THEME / FILES MANAGER dibuang total.
  *
  * Topbar: ≡ | nama file (tap → dialog Rename/Delete) | folder (import dari file
- * manager HP, SAF text/*) | kaca pembesar polos (palette: Line & Find) | plus.
+ * manager HP via SAF, filter tipe teks) | kaca pembesar polos (palette: Line &
+ * Find) | plus.
  * Ikon vektor polos ZIcons (di-tint mengikuti tema) menggantikan emoji topbar.
  *
  * Anti-regresi:
  * - "≡" = tiga garis (ikon menu teks — jangan ganti dengan kata lain)
  * - Semua tombol ter-wire ke WorkspaceViewModel / onRun / navigate ke layer output
+ * - JANGAN menulis glob bintang mentah (mis. MIME tipe teks-slash-bintang) apa
+ *   adanya di dalam block comment mana pun — Kotlin block comment BERSARANG,
+ *   pembuka nested nyasar = "Unclosed comment" di compiler (insiden CI
+ *   2026-08-09 baris ini; dijaga tools/kotlin_sanity_check.py via check.sh).
  */
 
 private val OledBlack = Color(0xFF050806)
