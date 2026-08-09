@@ -1,12 +1,16 @@
 package com.zaba.zcode.ui.workbench
 
 import android.webkit.WebView
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,8 +64,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
 import com.zaba.zcode.R
 import com.zaba.zcode.WorkspaceViewModel
+import com.zaba.zcode.core.plugins.PluginInfo
+import com.zaba.zcode.core.plugins.PluginRegistry
+import com.zaba.zcode.core.plugins.SnippetLibrary
+import com.zaba.zcode.core.plugins.TodoExtractor
+import com.zaba.zcode.core.plugins.TodoItem
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
 import com.zaba.zcode.ui.theme.ZcodeThemeType
@@ -71,7 +83,7 @@ import kotlinx.coroutines.launch
  *
  * Tata letak (dari atas ke bawah):
  *   Topbar (judul file di samping ≡, tanpa subtitle) → Tab bar (tanpa underline,
- *   long-press = close) → banner syntax → Editor Ace OLED → QuickTools/Symbol
+ *   long-press = close) → banner syntax → Editor CodeMirror 6 OLED → QuickTools/Symbol
  *   bar (opsional, toggle di drawer) → FAB ▶.
  *
  * Drawer: Navigasi (Pip/About), Code Transforms (5 plugin), Editor (toggle
@@ -103,9 +115,65 @@ fun WorkbenchScreen(
     var fileToDelete by remember { mutableStateOf<String?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
     var showPalette by remember { mutableStateOf(false) }
+    // Batch anti-sepi: drawer PLUGINS expandable, dialog TODO, dialog Snippets
+    var pluginsExpanded by remember { mutableStateOf(false) }
+    var showSnippets by remember { mutableStateOf(false) }
+    var showTodoResults by remember { mutableStateOf(false) }
+    var todoItems by remember { mutableStateOf<List<TodoItem>>(emptyList()) }
+
+    val context = LocalContext.current
+    fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     fun pushCode() {
         webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
+    }
+
+    fun gotoLine(n: Int) {
+        webViewRef.value?.evaluateJavascript("gotoLine($n);", null)
+    }
+
+    // Eksekusi satu plugin (drawer tap & palette — satu logika, dua pintu).
+    // Semantik S2: tap = eksekusi manual; toggle = ketersediaan/behavior.
+    fun pluginAction(plugin: PluginInfo): () -> Unit = {
+        when (plugin.id) {
+            "beautifier" -> {
+                vm.beautifyActiveFile()
+                pushCode()
+            }
+            "optimize_imports" -> {
+                vm.optimizeActiveImports()
+                pushCode()
+            }
+            "duplicate_line" -> {
+                webViewRef.value?.evaluateJavascript("duplicateRows();", null)
+            }
+            "toggle_comment" -> {
+                webViewRef.value?.evaluateJavascript("toggleCommentLines();", null)
+            }
+            "todo_extractor" -> {
+                todoItems = TodoExtractor.extract(vm.activeCode)
+                showTodoResults = true
+            }
+            "snippets" -> {
+                showSnippets = true
+            }
+            "auto_trim_on_run" -> {
+                // BEHAVIOR: tidak ada eksekusi manual — jelaskan statusnya
+                toast(
+                    if (vm.isPluginEnabled(plugin.id))
+                        "Auto Trim aktif — spasi akhir dibuang otomatis saat Run"
+                    else "Auto Trim nonaktif"
+                )
+            }
+            else -> plugin.pythonId?.let { pid ->
+                toast("Menjalankan ${plugin.name}…")
+                vm.runPythonPlugin(pid) { ok, report ->
+                    if (ok) pushCode()
+                    val msg = if (ok) report.lines().take(3).joinToString("\n") else "❌ $report"
+                    toast(msg)
+                }
+            } ?: toast("Plugin '${plugin.id}' belum punya handler")
+        }
     }
 
     ModalNavigationDrawer(
@@ -152,24 +220,46 @@ fun WorkbenchScreen(
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
 
-                DrawerSectionTitle("CODE TRANSFORMS")
-                DrawerItem("Beautifier Pro (Format Code)") {
-                    scope.launch { drawerState.close() }
-                    vm.beautifyActiveFile()
-                    pushCode()
+                // ---------- PLUGINS (batch anti-sepi S1/S2) ----------
+                // Header tap → kotak berborder expand ke bawah (±3 baris visible,
+                // scrollable). Tap badan baris = eksekusi; Switch = aktif/nonaktif.
+                val activePluginCount = PluginRegistry.plugins.count { vm.isPluginEnabled(it.id) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { pluginsExpanded = !pluginsExpanded }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "🧩 PLUGINS ($activePluginCount aktif)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        if (pluginsExpanded) "▾" else "▸",
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-                DrawerItem("Optimize Auto-Imports") {
-                    scope.launch { drawerState.close() }
-                    vm.optimizeActiveImports()
-                    pushCode()
-                }
-                DrawerItem("Duplicate Active Line") {
-                    scope.launch { drawerState.close() }
-                    webViewRef.value?.evaluateJavascript("duplicateRows();", null)
-                }
-                DrawerItem("Toggle Line Comment") {
-                    scope.launch { drawerState.close() }
-                    webViewRef.value?.evaluateJavascript("toggleCommentLines();", null)
+                AnimatedVisibility(visible = pluginsExpanded) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .heightIn(max = 176.dp) // ≈3 baris — sisanya scroll di dalam
+                            .border(1.dp, Color(0xFF1B4D2E), RoundedCornerShape(10.dp))
+                            .padding(vertical = 2.dp)
+                    ) {
+                        items(PluginRegistry.plugins) { plugin ->
+                            PluginRow(
+                                plugin = plugin,
+                                enabled = vm.isPluginEnabled(plugin.id),
+                                onToggle = { vm.setPluginEnabled(plugin.id, !vm.isPluginEnabled(plugin.id)) },
+                                onRun = { pluginAction(plugin)() }
+                            )
+                        }
+                    }
                 }
                 DrawerItem("Clear All Drafts & Files") {
                     scope.launch { drawerState.close() }
@@ -277,10 +367,16 @@ fun WorkbenchScreen(
                 // padding bawah menyesuaikan: 52dp saat symbol bar tampil agar tidak tertutup
                 FloatingActionButton(
                     onClick = {
+                        // BEHAVIOR auto_trim_on_run berjalan di sini (F5)
+                        vm.applyAutoTrimIfEnabled()
+                        pushCode()
                         val active = vm.activeFile ?: "main.py"
                         onRun(active)
                     },
-                    containerColor = MaterialTheme.colorScheme.primary,
+                    // S6: FAB syntax-aware — MERAH saat ada error syntax tapi TETAP
+                    // BISA RUN (warn-only never block; lesson RUN-mati Zabacode)
+                    containerColor = if (vm.syntaxError != null) Color(0xFFFF4B4B)
+                        else MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.padding(bottom = if (vm.symbolBarEnabled) 52.dp else 8.dp)
@@ -357,7 +453,7 @@ fun WorkbenchScreen(
                     }
                 }
 
-                // Editor (Ace WebView)
+                // Editor (CodeMirror 6 WebView)
                 Box(modifier = Modifier.weight(1f)) {
                     EditorScreen(
                         code = vm.activeCode,
@@ -438,31 +534,55 @@ fun WorkbenchScreen(
         )
     }
 
+    // ---------- Dialog: TODO Extractor results (batch anti-sepi) ----------
+    if (showTodoResults) {
+        TodoResultsDialog(
+            items = todoItems,
+            onDismiss = { showTodoResults = false },
+            onJump = { line ->
+                showTodoResults = false
+                gotoLine(line)
+            }
+        )
+    }
+
+    // ---------- Dialog: Snippet Pack (batch anti-sepi S5) ----------
+    if (showSnippets) {
+        SnippetsDialog(
+            onDismiss = { showSnippets = false },
+            onPick = { snippet ->
+                showSnippets = false
+                val name = vm.createFileFromSnippet(snippet)
+                pushCode()
+                toast("Snippet jadi file: $name")
+            }
+        )
+    }
+
     // ---------- Dialog: Command Palette & Quick Open ----------
     if (showPalette) {
         // Tipe eksplisit: tanpa ini, lambda `webViewRef.value?.evaluateJavascript(...)`
         // mengembalikan Unit? sehingga list ter-infer jadi Pair<String, () -> Unit?>
         // dan tidak cocok dengan parameter `commands: List<Pair<String, () -> Unit>>`.
-        val paletteCommands: List<Pair<String, () -> Unit>> = listOf(
-            "Beautifier Pro (Format Code)" to {
-                vm.beautifyActiveFile()
-                pushCode()
-            },
-            "Optimize Auto-Imports" to {
-                vm.optimizeActiveImports()
-                pushCode()
-            },
-            "Duplicate Active Line" to {
-                webViewRef.value?.evaluateJavascript("duplicateRows();", null)
-            },
-            "Toggle Line Comment" to {
-                webViewRef.value?.evaluateJavascript("toggleCommentLines();", null)
-            },
-            "Open Pip Manager" to { onNavigateToPip() },
-            "Open About" to { onNavigateToAbout() }
-        )
+        // Batch anti-sepi S2: palette hanya memuat plugin ACTION yang ENABLED.
+        // Eksekusi via pluginAction() — satu logika dengan drawer PLUGINS.
+        val paletteCommands: List<Pair<String, () -> Unit>> =
+            PluginRegistry.enabledActions { vm.isPluginEnabled(it) }
+                .map { p -> p.name to pluginAction(p) } + listOf<Pair<String, () -> Unit>>(
+                // Migrasi CM6: panel search @codemirror/search via bridge.
+                // Tipe eksplisit listOf<Pair<String, () -> Unit>>: tanpa ini,
+                // lambda ber-akhir `?.evaluateJavascript(...)` (Unit?) merusak
+                // inferensi — kelas bug yang sama dengan PR #3 (WorkbenchScreen).
+                "Find in File (panel search)" to {
+                    webViewRef.value?.evaluateJavascript("openFind();", null)
+                },
+                "Open Pip Manager" to { onNavigateToPip() },
+                "Open About" to { onNavigateToAbout() }
+            )
         PaletteDialog(
             files = vm.getAllFiles().map { it["name"] as String },
+            activeCode = vm.activeCode,
+            onGotoLine = { n -> gotoLine(n) },
             commands = paletteCommands,
             onDismiss = { showPalette = false },
             onOpenFile = { name ->
@@ -589,29 +709,68 @@ private fun QuickToolsBar(webViewRef: androidx.compose.runtime.MutableState<WebV
 @Composable
 private fun PaletteDialog(
     files: List<String>,
+    activeCode: String,
+    onGotoLine: (Int) -> Unit,
     commands: List<Pair<String, () -> Unit>>,
     onDismiss: () -> Unit,
     onOpenFile: (String) -> Unit,
     onRunCommand: (() -> Unit) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
+    // Mode default mengikuti chips; prefix power-user tetap hidup:
+    // ">" = perintah, ":" = goto line (S3)
+    var chipMode by remember { mutableStateOf("file") }
     val isCommandMode = query.startsWith(">")
-    val filter = if (isCommandMode) query.drop(1).trim() else query.trim()
+    val isLinePrefix = query.startsWith(":")
+    val mode = if (isCommandMode) "command" else if (isLinePrefix) "line" else chipMode
+    val filter = when {
+        isCommandMode -> query.drop(1).trim()
+        isLinePrefix -> query.drop(1).trim()
+        else -> query.trim()
+    }
 
-    val fileResults = if (!isCommandMode) files.filter { it.contains(filter, ignoreCase = true) } else emptyList()
-    val commandResults = if (isCommandMode) commands.filter { it.first.contains(filter, ignoreCase = true) } else emptyList()
+    val fileResults = if (mode == "file") files.filter { it.contains(filter, ignoreCase = true) } else emptyList()
+    val commandResults = if (mode == "command") commands.filter { it.first.contains(filter, ignoreCase = true) } else emptyList()
+    // Mode Find (ala Pydroid): cari kata di file aktif, maks 100 hasil
+    val findResults: List<Pair<Int, String>> = if (mode == "find" && filter.isNotBlank()) {
+        val out = mutableListOf<Pair<Int, String>>()
+        activeCode.split('\n').forEachIndexed { idx, line ->
+            if (out.size >= 100) return@forEachIndexed
+            if (line.contains(filter, ignoreCase = true)) out.add((idx + 1) to line.trim())
+        }
+        out
+    } else emptyList()
+    val lineTarget = if (mode == "line") filter.toIntOrNull() else null
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text(if (isCommandMode) "Perintah… (> Beautifier)" else "Cari file…") },
-                singleLine = true,
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column {
+                // Chips mode (S3) — discoverable ala Pydroid, tanpa perlu hafal prefix
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PaletteModeChip("📁 File", mode == "file") { chipMode = "file" }
+                    PaletteModeChip("🔎 Find", mode == "find") { chipMode = "find" }
+                    PaletteModeChip("#️ Line", mode == "line") { chipMode = "line" }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = {
+                        Text(
+                            when (mode) {
+                                "command" -> "Perintah… (> Beautifier)"
+                                "find" -> "Cari kata di file aktif…"
+                                "line" -> "Nomor baris… (mis. 42)"
+                                else -> "Cari file… (> perintah, : baris)"
+                            }
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         },
         text = {
             Column(
@@ -620,36 +779,81 @@ private fun PaletteDialog(
                     .height(240.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                if (isCommandMode) {
-                    commandResults.forEach { (label, action) ->
-                        Text(
-                            label,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onRunCommand(action) }
-                                .padding(horizontal = 4.dp, vertical = 10.dp)
-                        )
+                when (mode) {
+                    "command" -> {
+                        commandResults.forEach { (label, action) ->
+                            Text(
+                                label,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onRunCommand(action) }
+                                    .padding(horizontal = 4.dp, vertical = 10.dp)
+                            )
+                        }
+                        if (commandResults.isEmpty()) {
+                            Text("Tidak ada perintah cocok", fontSize = 12.sp, color = Color.Gray)
+                        }
                     }
-                    if (commandResults.isEmpty()) {
-                        Text("Tidak ada perintah cocok", fontSize = 12.sp, color = Color.Gray)
+                    "find" -> {
+                        findResults.forEach { (line, ctx) ->
+                            Text(
+                                "L$line: ${ctx.take(80)}",
+                                fontSize = 12.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onGotoLine(line)
+                                        onDismiss()
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 8.dp)
+                            )
+                        }
+                        if (filter.isBlank()) {
+                            Text("Ketik kata untuk dicari di file aktif", fontSize = 12.sp, color = Color.Gray)
+                        } else if (findResults.isEmpty()) {
+                            Text("Tidak ditemukan: $filter", fontSize = 12.sp, color = Color.Gray)
+                        }
                     }
-                } else {
-                    fileResults.forEach { name ->
-                        Text(
-                            name,
-                            fontSize = 13.sp,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenFile(name) }
-                                .padding(horizontal = 4.dp, vertical = 10.dp)
-                        )
+                    "line" -> {
+                        if (lineTarget != null && lineTarget >= 1) {
+                            Text(
+                                "→ Lompat ke baris $lineTarget",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onGotoLine(lineTarget)
+                                        onDismiss()
+                                    }
+                                    .padding(horizontal = 4.dp, vertical = 10.dp)
+                            )
+                        } else {
+                            Text("Ketik nomor baris (angka ≥ 1)", fontSize = 12.sp, color = Color.Gray)
+                        }
                     }
-                    if (fileResults.isEmpty()) {
-                        Text("Tidak ada file cocok", fontSize = 12.sp, color = Color.Gray)
+                    else -> {
+                        fileResults.forEach { name ->
+                            Text(
+                                name,
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenFile(name) }
+                                    .padding(horizontal = 4.dp, vertical = 10.dp)
+                            )
+                        }
+                        if (fileResults.isEmpty()) {
+                            Text("Tidak ada file cocok", fontSize = 12.sp, color = Color.Gray)
+                        }
                     }
                 }
             }
@@ -657,6 +861,137 @@ private fun PaletteDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Tutup") }
         }
+    )
+}
+
+@Composable
+private fun PaletteModeChip(label: String, active: Boolean, onClick: () -> Unit) {
+    AssistChip(
+        onClick = onClick,
+        label = { Text(label, fontSize = 11.sp) },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                else MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurface
+        ),
+        shape = RoundedCornerShape(50)
+    )
+}
+
+// =====================================================================
+// Komponen PLUGINS drawer (batch anti-sepi S1/S2)
+// =====================================================================
+
+@Composable
+private fun PluginRow(
+    plugin: PluginInfo,
+    enabled: Boolean,
+    onToggle: () -> Unit,
+    onRun: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onRun)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                plugin.name,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                plugin.description,
+                fontSize = 10.sp,
+                color = Color.Gray,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        // Toggle = ketersediaan/behavior (S2); tap badan baris = eksekusi
+        Switch(checked = enabled, onCheckedChange = { onToggle() })
+    }
+    Divider(color = Color.White.copy(alpha = 0.04f), modifier = Modifier.padding(horizontal = 10.dp))
+}
+
+@Composable
+private fun TodoResultsDialog(
+    items: List<TodoItem>,
+    onDismiss: () -> Unit,
+    onJump: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("✅ TODO / FIXME / HACK (${items.size})", fontSize = 14.sp) },
+        text = {
+            if (items.isEmpty()) {
+                Text("Tidak ada penanda TODO/FIXME/HACK di file aktif 🎉", fontSize = 12.sp, color = Color.Gray)
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth().height(240.dp)) {
+                    items(items) { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onJump(item.line) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "L${item.line}",
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                "[${item.tag}] ${item.text.ifBlank { "(tanpa teks)" }}",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Divider(color = Color.White.copy(alpha = 0.04f))
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Tutup") } }
+    )
+}
+
+@Composable
+private fun SnippetsDialog(
+    onDismiss: () -> Unit,
+    onPick: (com.zaba.zcode.core.plugins.Snippet) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("📜 Snippet Pack — pilih template", fontSize = 14.sp) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                SnippetLibrary.snippets.forEach { snippet ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPick(snippet) }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(snippet.name, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(snippet.description, fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Divider(color = Color.White.copy(alpha = 0.04f))
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Tutup") } }
     )
 }
 

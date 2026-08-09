@@ -12,6 +12,8 @@ import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.core.plugins.PluginHost
+import com.zaba.zcode.core.plugins.PluginRunner
+import com.zaba.zcode.core.plugins.Snippet
 import com.zaba.zcode.ui.theme.ZcodeThemeType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +51,17 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var symbolBarEnabled by mutableStateOf(true)
         private set
 
+    /**
+     * State enabled plugin (batch anti-sepi S2) — SATU sumber kebenaran di sini
+     * (SharedPreferences), anti kasus state-terbelah Zabacode (backend in-memory
+     * vs frontend localStorage).
+     */
+    var pluginFlags by mutableStateOf(
+        com.zaba.zcode.core.plugins.PluginRegistry.plugins
+            .associate { it.id to it.enabledByDefault }.toMutableMap()
+    )
+        private set
+
     private val fileDrafts = mutableMapOf<String, String>()
 
     private var lastClosed: Pair<String, Long>? = null
@@ -63,6 +76,79 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         // backend eksekusi butuh cwd = folder workspace (plt.savefig / open() relatif)
         ExecutionEngine.workspaceDirPath = filesDir.absolutePath
         loadSavedWorkspace()
+        loadPluginFlags()
+    }
+
+    private fun loadPluginFlags() {
+        val m = pluginFlags.toMutableMap()
+        com.zaba.zcode.core.plugins.PluginRegistry.plugins.forEach { p ->
+            m[p.id] = prefs.getBoolean("plugin_enabled_${p.id}", p.enabledByDefault)
+        }
+        pluginFlags = m
+    }
+
+    fun isPluginEnabled(id: String): Boolean =
+        pluginFlags[id]
+            ?: (com.zaba.zcode.core.plugins.PluginRegistry.byId(id)?.enabledByDefault ?: false)
+
+    fun setPluginEnabled(id: String, enabled: Boolean) {
+        pluginFlags = pluginFlags.toMutableMap().apply { put(id, enabled) }
+        prefs.edit().putBoolean("plugin_enabled_$id", enabled).apply()
+    }
+
+    /**
+     * Eksekusi plugin transform Python (port ZABACODE) secara async.
+     * Bila sukses & kode berubah → diterapkan ke file aktif. Callback di Main.
+     */
+    fun runPythonPlugin(pythonId: String, onDone: (Boolean, String) -> Unit) {
+        val code = activeCode
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                PluginRunner.run(getApplication(), pythonId, code)
+            }
+            if (result.ok && result.code != code) {
+                updateCode(result.code)
+            }
+            onDone(result.ok, result.report)
+        }
+    }
+
+    /** Snippet Pack (S5): bikin file dari template lalu buka. Return nama file. */
+    fun createFileFromSnippet(snippet: Snippet): String {
+        val existing = FileManager.listFiles(filesDir).map { it["name"] as String }.toSet()
+        var index = 1
+        var newName = "snippet_${snippet.id}_$index.py"
+        while (existing.contains(newName)) {
+            index++
+            newName = "snippet_${snippet.id}_$index.py"
+        }
+        FileManager.saveFile(filesDir, newName, snippet.code)
+        selectFile(newName)
+        return newName
+    }
+
+    /** 🔍 mode Find (S3): cari kata di file aktif → (line, konteks), maks 100 hasil. */
+    fun findInActiveCode(query: String): List<Pair<Int, String>> {
+        if (query.isBlank()) return emptyList()
+        val out = mutableListOf<Pair<Int, String>>()
+        activeCode.split('\n').forEachIndexed { idx, line ->
+            if (out.size >= 100) return@forEachIndexed
+            if (line.contains(query, ignoreCase = true)) {
+                out.add((idx + 1) to line.trim())
+            }
+        }
+        return out
+    }
+
+    /**
+     * BEHAVIOR auto_trim_on_run (port perilaku auto_formatter Zabacode):
+     * buang spasi akhir tiap baris SEBELUM eksekusi. Catatan jujur: Zabacode
+     * juga mengubah buffer (setEditorValue) — file di sini ikut tersimpan rapi.
+     */
+    fun applyAutoTrimIfEnabled() {
+        if (!isPluginEnabled("auto_trim_on_run")) return
+        val trimmed = activeCode.split('\n').joinToString("\n") { it.trimEnd() }
+        if (trimmed != activeCode) updateCode(trimmed)
     }
 
     // ------------------------------------------------------------------

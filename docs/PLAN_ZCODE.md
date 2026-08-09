@@ -1,3 +1,8 @@
+> ⚠️ **SUPERSEDED (sebagian):** keputusan editor di dokumen ini ("Ace 1.44.0 dulu +
+> IEditor abstraction siap CodeMirror 6") telah **dieksekusi** — ZCODE kini memakai
+> **CodeMirror 6** secara penuh. Lihat **`docs/MIGRASI_CM6.md`**. Dokumen ini
+> dipertahankan sebagai catatan sejarah perencanaan Fase 0–2.
+
 # ZCODE — Plan Matang v0.2
 ### Zabacode Kotlin Edition: Kesederhanaan Pydroid × Detail VS Code × Kelincahan Acode
 

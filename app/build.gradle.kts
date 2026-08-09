@@ -135,18 +135,22 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 
-// Fase 0 guard: verify Ace bundled before any APK is considered good
+// Fase 0 guard: verify editor bundled before any APK is considered good
+// (Migrasi CM6 2026-08: Ace 1.44.0 → CodeMirror 6 bundle, lihat docs/MIGRASI_CM6.md)
 // NOTE: tasks are AFTER dependencies to avoid "Cannot mutate dependencies after resolved" (Gradle 8.5 stricter)
-tasks.register("verifyAceBundled") {
+tasks.register("verifyEditorBundled") {
     doLast {
-        val ace = layout.projectDirectory.file("src/main/assets/editor/ace/ace.js").asFile
-        check(ace.isFile && ace.length() > 0) { "Ace not bundled: ${ace.path} missing — offline-first violation" }
-        val mode = layout.projectDirectory.file("src/main/assets/editor/ace/mode-python.js").asFile
-        check(mode.isFile) { "Ace mode-python.js missing" }
-        println("✅ Ace 1.44.0 bundled — ${ace.length()} bytes")
+        val bundle = layout.projectDirectory.file("src/main/assets/editor/codemirror.bundle.js").asFile
+        check(bundle.isFile && bundle.length() > 100_000) {
+            "CodeMirror 6 not bundled (or stub): ${bundle.path} — offline-first violation"
+        }
+        val text = bundle.readText()
+        check("setCode" in text && "onEditorReady" in text) { "Bundle CM6 kehilangan kontrak bridge (setCode/onEditorReady)" }
+        check("index.html" .let { layout.projectDirectory.file("src/main/assets/editor/$it").asFile.readText().contains("codemirror.bundle.js") }) { "index.html tidak memuat codemirror.bundle.js" }
+        println("✅ CodeMirror 6 bundled — ${bundle.length()} bytes (offline-first)")
     }
 }
-tasks.named("preBuild") { dependsOn("verifyAceBundled") }
+tasks.named("preBuild") { dependsOn("verifyEditorBundled") }
 
 tasks.register("verifyNoUnverifiedSSL") {
     doLast {

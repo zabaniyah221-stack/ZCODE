@@ -77,14 +77,14 @@ jobs:
             exit $rc
           fi
 
-      - name: Verify APK contains Ace + taskAffinity
+      - name: Verify APK contains CodeMirror 6 + taskAffinity
         run: |
           ls -R app/build 2>&1 | head -n 50 || echo "no build dir"
           APK=$(find app/build -name "*.apk" 2>/dev/null | head -n 1)
           echo "APK: $APK"
           if [ -z "$APK" ]; then echo "❌ No APK found — build failed"; ls -lh app/build/outputs/apk/ 2>&1 | head -n 30; exit 1; fi
           ls -lh "$APK"
-          unzip -l "$APK" | grep -i -E "ace.js|AndroidManifest" | head -n 20
+          unzip -l "$APK" | grep -i -E "codemirror.bundle.js|AndroidManifest" | head -n 20
           # Check manifest has taskAffinity (via aapt dump)
           $ANDROID_HOME/build-tools/34.0.0/aapt dump xmltree "$APK" AndroidManifest.xml | grep -i "taskAffinity" || echo "check taskAffinity in manifest"
 
@@ -101,7 +101,7 @@ jobs:
           echo "### ZCODE Fase 1 & 2 Build — $(date)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- Topbar: faded grey #3A4452 ≡ + (no hamburger text)" >> $GITHUB_STEP_SUMMARY
-          echo "- Editor: OLED #050806 Ace 1.44.0 file:// + gutter 40px" >> $GITHUB_STEP_SUMMARY
+          echo "- Editor: OLED #050806 CodeMirror 6 bundled file:// + gutter ramping" >> $GITHUB_STEP_SUMMARY
           echo "- QuickTools + FAB above handle, Drawer text-only, Contribute -> Issues" >> $GITHUB_STEP_SUMMARY
           echo "- PTY: ketik langsung di terminal (no stdin field), Chaquopy 3.11 arm64+armv7" >> $GITHUB_STEP_SUMMARY
           ls -lh app/build/outputs/apk/debug/ >> $GITHUB_STEP_SUMMARY || true

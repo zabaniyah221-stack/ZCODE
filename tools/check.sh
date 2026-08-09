@@ -5,12 +5,17 @@
 set -e
 echo "=== ZCODE Local Check Fase 0 + Fase 1/2 ==="
 
-echo "[1/8] Verify Ace 1.44.0 bundled (offline-first, ASLI bukan stub)"
-test -f app/src/main/assets/editor/ace/ace.js && echo "✅ ace.js exists" || (echo "❌ ace.js missing" && exit 1)
-grep -q "1.44.0" app/src/main/assets/editor/ace/ace.js && echo "✅ Ace 1.44.0" || (echo "❌ Ace not 1.44.0" && exit 1)
-test -f app/src/main/assets/editor/ace/mode-python.js && echo "✅ mode-python.js exists" || (echo "❌ mode-python.js missing" && exit 1)
-SIZE=$(stat -c%s app/src/main/assets/editor/ace/ace.js 2>/dev/null || echo 0)
-if [ "$SIZE" -gt 100000 ]; then echo "✅ Ace asli ($SIZE bytes, bukan stub)"; else echo "❌ ace.js masih stub ($SIZE bytes)" && exit 1; fi
+echo "[1/8] Verify CodeMirror 6 bundled (offline-first, ASLI bukan stub — migrasi 2026-08 dari Ace)"
+BUNDLE=app/src/main/assets/editor/codemirror.bundle.js
+test -f $BUNDLE && echo "✅ codemirror.bundle.js exists" || (echo "❌ codemirror.bundle.js missing" && exit 1)
+SIZE=$(stat -c%s $BUNDLE 2>/dev/null || echo 0)
+if [ "$SIZE" -gt 100000 ]; then echo "✅ CM6 asli ($SIZE bytes, bukan stub)"; else echo "❌ bundle masih stub ($SIZE bytes)" && exit 1; fi
+grep -q "setCode" $BUNDLE && grep -q "onEditorReady" $BUNDLE && echo "✅ kontrak bridge (setCode + onEditorReady)" || (echo "❌ kontrak bridge hilang" && exit 1)
+grep -q "nonlocal" $BUNDLE && echo "✅ lang-python (Lezer) terbundle" || (echo "❌ lang-python missing" && exit 1)
+grep -q "codemirror.bundle.js" app/src/main/assets/editor/index.html && echo "✅ index.html me-load bundle" || (echo "❌ index.html tidak me-load bundle" && exit 1)
+if grep -qiE "cdnjs|unpkg|jsdelivr" $BUNDLE; then echo "❌ CDN reference ditemukan — offline-first violation" && exit 1; else echo "✅ no CDN"; fi
+grep -q "gotoLine" $BUNDLE && grep -q "frozenset" $BUNDLE && echo "✅ kontrak gotoLine + autocomplete terbundle" || (echo "❌ bundle kehilangan gotoLine/autocomplete" && exit 1)
+test -f app/src/main/python/zcode_plugins.py && grep -q "PORTED FROM ZABACODE (GPLv3)" app/src/main/python/zcode_plugins.py && echo "✅ zcode_plugins.py + provenance header" || (echo "❌ zcode_plugins.py / provenance hilang" && exit 1)
 
 echo "[2/8] Verify no unverified SSL (S-22)"
 if grep -R "trustAllCerts\|ssl._create_unverified_context\|TRUST_ALL" app/src/main/java --include="*.kt" 2>/dev/null; then
@@ -41,6 +46,7 @@ grep -q "isChaquopyAvailable" app/src/main/java/com/zaba/zcode/core/execution/Ex
 
 echo "[7/8] Verify Fase 1/2 wiring (WebView asli, VM, terminal, pip, themes)"
 grep -q "addJavascriptInterface" app/src/main/java/com/zaba/zcode/ui/editor/EditorScreen.kt && echo "✅ WebView bridge" || (echo "❌ bridge missing" && exit 1)
+test -f app/src/main/java/com/zaba/zcode/core/plugins/PluginRegistry.kt && echo "✅ PluginRegistry (batch anti-sepi)" || (echo "❌ PluginRegistry missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt && echo "✅ WorkspaceViewModel" || (echo "❌ VM missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/ui/terminal/TerminalScreen.kt && echo "✅ TerminalScreen" || (echo "❌ terminal missing" && exit 1)
 test -f app/src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt && echo "✅ PipScreen" || (echo "❌ pip missing" && exit 1)

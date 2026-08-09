@@ -1,0 +1,22 @@
+{
+  "name": "zcode-editor-src",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ZCODE editor bundle source — CodeMirror 6 (menggantikan Ace 1.44.0, migrasi 2026-08). Output: app/src/main/assets/editor/codemirror.bundle.js (DI-COMMIT; CI build APK tidak butuh Node). Regenerasi: cd editor-src && npm ci && npm run build",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "6.20.3",
+    "@codemirror/lang-python": "6.2.1",
+    "codemirror": "6.0.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  },
+  "notes": {
+    "pinning": "Versi DIPIN eksak (tanpa ^/~) — anti-drift prinsip F-09. Referensi kompatibilitas: package.json Acode-Foundation/Acode (autocomplete ^6.20.3, commands ^6.10.3, lang-python ^6.2.1).",
+    "target": "esbuild target es2018 — envelope WebView Android 8.0 (minSdk 26) / Chrome 63+; kompatibel armv7/arm64/x86_64 (JS murni, tanpa native/WASM)."
+  }
+}
