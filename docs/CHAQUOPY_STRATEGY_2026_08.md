@@ -5,8 +5,12 @@ dan versi terbaru yang layak untuk visi ZCODE. Dibuat dari diskusi "mulai dari
 awal" (peraturan tim: *honest about anything / be meticulous in everything*).
 
 Tujuan: supaya keputusan upgrade runtime Python tidak hilang dan kontributor
-paham *kenapa* kita di posisi ini. Dua aturan kerja batch ini berlaku di sini
-sama seperti di `docs/RENCANA_UPDATE_2026_08.md`.
+paham *kenapa* kita di posisi ini. Tiga aturan kerja batch ini berlaku di sini
+sama seperti di `docs/RENCANA_UPDATE_2026_08.md`:
+
+1. **Honest about everything, even our weakness.**
+2. **Be meticulous in everything, no matter how small, to minimize edge case.**
+3. **Build for the user, not for ego.**
 
 ---
 

@@ -8,6 +8,9 @@ berikutnya.
 Aturan tim (dari `docs/RENCANA_UPDATE_2026_08.md`):
 - **§1 — Honest about anything, no matter our weakness.**
 - **§2 — Be meticulous in everything, no matter how small, to minimize edge case.**
+- **§3 — Build for the user, not for ego.** (Ditambahkan 2026-08: bangun yang
+  berguna/nyata untuk user di perangkat target, bukan yang keren atau memuaskan
+  kebanggaan teknis.)
 
 > Cabang sesi ini: **`arena/019fe8ce-zcode`**. (Doc sesi sebelumnya menyebut
 > `arena/019fe878-zcode`; lingkungan ini berada di `arena/019fe8ce-zcode` dan
