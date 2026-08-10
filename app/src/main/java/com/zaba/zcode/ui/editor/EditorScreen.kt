@@ -67,7 +67,7 @@ fun EditorScreen(
         val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
         webViewRef.value?.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
         webViewRef.value?.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
-        webViewEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
+        applyEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
     }
 
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {
