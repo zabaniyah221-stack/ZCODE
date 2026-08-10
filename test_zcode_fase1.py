@@ -403,6 +403,52 @@ class TestPluginKotlin:
         assert "pluginFlags" in txt and "plugin_enabled_" in txt
 
 
+# ===================================================================
+# F2.4 — Toggle indikator Python di terminal
+# ===================================================================
+
+class TestF24PythonIndicator:
+    def test_vm_has_show_python_indicator_state(self):
+        """F2.4: WorkspaceViewModel harus punya state showPythonIndicator."""
+        txt = read(JAVA / "WorkspaceViewModel.kt")
+        assert "showPythonIndicator" in txt, "State showPythonIndicator hilang dari ViewModel"
+        assert "mutableStateOf(true)" in txt, "Default harus true (ON)"
+
+    def test_vm_has_set_show_python_indicator(self):
+        """F2.4: Harus ada setter yang persist via SharedPreferences."""
+        txt = read(JAVA / "WorkspaceViewModel.kt")
+        assert "setShowPythonIndicator" in txt, "Setter setShowPythonIndicator hilang"
+        assert "show_python_indicator" in txt, "Key SharedPreferences hilang"
+
+    def test_vm_loads_show_python_indicator_from_prefs(self):
+        """F2.4: State harus di-load dari SharedPreferences saat init."""
+        txt = read(JAVA / "WorkspaceViewModel.kt")
+        assert 'prefs.getBoolean("show_python_indicator"' in txt, "Load dari prefs hilang"
+
+    def test_settings_screen_has_python_indicator_toggle(self):
+        """F2.4: SettingsScreen harus punya toggle untuk indikator Python."""
+        txt = read(UI / "settings/SettingsScreen.kt")
+        assert "showPythonIndicator" in txt, "Toggle showPythonIndicator hilang dari SettingsScreen"
+        assert "Menyalakan Python" in txt, "Label toggle harus menyebut indikator Python"
+
+    def test_terminal_screen_accepts_show_python_indicator(self):
+        """F2.4: TerminalScreen harus terima parameter showPythonIndicator."""
+        txt = read(UI / "terminal/TerminalScreen.kt")
+        assert "showPythonIndicator" in txt, "Parameter showPythonIndicator hilang dari TerminalScreen"
+        assert "Boolean = true" in txt, "Default harus true (ON)"
+
+    def test_terminal_screen_conditional_indicator(self):
+        """F2.4: Indikator harus conditional berdasarkan showPythonIndicator."""
+        txt = read(UI / "terminal/TerminalScreen.kt")
+        # Harus ada kondisi yang menggabungkan startingPython DAN showPythonIndicator
+        assert "startingPython && showPythonIndicator" in txt, "Kondisi conditional hilang"
+
+    def test_main_activity_passes_show_python_indicator(self):
+        """F2.4: MainActivity harus pass state ke TerminalScreen."""
+        txt = read(JAVA / "MainActivity.kt")
+        assert "showPythonIndicator = vm.showPythonIndicator" in txt, "MainActivity tidak pass state ke TerminalScreen"
+
+
 class TestBatchUI:
     def test_drawer_plugins_expandable(self):
         txt = read(UI / "workbench/WorkbenchScreen.kt")

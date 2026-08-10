@@ -73,7 +73,8 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 filename = filename,
                 filesDir = Paths.filesDir(appContext),
                 context = appContext,
-                onBack = { nav.navigateUp() }
+                onBack = { nav.navigateUp() },
+                showPythonIndicator = vm.showPythonIndicator // F2.4: toggle indikator Python
             )
         }
         composable("pip") {

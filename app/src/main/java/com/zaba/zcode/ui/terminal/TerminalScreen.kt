@@ -74,7 +74,8 @@ fun TerminalScreen(
     filename: String,
     filesDir: File,
     context: Context,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    showPythonIndicator: Boolean = true // F2.4: toggle indikator cold-start Python
 ) {
     var terminalText by remember { mutableStateOf("ZCODE Terminal — Running $filename\n" + "-".repeat(40) + "\n") }
     var inputVal by remember { mutableStateOf(TextFieldValue("")) }
@@ -107,9 +108,10 @@ fun TerminalScreen(
             startingPython = false
             return@LaunchedEffect
         }
-        // F1.2: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
+        // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
         // (Python.start() yang berat berjalan di dalamnya). Layar tidak lagi kosong.
-        append("\u2699 Menyalakan Python\u2026\n")
+        // F2.4: indikator bisa dimatikan user via Settings.
+        if (showPythonIndicator) append("\u2699 Menyalakan Python\u2026\n")
         // Beri satu frame agar pesan tergambar sebelum pemanggilan sinkron yang berat.
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
         val activeSession = ExecutionEngine.startInteractiveSession(
@@ -220,8 +222,9 @@ fun TerminalScreen(
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
             ) {
-                if (startingPython) {
-                    // F1.2: indikator tak menghalangi; user paham app sedang bekerja.
+                if (startingPython && showPythonIndicator) {
+                    // F1.2 + F2.4: indikator tak menghalangi; user paham app sedang bekerja.
+                    // F2.4: bisa dimatikan via Settings.
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopEnd)

@@ -150,6 +150,16 @@ fun SettingsScreen(
                 )
             }
 
+            // F2.4: Toggle indikator "Menyalakan Python…" di terminal
+            item {
+                SettingsToggleRow(
+                    label = "Indikator \"Menyalakan Python…\"",
+                    description = "Tampilkan status cold-start Python di terminal",
+                    checked = vm.showPythonIndicator,
+                    onCheckedChange = { vm.setShowPythonIndicator(it) }
+                )
+            }
+
             item { SettingsDivider() }
 
             // ===========================================================
