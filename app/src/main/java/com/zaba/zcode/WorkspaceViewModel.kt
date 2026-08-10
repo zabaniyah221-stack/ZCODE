@@ -243,8 +243,11 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("highlight_selection_matches", enabled).apply()
     }
 
-    /** F2.4: Toggle indikator "Menyalakan Python…" — persist antar sesi. */
-    fun setShowPythonIndicator(enabled: Boolean) {
+    /** F2.4: Toggle indikator "Menyalakan Python…" — persist antar sesi.
+     *  CATATAN: namanya BUKAN setShowPythonIndicatorEnabled — property var di atas tetap
+     *  membangkitkan method JVM setShowPythonIndicator(Z)V (walau private set),
+     *  sehingga nama itu bentrok (platform declaration clash, CI compile error). */
+    fun setPythonIndicator(enabled: Boolean) {
         showPythonIndicator = enabled
         prefs.edit().putBoolean("show_python_indicator", enabled).apply()
     }

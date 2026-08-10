@@ -156,7 +156,7 @@ fun SettingsScreen(
                     label = "Indikator \"Menyalakan Python…\"",
                     description = "Tampilkan status cold-start Python di terminal",
                     checked = vm.showPythonIndicator,
-                    onCheckedChange = { vm.setShowPythonIndicator(it) }
+                    onCheckedChange = { vm.setPythonIndicator(it) }
                 )
             }
 

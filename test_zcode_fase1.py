@@ -417,7 +417,7 @@ class TestF24PythonIndicator:
     def test_vm_has_set_show_python_indicator(self):
         """F2.4: Harus ada setter yang persist via SharedPreferences."""
         txt = read(JAVA / "WorkspaceViewModel.kt")
-        assert "setShowPythonIndicator" in txt, "Setter setShowPythonIndicator hilang"
+        assert "setPythonIndicator" in txt, "Setter setPythonIndicator hilang"
         assert "show_python_indicator" in txt, "Key SharedPreferences hilang"
 
     def test_vm_loads_show_python_indicator_from_prefs(self):
