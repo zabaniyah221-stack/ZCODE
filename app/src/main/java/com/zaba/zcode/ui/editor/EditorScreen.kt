@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
+import com.zaba.zcode.WorkspaceViewModel
 
 /**
  * EditorScreen — WebView file:// + CodeMirror 6 bundled (offline-first, tanpa CDN).
@@ -59,8 +60,10 @@ fun EditorScreen(
     // F1.7 & F1.8: Apply editor settings (closeBrackets, highlightSelectionMatches) ke CM6 bridge.
     // Dipanggil setiap recomposition agar perubahan dari SettingsScreen langsung berefek.
     webViewRef.value?.post {
-        webViewRef.value?.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets(${vm.closeBracketsEnabled});", null)
-        webViewRef.value?.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches(${vm.highlightSelectionMatchesEnabled});", null)
+        val closeBrackets = vm?.closeBracketsEnabled ?: true
+        val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
+        webViewRef.value?.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
+        webViewRef.value?.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
     }
 
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {
