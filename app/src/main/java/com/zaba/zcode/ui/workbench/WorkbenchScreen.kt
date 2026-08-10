@@ -5,12 +5,15 @@ import android.webkit.WebView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -59,6 +62,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -378,6 +383,14 @@ fun WorkbenchScreen(
             floatingActionButton = {
                 // ▶ Run → onRun(filename) → MainActivity navigate ke layer output full-screen (pindah layer)
                 // padding bawah menyesuaikan: 52dp saat symbol bar tampil agar tidak tertutup
+                // F1.1 (PERF_PASS F): FAB ditekan = scale mengecil seketika supaya tap
+                // terasa "kebaca", meski cold-start Python terjadi di layer terminal.
+                var fabPressed by remember { mutableStateOf(false) }
+                val fabScale by animateFloatAsState(
+                    targetValue = if (fabPressed) 0.86f else 1f,
+                    animationSpec = tween(durationMillis = 90),
+                    label = "fabScale"
+                )
                 FloatingActionButton(
                     onClick = {
                         // BEHAVIOR auto_trim_on_run berjalan di sini (F5)
@@ -392,7 +405,18 @@ fun WorkbenchScreen(
                         else MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.padding(bottom = if (vm.symbolBarEnabled) 52.dp else 8.dp)
+                    modifier = Modifier
+                        .padding(bottom = if (vm.symbolBarEnabled) 52.dp else 8.dp)
+                        .graphicsLayer { scaleX = fabScale; scaleY = fabScale }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onPress = {
+                                    fabPressed = true
+                                    val released = tryAwaitRelease()
+                                    if (released) fabPressed = false
+                                }
+                            )
+                        }
                 ) {
                     // ▶ FAB — ikon vektor polos (bukan emoji), tint ikut contentColor tema
                     Icon(

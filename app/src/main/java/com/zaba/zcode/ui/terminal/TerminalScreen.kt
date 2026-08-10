@@ -26,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -78,6 +79,9 @@ fun TerminalScreen(
     var terminalText by remember { mutableStateOf("ZCODE Terminal — Running $filename\n" + "-".repeat(40) + "\n") }
     var inputVal by remember { mutableStateOf(TextFieldValue("")) }
     var session by remember { mutableStateOf<ExecutionEngine.InteractiveSession?>(null) }
+    // F1.2 (PERF_PASS B,F): indikator cold-start Python. Di ARMv7 Python.start()
+    // bisa 1-3 dtk; tanpa ini layar terlihat kosong/diam seolah tap Run telat.
+    var startingPython by remember { mutableStateOf(true) }
     val scrollState = rememberScrollState()
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
@@ -100,16 +104,25 @@ fun TerminalScreen(
         val targetFile = File(filesDir, filename)
         if (!targetFile.exists()) {
             append("\nError: File $filename not found!\n")
+            startingPython = false
             return@LaunchedEffect
         }
-        // Baris [backend: ...] sengaja tidak ditampilkan (permintaan user — bersih, langsung output)
+        // F1.2: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
+        // (Python.start() yang berat berjalan di dalamnya). Layar tidak lagi kosong.
+        append("\u2699 Menyalakan Python\u2026\n")
+        // Beri satu frame agar pesan tergambar sebelum pemanggilan sinkron yang berat.
+        withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
         val activeSession = ExecutionEngine.startInteractiveSession(
             context = context,
             file = targetFile,
             onOutput = { chunk -> scope.launch { append(chunk) } },
-            onExit = { code -> scope.launch { append("\n\nProcess finished with exit code $code\n") } }
+            onExit = { code ->
+                startingPython = false
+                scope.launch { append("\n\nProcess finished with exit code $code\n") }
+            }
         )
         session = activeSession
+        startingPython = false
         withContext(Dispatchers.IO) {
             activeSession.waitForExit()
         }
@@ -207,6 +220,28 @@ fun TerminalScreen(
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
             ) {
+                if (startingPython) {
+                    // F1.2: indikator tak menghalangi; user paham app sedang bekerja.
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Menyalakan Python\u2026",
+                            color = Color(0xFF8A9BB0),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(13.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFF39FF14)
+                        )
+                    }
+                }
                 Column {
                     Text(
                         text = terminalText,
