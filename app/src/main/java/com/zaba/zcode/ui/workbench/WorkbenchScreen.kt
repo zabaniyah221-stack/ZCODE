@@ -222,6 +222,7 @@ fun WorkbenchScreen(
                     else -> "upper"
                 }
                 toast("Change Case: ${mode.uppercase()}")
+            }
             "trim_now" -> {
                 webViewRef.value?.evaluateJavascript("trimNow();", null)
                 pushCode()
