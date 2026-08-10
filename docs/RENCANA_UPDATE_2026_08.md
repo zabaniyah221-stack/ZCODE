@@ -2,10 +2,17 @@
 
 Dokumen ini mengarsipkan rangkaian diskusi desain 2026-08 (batch "UI Redesign +
 SAMPLES") beserta alasannya, supaya keputusan tidak hilang dan kontributor
-paham *kenapa* arsitekturnya begini. Dua aturan kerja batch ini:
+paham *kenapa* arsitekturnya begini. Tiga aturan kerja batch ini:
 
 1. **Honest about everything, even our weakness.**
 2. **Be meticulous in everything, no matter how small, to minimize edge case.**
+3. **Build for the user, not for ego** — fitur yang dibangun adalah yang
+   berguna/nyata dipakai orang di perangkat target (HP ampas ARMv7), bukan yang
+   sekadar keren, memuaskan kebanggaan teknis si pembuat, atau menambah
+   kompleksitas tanpa manfaat user. Ini menguatkan banyak keputusan: menolak
+   minimap (makan daya/layar), tidak mengklaim "semua PyPI" di LIBRARY,
+   mempertahankan latar terminal hitam OLED (keterbacaan), dan tidak memaksakan
+   GUI native di inti ZCODE (ranah ZPLAY, bukan gengsi membongkar arsitektur).
 
 ---
 

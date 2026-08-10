@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.viewinterop.AndroidView
+import com.zaba.zcode.WorkspaceViewModel
 
 /**
  * EditorScreen — WebView file:// + CodeMirror 6 bundled (offline-first, tanpa CDN).
@@ -35,7 +36,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 fun EditorScreen(
     code: String,
     onCodeChange: (String) -> Unit,
-    webViewRef: MutableState<WebView?> = remember { mutableStateOf(null) }
+    webViewRef: MutableState<WebView?> = remember { mutableStateOf(null) },
+    vm: WorkspaceViewModel? = null // F1.7 & F1.8: untuk apply editor settings ke CM6 bridge
 ) {
     // Menghindari stale state capture pada factory blok AndroidView
     val bridge = androidx.compose.runtime.remember {
@@ -53,6 +55,15 @@ fun EditorScreen(
             webViewRef.value?.requestLayout()
             webViewRef.value?.invalidate()
         }
+    }
+
+    // F1.7 & F1.8: Apply editor settings (closeBrackets, highlightSelectionMatches) ke CM6 bridge.
+    // Dipanggil setiap recomposition agar perubahan dari SettingsScreen langsung berefek.
+    webViewRef.value?.post {
+        val closeBrackets = vm?.closeBracketsEnabled ?: true
+        val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
+        webViewRef.value?.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
+        webViewRef.value?.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
     }
 
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {

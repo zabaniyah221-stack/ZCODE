@@ -53,6 +53,18 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var symbolBarEnabled by mutableStateOf(true)
         private set
 
+    /** F1.7: Auto-close brackets (CM6) — toggle user, persist di SharedPreferences. */
+    var closeBracketsEnabled by mutableStateOf(true)
+        private set
+
+    /** F1.8: Selection match highlight (CM6) — toggle user, persist di SharedPreferences. */
+    var highlightSelectionMatchesEnabled by mutableStateOf(true)
+        private set
+
+    /** F2.4: Toggle indikator "Menyalakan Python…" di terminal — persist di SharedPreferences. */
+    var showPythonIndicator by mutableStateOf(true)
+        private set
+
     /**
      * State enabled plugin (batch anti-sepi S2) — SATU sumber kebenaran di sini
      * (SharedPreferences), anti kasus state-terbelah Zabacode (backend in-memory
@@ -198,6 +210,14 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
         activeCode = activeFile?.let { FileManager.readFile(filesDir, it).getOrDefault("") } ?: ""
         symbolBarEnabled = prefs.getBoolean("symbol_bar", true)
+        closeBracketsEnabled = prefs.getBoolean("close_brackets", true)
+        highlightSelectionMatchesEnabled = prefs.getBoolean("highlight_selection_matches", true)
+        // F2.4: Load preferensi indikator Python (default ON)
+        showPythonIndicator = prefs.getBoolean("show_python_indicator", true)
+        // F1.5: Load tema yang dipersist (default RETRO jika belum ada)
+        prefs.getString("theme_type", null)?.let { saved ->
+            themeType = ZcodeThemeType.values().firstOrNull { it.name == saved } ?: ZcodeThemeType.RETRO
+        }
         validateSyntaxDebounced(activeCode)
         persistWorkspaceState()
     }
@@ -211,6 +231,27 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("symbol_bar", enabled).apply()
     }
 
+    /** F1.7: Toggle auto-close brackets (CM6) — persist antar sesi. */
+    fun setCloseBrackets(enabled: Boolean) {
+        closeBracketsEnabled = enabled
+        prefs.edit().putBoolean("close_brackets", enabled).apply()
+    }
+
+    /** F1.8: Toggle selection match highlight (CM6) — persist antar sesi. */
+    fun setHighlightSelectionMatches(enabled: Boolean) {
+        highlightSelectionMatchesEnabled = enabled
+        prefs.edit().putBoolean("highlight_selection_matches", enabled).apply()
+    }
+
+    /** F2.4: Toggle indikator "Menyalakan Python…" — persist antar sesi.
+     *  CATATAN: namanya BUKAN setShowPythonIndicatorEnabled — property var di atas tetap
+     *  membangkitkan method JVM setShowPythonIndicator(Z)V (walau private set),
+     *  sehingga nama itu bentrok (platform declaration clash, CI compile error). */
+    fun setPythonIndicator(enabled: Boolean) {
+        showPythonIndicator = enabled
+        prefs.edit().putBoolean("show_python_indicator", enabled).apply()
+    }
+
     /**
      * Cycle tema satu tombol (redesign 2026-08): tap-tap sampai cocok.
      * Urutan mengikuti enum ZcodeThemeType: RETRO → DRACULA → TOKYO_NIGHT → RETRO…
@@ -221,6 +262,15 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         val order = ZcodeThemeType.values()
         val next = (order.indexOf(themeType) + 1) % order.size
         themeType = order[next]
+    }
+
+    /**
+     * F1.5: Pilih tema langsung (bukan cycle buta) — dipanggil dari SettingsScreen.
+     * Tema dipersist antar-restart (berbeda dengan cycleTheme yang tidak persist).
+     */
+    fun setTheme(theme: ZcodeThemeType) {
+        themeType = theme
+        prefs.edit().putString("theme_type", theme.name).apply()
     }
 
     // ------------------------------------------------------------------

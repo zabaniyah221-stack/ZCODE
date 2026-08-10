@@ -14,6 +14,7 @@ import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.ui.samples.SamplesScreen
 import com.zaba.zcode.ui.settings.AboutScreen
 import com.zaba.zcode.ui.settings.PipScreen
+import com.zaba.zcode.ui.settings.SettingsScreen
 import com.zaba.zcode.ui.terminal.TerminalScreen
 import com.zaba.zcode.ui.theme.ZcodeTheme
 import com.zaba.zcode.ui.workbench.WorkbenchScreen
@@ -50,7 +51,8 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 },
                 onNavigateToPip = { nav.navigate("pip") },
                 onNavigateToAbout = { nav.navigate("about") },
-                onNavigateToSamples = { nav.navigate("samples") }
+                onNavigateToSamples = { nav.navigate("samples") },
+                onNavigateToSettings = { nav.navigate("settings") }
             )
         }
         // SAMPLES (redesign 2026-08): halaman 2 level; tap sample → file baru
@@ -71,7 +73,8 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 filename = filename,
                 filesDir = Paths.filesDir(appContext),
                 context = appContext,
-                onBack = { nav.navigateUp() }
+                onBack = { nav.navigateUp() },
+                showPythonIndicator = vm.showPythonIndicator // F2.4: toggle indikator Python
             )
         }
         composable("pip") {
@@ -82,6 +85,17 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
         }
         composable("about") {
             AboutScreen(onBack = { nav.navigateUp() })
+        }
+        // F1.3: Settings — halaman pengaturan (route "settings")
+        composable("settings") {
+            SettingsScreen(
+                vm = vm,
+                onBack = { nav.navigateUp() },
+                onClearAll = {
+                    // F1.4: Clear All dari Settings → konfirmasi tetap wajib
+                    vm.clearAllDrafts()
+                }
+            )
         }
     }
 }

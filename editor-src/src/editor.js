@@ -10,7 +10,7 @@
 // Prinsip: jujur & teliti — semantik fungsi harus identik dengan versi Ace.
 // =====================================================================
 
-import { EditorState } from "@codemirror/state";
+import { EditorState, Compartment } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -36,8 +36,8 @@ import {
   indentOnInput,
   HighlightStyle,
 } from "@codemirror/language";
-import { search, searchKeymap, openSearchPanel } from "@codemirror/search";
-import { autocompletion } from "@codemirror/autocomplete";
+import { search, searchKeymap, openSearchPanel, highlightSelectionMatches } from "@codemirror/search";
+import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
 import { tags } from "@lezer/highlight";
 import { python } from "@codemirror/lang-python";
 
@@ -272,6 +272,11 @@ const tneHighlight = HighlightStyle.define([
 let view = null;
 let isSettingValue = false; // guard anti echo-loop (sama dengan versi Ace)
 
+// F1.7 & F1.8: Compartment untuk toggle closeBrackets & highlightSelectionMatches
+// via bridge Kotlin↔JS (reconfigure tanpa recreate editor — anti jank di HP ampas).
+const closeBracketsCompartment = new Compartment();
+const highlightSelectionMatchesCompartment = new Compartment();
+
 function buildState(doc) {
   return EditorState.create({
     doc,
@@ -303,6 +308,10 @@ function buildState(doc) {
         maxRenderedOptions: 5, // popup ringkas di layar HP
         optionClass: () => "zcode-completion-option",
       }),
+      // F1.7: Auto-close brackets (CM6) — default ON, toggle via bridge setCloseBrackets().
+      closeBracketsCompartment.of(closeBrackets()),
+      // F1.8: Selection match highlight (CM6) — default ON, toggle via bridge setHighlightSelectionMatches().
+      highlightSelectionMatchesCompartment.of(highlightSelectionMatches()),
       zcodeTheme,
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !isSettingValue && window.ZCODE) {
@@ -415,6 +424,94 @@ function openFind() {
   if (view) openSearchPanel(view);
 }
 
+// F1.9: Sort Lines — urutkan baris selection secara alfabetis (case-insensitive).
+// Semantik: sort baris yang dipilih, selection/kursor tidak berpindah.
+function sortLines() {
+  if (!view) return;
+  const state = view.state;
+  const range = state.selection.main;
+  const startLine = state.doc.lineAt(range.from);
+  const endLine = state.doc.lineAt(range.to);
+  const lines = [];
+  for (let n = startLine.number; n <= endLine.number; n++) {
+    lines.push(state.doc.line(n).text);
+  }
+  if (!lines.length) return;
+  // Sort case-insensitive, tapi pertahankan urutan relatif yang sama (stable sort).
+  lines.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+  const newText = lines.join("\n");
+  view.dispatch({
+    changes: { from: startLine.from, to: endLine.to, insert: newText },
+    selection: { anchor: startLine.from + newText.length },
+  });
+}
+
+// F1.9: Change Case — UPPER / lower / Title Case pada selection.
+// type: "upper" | "lower" | "title"
+function changeCase(type) {
+  if (!view) return;
+  const state = view.state;
+  const range = state.selection.main;
+  const selectedText = state.doc.sliceString(range.from, range.to);
+  if (!selectedText) return;
+  let transformed;
+  switch (type) {
+    case "upper":
+      transformed = selectedText.toUpperCase();
+      break;
+    case "lower":
+      transformed = selectedText.toLowerCase();
+      break;
+    case "title":
+      transformed = selectedText.replace(/\w\S*/g, (txt) =>
+        txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+      );
+      break;
+    default:
+      return;
+  }
+  view.dispatch({
+    changes: { from: range.from, to: range.to, insert: transformed },
+    selection: { anchor: range.from, head: range.from + transformed.length },
+  });
+}
+
+// F1.9: Trim Now — buang spasi akhir tiap baris di selection (manual, tanpa Run).
+function trimNow() {
+  if (!view) return;
+  const state = view.state;
+  const range = state.selection.main;
+  const startLine = state.doc.lineAt(range.from);
+  const endLine = state.doc.lineAt(range.to);
+  const lines = [];
+  for (let n = startLine.number; n <= endLine.number; n++) {
+    lines.push(state.doc.line(n).text);
+  }
+  if (!lines.length) return;
+  const out = lines.map((l) => l.trimEnd());
+  const newText = out.join("\n");
+  view.dispatch({
+    changes: { from: startLine.from, to: endLine.to, insert: newText },
+    selection: { anchor: startLine.from + newText.length },
+  });
+}
+
+// F1.7: Toggle auto-close brackets (CM6) — reconfigure via compartment (tanpa recreate editor).
+function setCloseBrackets(enabled) {
+  if (!view) return;
+  view.dispatch({
+    effects: closeBracketsCompartment.reconfigure(enabled ? closeBrackets() : []),
+  });
+}
+
+// F1.8: Toggle selection match highlight (CM6) — reconfigure via compartment.
+function setHighlightSelectionMatches(enabled) {
+  if (!view) return;
+  view.dispatch({
+    effects: highlightSelectionMatchesCompartment.reconfigure(enabled ? highlightSelectionMatches() : []),
+  });
+}
+
 // BARU (batch anti-sepi F2): lompat ke baris n (1-based, di-clamp).
 // Dipakai 🔍 mode Line, hasil mode Find, dan TODO Extractor — 1 fungsi
 // 3 pemakai (lihat PLAN_BATCH_ANTI_SEPI.md §3 F2).
@@ -460,6 +557,11 @@ window.duplicateRows = duplicateRows;
 window.toggleCommentLines = toggleCommentLines;
 window.openFind = openFind;
 window.gotoLine = gotoLine;
+window.setCloseBrackets = setCloseBrackets;
+window.setHighlightSelectionMatches = setHighlightSelectionMatches;
+window.sortLines = sortLines;
+window.changeCase = changeCase;
+window.trimNow = trimNow;
 
 // Handshake — dipanggil bahkan jika init gagal, agar Kotlin tidak hang
 // menunggu (setCode dkk. aman sebagai no-op).
