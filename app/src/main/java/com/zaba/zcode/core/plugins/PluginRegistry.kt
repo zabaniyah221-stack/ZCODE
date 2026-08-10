@@ -78,6 +78,23 @@ object PluginRegistry {
             PluginKind.ACTION
         ),
 
+        // ---- F1.9: Transform teks kecil (Kotlin/JS murni, tanpa pip) ----
+        PluginInfo(
+            "sort_lines", "Sort Lines",
+            "Urutkan baris yang dipilih secara alfabetis",
+            PluginKind.ACTION
+        ),
+        PluginInfo(
+            "change_case", "Change Case",
+            "Ubah UPPER / lower / Title Case pada teks yang dipilih",
+            PluginKind.ACTION
+        ),
+        PluginInfo(
+            "trim_now", "Trim Now",
+            "Buang spasi akhir tiap baris secara manual (tanpa Run)",
+            PluginKind.ACTION
+        ),
+
         // ---- Behavior: otomatis saat Run (default OFF) ----
         PluginInfo(
             "auto_trim_on_run", "Auto Trim on Run",
