@@ -1,238 +1,161 @@
 # 🗺️ TASK_ROADMAP — Alur Kerja ZCODE (2026-08)
 
-Dokumen ini menyusun **urutan eksekusi** semua pekerjaan yang sudah diarsipkan di
-dokumen sesi 2026-08. Urutannya sengaja disusun berdasarkan **dampak ke user di
-perangkat target (Infinix Smart 9 HD, ARMv7)** — bukan berdasarkan yang paling
-keren/menantang secara teknis (aturan inti #3: *build for user, not for ego*).
+Dokumen ini menyusun **alur eksekusi** semua pekerjaan yang diarsipkan di sesi
+2026-08, dibagi dalam **3 fase** menurut tingkat risiko, dan aturan main yang
+jelas. Dibaca bersama dokumen per-fitur: `PERF_PASS.md`, `SETTINGS_DESIGN.md`,
+`CM6_FEATURE_MAP.md`, `TOOLS_CATALOG.md`, `VPP_DESIGN.md`, `LIBRARY_DESIGN.md`,
+`PIP_SCOPE.md`, `TERMINAL_THEMES.md`, `CHAQUOPY_STRATEGY_2026_08.md`.
 
-Aturan main yang berlaku di SETIAP task:
-1. **Satu task = satu commit kecil** (atau beberapa kecil), bukan borongan.
-2. **Guard:** test sandbox (`pytest`, `tools/check.sh`, `py_compile`,
-   `verifyEditorBundled`) harus hijau. Kompilasi Kotlin dinilai **CI** (sandbox
-   tanpa JDK — jujur soal keterbatasan ini).
-3. **UAT Infinix** sebelum task dianggap selesai. Belum UAT = belum selesai.
-4. Gagal/merusak → `git revert` satu SHA, jangan ditambal berlarut-larut.
-5. Tidak mencampur pekerjaan yang belum teruji (hukum keluarga).
+Tiga aturan inti berlaku: **(1) jujur apa adanya, (2) teliti sampai hal kecil,
+(3) build for user not for ego** — kerjakan yang meringankan beban user di
+perangkat target (Infinix Smart 9 HD, ARMv7, RAM kecil) sebelum yang seru secara
+teknis.
 
 ---
 
-## Ringkasan urutan (peta besar)
+## Aturan main (WAJIB dibaca)
 
-```
-Gelombang 1 — Run yang enak (PERF: atasi keluhan tombol Run lambat)
-   └─ sub 1A: feedback & indikator (cepat)
-   └─ sub 1B: pindah kerja berat + debounce + pre-warm
-Gelombang 2 — Rumah Settings (halaman + item dasar + pindah Clear All)
-Gelombang 3 — Editor quick wins (close brackets, selection match, dll)
-Gelombang 4 — Visual Problems Panel (VPP)
-Gelombang 5 — LIBRARY di INSTALL MODULES
-Gelombang 6 — Terminal: palet ANSI & ukuran font
-Gelombang 7 — Tools lanjutan (folding, outline/symbols)
-Gelombang 8 — Spike Chaquopy 17 (TERAKHIR, terisolasi, setelah semua stabil)
-```
+### A. Aturan commit (sudah dikoreksi)
+- **BUKAN "1 task = 1 commit".** Aturan yang benar: **satu perubahan koheren =
+  satu commit** (satu ide; bisa 1 file atau beberapa file yang saling terkait).
+- **Commit harus berdiri sendiri:** kode tetap kompil & guard hijau. Jangan
+  tinggalkan state setengah jadi yang bikin merah.
+- **Task/fitur besar dipecah** jadi beberapa commit (mis. refactor dulu yang
+  lulus, baru fitur di atasnya).
+- **Jangan mikro-commit berisik** ("typo", "ganti spasi" terpisah) — gabungkan
+  dengan perubahan yang relevan.
 
-Prinsip: **selesaikan yang bikin user kesal dulu** (Run lambat), baru fitur baru.
-Chaquopy 17 ditaruh paling akhir karena mengubah runtime — hanya dikerjakan
-setelah gelombang lain stabil, sesuai `CHAQUOPY_STRATEGY_2026_08.md`.
+### B. Fase = PR, bukan commit
+- **Satu fase = satu Pull Request** berisi **banyak commit kecil** di dalamnya.
+- Fase dianggap selesai & boleh merge hanya setelah: (a) CI hijau, (b) **UAT di
+  Infinix lolos**, (c) user setuju.
+- **Fase 3 beda sendiri:** itemnya berisiko, jadi jalankan **satu per satu dalam
+  spike terisolasi** (jangan dibundel dalam satu PR besar). Gampang revert.
 
----
+### C. Guard & kejujuran keterbatasan
+- Guard sandbox: `pytest` (fase0/1/3), `bash tools/check.sh`, `py_compile`
+  sample, `verifyEditorBundled`.
+- **Sandbox TANPA JDK/Android SDK** → Kotlin tidak bisa dikompilasi di sini.
+  Hijau di sandbox **bukan jaminan APK**; **CI & UAT Infinix yang hakim.**
+- Perubahan editor CodeMirror **WAJIB rebuild bundle** (`cd editor-src && npm
+  run build`) lalu commit hasilnya; `verifyEditorBundled` gagal kalau kontrak
+  bridge (`setCode/getCode/...`) rusak.
 
-## Gelombang 1 — Run yang enak (prioritas UTAMA)
-
-Sumber: `PERF_PASS.md` (khusus akar F — keluhan user soal tombol Run).
-
-### 1A — Feedback instan & indikator (risiko rendah, cepat)
-- [ ] **T1.1** FAB ▶ langsung kasih reaksi saat di-tap (state "running" —
-      mis. FAB jadi spinner/berubah warna/ikon "stop"), TIDAK menunggu Python.
-- [ ] **T1.2** `TerminalScreen` tampilkan **"Menyalakan Python…"** + indikator
-      saat cold-start, bukan layar kosong.
-- [ ] **T1.3** Pastikan pesan pertama muncul (banner "ZCODE Terminal") sebelum
-      Python siap, supaya user tahu tap-nya kebaca.
-
-**Guard/UAT:** tap Run di Infinix harus terasa "kebaca" seketika; tidak ada
-layar hitam/kosong tanpa tulisan.
-
-### 1B — Pindah kerja berat & optimasi (risiko sedang)
-- [ ] **T1.4** Evaluasi & pangkas `onClick` FAB: `applyAutoTrimIfEnabled` +
-      `pushCode()` (`setCode` sinkron ke WebView) tidak boleh memblokir tap.
-      Ambil kode dari sumber otoritatif (VM) tanpa round-trip JS yang berisiko
-      feedback-loop. **Hati-hati: jangan sampai ketikan/posisi kursor hilang.**
-- [ ] **T1.5** **Debounce auto-save** (tulis file setelah berhenti mengetik),
-      dengan **flush wajib** saat: Run, pindah file, app di-background/pause.
-      (Akar C, D di PERF_PASS.)
-- [ ] **T1.6** **Pre-warm Python** saat app start (di background, tidak blokir
-      UI). Default **OFF** dulu (aman buat HP ampas); aktifkan via toggle di
-      Settings (Gelombang 2). Ukur dampak start app sebelum memutuskan default.
-- [ ] **T1.7** Terminal: **ring buffer/cap output** + **coalesce scrollTo**
-      (~120 ms) supaya output deras tidak jank (akar E).
-
-**Gerbang Gelombang 1:** UAT Infinix — mengetik lancar, Run terasa instan,
-tidak ada layar kosong, output deras tidak freeze, `input()` tetap jalan.
+### D. Protokol kolaborasi (berdasarkan pengalaman lintas repo)
+1. **File `.github/workflows/*` = ranah user.** Agent tidak bisa/ tidak boleh
+   mengubahnya (butuh kredensial scope `workflow`). Bila sebuah task butuh
+   mengubah CI, agent menyiapkan **isi file lengkap + link raw**, lalu **user
+   yang menimpa & commit di `main`**. Agent akan eksplisit menandai
+   "butuh campur tangan user".
+2. **CI merah jangan ditebak.** Agent boleh cek status/run via `gh`, tetapi bila
+   log error tidak bisa diakses/dibaca, **agent berhenti dan meminta user
+   menyalin log error spesifik**. Diagnosis hanya dibuat dari log asli.
+3. Gagal/merusak → revert commit/SHA yang bersalah, jangan ditambal berlarut.
+4. Hukum keluarga: jangan mencampur pekerjaan yang belum teruji; jangan
+   membundel perubahan runtime besar dengan fitur.
 
 ---
 
-## Gelombang 2 — Rumah Settings
+## FASE 1 🟢 — Menang cepat, langsung kerasa
 
-Sumber: `SETTINGS_DESIGN.md` (Batch 1).
+**Kriteria:** risiko rendah, ketahuan langsung oleh user, tidak membongkar
+arsitektur/runtime. Tujuan: kurangi rasa kesal sehari-hari (terutama tombol Run)
+dan kasih fondasi Settings/editor yang langsung kepakai.
 
-- [ ] **T2.1** Buat `ui/settings/SettingsScreen.kt` (LazyColumn), route
-      `"settings"`, item **SETTINGS** di sidebar (di atas About & Contribute).
-- [ ] **T2.2** **Pindahkan "Clear All Drafts & Files"** dari TOOLS ke SETTINGS
-      (Privasi & Data); tetap dengan dialog konfirmasi.
-- [ ] **T2.3** Pemilih tema yang **jelas** (daftar RETRO/DRACULA/TOKYO_NIGHT),
-      menggantikan "cycle buta" sambil mempertahankan fungsi cycle jika diinginkan.
-- [ ] **T2.4** Cerminkan toggle yang sudah ada: Symbol bar, Auto Trim on Run.
-- [ ] **T2.5** Tambah toggle untuk: indikator Python (T1.2), pre-warm (T1.6),
-      auto-save + interval (T1.5) — semua dipersist (DataStore/EncryptedPrefs).
-- [ ] **T2.6** Info perangkat (ABI, RAM, Android) di bagian Tentang — menjelaskan
-      tag LIBRARY nanti.
+| ID | Item | Dokumen | Catatan |
+|---|---|---|---|
+| F1.1 | FAB ▶ **reaksi instan** (spinner/state saat di-tap) | `PERF_PASS` F | Langsung menyerang keluhan "Run lambat" |
+| F1.2 | Indikator **"Menyalakan Python…"** di terminal (layar tidak kosong) | `PERF_PASS` B,F | |
+| F1.3 | Cangkang **SettingsScreen** + route `settings` + item sidebar | `SETTINGS_DESIGN` | LazyColumn, di atas About |
+| F1.4 | **Pindah "Clear All Drafts & Files"** ke Settings (Privasi & Data) | `SETTINGS_DESIGN` | Konfirmasi tetap; hapus dari TOOLS |
+| F1.5 | Pemilih **tema yang jelas** (daftar RETRO/DRACULA/TOKYO_NIGHT) | `SETTINGS_DESIGN` | Bukan cycle buta; fungsi cycle boleh tetap |
+| F1.6 | Cerminkan toggle yang sudah ada: Symbol bar, Auto Trim on Run | `SETTINGS_DESIGN` | Backend sudah ada |
+| F1.7 | **Auto-close brackets** (CM6) + toggle-nya | `CM6_FEATURE_MAP`, `TOOLS_CATALOG` | `closeBrackets` sudah di dep; rebuild bundle |
+| F1.8 | **Selection match highlight** (CM6) | `CM6_FEATURE_MAP` | Style sudah ada, tinggal pasang |
+| F1.9 | Transform teks kecil: **Sort Lines, Change Case, Trim Now** | `TOOLS_CATALOG` | Kotlin/JS murni, tanpa pip; daftar sebagai plugin ACTION |
 
-**JANGAN di gelombang ini:** palet terminal, font size, semua item 💡 — itu
-Gelombang 6/lanjutan. Tujuannya Settings fungsional, bukan penuh.
-
-**Gerbang:** semua toggle persist setelah restart; scroll pengaturan mulus di
-Infinix; Clear All pindah & tetap aman.
-
----
-
-## Gelombang 3 — Editor quick wins (TOOLS_CATALOG prioritas tinggi)
-
-Sumber: `TOOLS_CATALOG.md` §5 + `CM6_FEATURE_MAP.md`.
-
-> Perubahan editor = WAJIB rebuild bundle CM6 (`cd editor-src && npm run build`)
-> dan commit hasilnya; `verifyEditorBundled` akan gagal kalau kontrak bridge
-> rusak. Ukur ukuran bundle sebelum/sesudah.
-
-- [ ] **T3.1** **Auto-close brackets** (`closeBrackets` — sudah ada di dep
-      `autocomplete`, tinggal aktifkan). Termasuk toggle-nya di Settings.
-- [ ] **T3.2** **Selection match highlight** (`highlightSelectionMatches`; gaya
-      `.cm-selectionMatch` sudah ada, tinggal pasang).
-- [ ] **T3.3** **Word wrap** sebagai toggle (bila belum bisa di-switch runtime).
-- [ ] **T3.4** Transform teks kecil (Kotlin/JS murni, tanpa pip):
-      **Sort Lines**, **Change Case** (UPPER/lower/Title), **Trim Now**.
-      Tambah sebagai plugin ACTION di `PluginRegistry`.
-- [ ] **T3.5** **Organize imports lanjutan**: rapikan/buang import tak terpakai
-      (berbasis AST Python, ringan; waspada bug Zabacode F-02/B-10 — jangan
-      merusak kode valid).
-
-**Gerbang:** bundle bertambah wajar (tidak gendut), semua toggle bekerja &
-persist, mengetik tetap ringan, UAT Infinix.
+**Ukuran PR Fase 1:** beberapa commit kecil per item.
+**Gerbang UAT Fase 1 (Infinix):**
+- [ ] Tap Run langsung bereaksi (spinner) tanpa jeda; terminal tidak pernah
+      kosong tanpa tulisan.
+- [ ] Settings terbuka, scroll mulus; Clear All pindah & tetap minta konfirmasi.
+- [ ] Ganti tema/symbol bar/auto-trim bekerja & bertahan setelah restart.
+- [ ] Auto-close brackets & selection match bekerja; bundle tidak membengkak
+      berlebihan; mengetik tetap ringan.
 
 ---
 
-## Gelombang 4 — Visual Problems Panel (VPP)
+## FASE 2 🟡 — Beneran, butuh waktu
 
-Sumber: `VPP_DESIGN.md`.
+**Kriteria:** kerja sedang, banyak file, butuh test/UAT serius; tidak mengubah
+fondasi runtime, tapi mengubah alur data/perilaku inti.
 
-- [ ] **T4.1** Ubah `Checker.checkSyntax` → `List<Problem>` (model `Problem`:
-      severity, message, line, column, source). Lengkapi unit test untuk semua
-      kasus lama (string berisi `:)`, triple-quote, f-string, `async def`, dll).
-- [ ] **T4.2** State `problems` + `expanded` di ViewModel (perhitungan terjadwal/
-      debounce, bukan tiap ketik tanpa henti).
-- [ ] **T4.3** `ProblemsBanner` collapsed: ikon severity terparah + pesan pertama
-      (elipsis) + chip `(+N)`.
-- [ ] **T4.4** Expand ke bawah (Opsi 3): header "N masalah", ±5 baris,
-      scrollable, warna tema, `rememberSaveable`.
-- [ ] **T4.5** Tap item → `gotoLine(n)` (sudah ada); panel tetap terbuka.
-- [ ] **T4.6** 0 error → banner hilang. Edge: 1 error, pesan panjang, rotasi,
-      error tanpa line, performa (lihat PERF_PASS).
+| ID | Item | Dokumen | Catatan |
+|---|---|---|---|
+| F2.1 | **Debounce auto-save** + **flush wajib** saat Run/pindah file/background | `PERF_PASS` C | Jangan sampai ketikan hilang |
+| F2.2 | **Ring buffer/cap output** + **coalesce scrollTo** (~120 ms) | `PERF_PASS` E | Anti-jank output deras |
+| F2.3 | Pangkas kerja berat di `onClick` Run (auto-trim/`setCode` sinkron) tanpa bikin feedback-loop/hilang kursor | `PERF_PASS` F | Hati-hati; perlu UAT |
+| F2.4 | Item Settings lanjutan: ukuran font editor/terminal, toggle indikator Python, info perangkat (ABI/RAM) | `SETTINGS_DESIGN` | Preferensi ter-persist |
+| F2.5 | **VPP** — `Checker` → `List<Problem>` + banner expand ke bawah + gotoLine | `VPP_DESIGN` | Refactor Checker hati-hati (jaga regresi B-11/B-19/F-07) |
+| F2.6 | **LIBRARY** — `libraries.json`, DeviceProbe (ABI+RAM), katalog, install via `startPipStream`, gagal bersih + rollback, pip manual di bawah | `LIBRARY_DESIGN`, `PIP_SCOPE` | `requests`/`numpy` OK; `pyzmq` gagal dengan pesan jujur |
+| F2.7 | **Organize imports lanjutan** (urutkan + buang tak terpakai, berbasis AST) | `TOOLS_CATALOG` | Waspadai bug Zabacode F-02/B-10; jangan rusak kode valid |
+| F2.8 | **Palet terminal** penuh: model 16 warna ANSI + render SGR + pemilih di Settings (latar TETAP hitam OLED) | `TERMINAL_THEMES` | Unit test pemetaan SGR |
 
-**Gerbang:** UAT Infinix mengetik dengan panel terbuka tetap mulus; banner
-akurat; goto benar.
-
----
-
-## Gelombang 5 — LIBRARY di INSTALL MODULES
-
-Sumber: `LIBRARY_DESIGN.md` + `PIP_SCOPE.md`.
-
-- [ ] **T5.1** `assets/libraries.json` (~30–50 paket populer dulu) + test
-      validasi (JSON valid, field wajib, kategori dikenal) — seperti
-      `test_zcode_fase3.py` untuk samples.
-- [ ] **T5.2** `DeviceProbe`: baca `Build.SUPPORTED_ABIS` + RAM, hitung tag
-      ✅/⚠️/❌/🚫 (unit test dengan fake, tanpa perangkat).
-- [ ] **T5.3** `LibraryScreen` (pola `SamplesScreen`): kategori → item, search,
-      tag perangkat, tombol Install. Baca-only dulu.
-- [ ] **T5.4** Sambungkan Install ke `ExecutionEngine.startPipStream`; log rapi.
-- [ ] **T5.5** Penanganan gagal BERSIH: deteksi error klasik (tak ada wheel,
-      resolution, storage penuh, timeout), pesan jujur, rollback setengah jadi.
-- [ ] **T5.6** Pindahkan layar pip manual (field nama + log) ke bawah sebagai
-      **"Install manual"**; fitur lama tidak hilang.
-
-**Gerbang:** `requests`/`numpy` terpasang & bisa di-import; `pyzmq`/`jupyter`
-gagal dengan pesan jelas (bukan berantakan) di Infinix.
+**Gerbang UAT Fase 2 (Infinix):**
+- [ ] Mengetik file panjang lancar; tersimpan setelah berhenti & saat Run/pindah/background.
+- [ ] Output deras (`print` loop) tidak freeze; baris terakhir terlihat; `input()` tetap jalan.
+- [ ] VPP: banner muncul/hilang, expand, goto benar, rotasi aman.
+- [ ] LIBRARY: tag perangkat benar; install sukses; gagal bersih.
+- [ ] Terminal berwarna (`rich`/`colorama`) sesuai palet; tetap terbaca di OLED.
 
 ---
 
-## Gelombang 6 — Terminal: palet & font
+## FASE 3 🔴 — Jebakan, spike dulu
 
-Sumber: `TERMINAL_THEMES.md`.
+**Kriteria:** membongkar arsitektur / mengubah runtime / bisa merusak besar.
+Aturan: **satu item = satu PR/spike terisolasi**, jangan dibundel. Siap
+revert. Dikerjakan **setelah Fase 1–2 stabil** dan atas persetujuan user.
 
-- [ ] **T6.1** Model `TerminalPalette` (16 warna ANSI + fg/bg/cursor) + unit
-      test pemetaan SGR (30–37, 90–97, reset, kombinasi).
-- [ ] **T6.2** 2–3 palet awal (Phosphor, Dracula, Tokyo) — latar TETAP hitam OLED.
-- [ ] **T6.3** Render SGR di terminal memakai palet aktif; stderr/error merah.
-- [ ] **T6.4** Pemilih palet & ukuran font di Settings; persist.
-- [ ] **T6.5** (Opsional) palet Solarized/Monokai setelah dasar stabil.
+| ID | Item | Dokumen | Risiko utama |
+|---|---|---|---|
+| F3.1 | **Terminal sebagai overlay/layer** (jangan recreate WebView saat Run) | `PERF_PASS` A | Perubahan struktur navigasi; jembatan `input()`/stdin harus tetap |
+| F3.2 | **Pre-warm Python** saat startup | `PERF_PASS` B | Bisa memperlambat start app; ukur dulu, default aman |
+| F3.3 | **Code folding** (`foldGutter`) + **Outline/Symbols** (AST→gotoLine) | `CM6_FEATURE_MAP`, `TOOLS_CATALOG` | Rebuild bundle; perilaku editor |
+| F3.4 | **Spike Chaquopy 15.0.1 → 17.0.0** (TETAP `pythonVersion "3.11"`) | `CHAQUOPY_STRATEGY` | Runtime: pip 25.3, `--only-binary` default; **WAJIB** cek monkey-patch AssetPath, `input()`/stdin, AGP, build ARMv7 asli |
+| F3.5 | (Tunda, bila disetujui) Go to Definition/Rename dalam-file (fondasi LSP/jedi) | `TOOLS_CATALOG` | Berat di perangkat ampas; evaluasi terpisah |
 
-**Gerbang:** output `rich`/`colorama` tampil sesuai palet; output deras tetap
-mulus; kontras terbaca di OLED Infinix.
-
----
-
-## Gelombang 7 — Tools lanjutan
-
-Sumber: `TOOLS_CATALOG.md` (prioritas menengah) + `CM6_FEATURE_MAP.md`.
-
-- [ ] **T7.1** **Code folding** (`foldGutter`) + toggle; rebuild bundle.
-- [ ] **T7.2** **Outline/Symbols** (daftar fungsi/kelas → gotoLine), berbasis
-      AST Python ringan (pola sama seperti TODO Extractor).
-- [ ] **T7.3** (Tunda, butuh LSP/jedi) Go to Definition/Rename versi dalam-file.
-- [ ] **T7.4** (Tunda) Find in files — butuh konsep folder/project.
+**Protokol Fase 3 (setiap item):**
+1. Satu spike = satu commit/PR terisolasi.
+2. Verifikasi poin per poin (lihat dokumen terkait).
+3. UAT Infinix penuh.
+4. Jika ada yang patah → revert, laporkan dengan jujur, jangan dipaksa.
+5. F3.4 (Chaquopy) **paling akhir**, setelah semua lain stabil.
 
 ---
 
-## Gelombang 8 — Spike Chaquopy 17 (TERAKHIR & TERISOLASI)
-
-Sumber: `CHAQUOPY_STRATEGY_2026_08.md`.
-
-- [ ] **T8.1** SATU commit terisolasi: plugin `15.0.1 → 17.0.0`, **TETAP**
-      `version = "3.11"` (jangan 3.10 default, apalagi 3.12+).
-- [ ] **T8.2** Verifikasi: monkey-patch `AssetPath.parent` di `zcode_pip.py`
-      masih perlu/redundan di pip 25.3.
-- [ ] **T8.3** UAT berat: `sys.stdin`/`input()` (TerminalBridge), AGP 8.2.2
-      kompat, build & jalan di ARMv7 asli.
-- [ ] **T8.4** Kalau ada yang patah → `git revert` satu SHA, laporkan, jangan
-      dipaksa.
-
-**Syarat:** hanya dikerjakan SETELAH Gelombang 1–7 stabil di UAT, tidak bareng
-fitur lain.
-
----
-
-## Yang TIDAK dikerjakan sekarang (jujur)
+## Yang TIDAK dikerjakan sekarang (jujur, backlog)
 
 - AI/Oracle auto-fix (butuh diskusi privasi/API key terpisah).
-- ZMUX (Alpine proot) — download-on-demand, tidak dibundle; ranah terpisah.
-- ZPLAY (Kivy/pygame) — fork terpisah, bukan ZCODE.
-- LSP penuh (jedi/Ruff) — berat di HP ampas; backlog.
-- Multi-bahasa penuh — memperbesar bundle; butuh keputusan tersendiri.
+- **ZMUX** (Alpine proot) — download-on-demand, tidak dibundle; ranah terpisah.
+- **ZPLAY** (Kivy/pygame) — fork terpisah, bukan ZCODE.
+- **LSP penuh (jedi/Ruff)** — berat di HP ampas; backlog (F3.5 baru fondasi).
+- Multi-bahasa editor penuh — memperbesar bundle; butuh keputusan tersendiri.
 - GUI native (Tkinter/Qt) — di luar arsitektur Chaquopy in-process.
 - Minimap, Emmet, remote file, marketplace plugin sembarangan — ditolak
-  (aturan #3: tidak memberi manfaat sepadan di perangkat target).
+  (aturan #3: manfaat tak sebanding dengan biaya di perangkat target).
 
 ---
 
-## Cara bergerak
+## Cara bergerak (ringkas)
 
-1. Selesaikan **satu task**, commit, biar CI menilai kompilasi.
-2. Setelah satu gelombang, **berhenti & UAT di Infinix**; baru lanjut.
-3. Setiap doc yang berubah karena kenyataan implementasi, **update doc-nya**
-   (jujur: rencana bukan kitab suci).
-4. Urutan bisa diubah atas persetujuan user — terutama kalau ada keluhan baru
-   yang lebih mendesak.
+1. Kerjakan **per item dalam fase**, buat commit per perubahan koheren.
+2. Satu fase = satu PR; CI hijau + UAT Infinix + approval user → merge.
+3. Selalu update dokumen bila kenyataan implementasi berbeda (rencana bukan kitab).
+4. Urutan bisa berubah atas persetujuan user bila ada keluhan lebih mendesak.
+5. Butuh ubah workflow? Serahkan file lengkap ke user. CI merah tak terbaca?
+   Minta log asli, jangan menebak.
 
 ---
 
-*Roadmap ini dibaca dari atas ke bawah: dampak user dulu, teknis menarik belakangan.
-Chaquopy 17 sengaja di akhir sebagai gerbang keamanan.*
+*Roadmap ini dibaca atas-bawah: kenyamanan user dulu, pekerjaan dalam kemudian,
+jebakan/runtime paling akhir dengan perlindungan penuh.*
