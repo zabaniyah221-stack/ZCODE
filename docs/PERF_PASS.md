@@ -52,12 +52,43 @@ dan `WorkbenchScreen.kt`.
 
 ---
 
+### F. Khusus: tombol Run (FAB ▶) terasa lambat/lag — LAPORAN USER (2026-08)
+- **Gejala (user):** tombol Run saja yang terasa kurang responsif/lag setelah
+  di-tap. Tombol lain tidak dikeluhkan. Diuji hanya di **Infinix Smart 9 HD**
+  (ARMv7, satu-satunya perangkat user) — jadi ini adalah perangkat TARGET,
+  bukan kasus pinggiran.
+- **Akar dari kode (`WorkbenchScreen.kt` onClick FAB):**
+  1. `vm.applyAutoTrimIfEnabled()` dijalankan di **thread UI** (bisa memindai
+     seluruh `activeCode`).
+  2. `pushCode()` menulis kode ke `WebView` via `evaluateJavascript("setCode(...)")`
+     secara sinkron di jalur klik — di editor file panjang, ini menahan respons
+     tap.
+  3. `onRun(active)` → `navController.navigate("output/...")` yang **memulai
+     `TerminalScreen` baru**. Di sana `LaunchedEffect` melakukan cold-start
+     Python (~1–3 dtk di ARMv7) — layar sempat tampil kosong/putih tanpa
+     feedback, sehingga user mengira tap-nya telat.
+  4. Perpindahan layar juga membongkar `WorkbenchScreen` (WebView CM6 di-recreate
+     saat kembali) — lihat akar A; menambah kesan "berat" tiap kali Run.
+- **Dampak:** tap Run tidak langsung memberi reaksi visual; terasa delay sebelum
+  terminal muncul, apalagi pada file berukuran sedang/besar di HP RAM kecil.
+- **Arah fix (urut dampak):**
+  1. **Feedback seketika:** saat FAB di-tap, langsung tampilkan state "running"
+     (mis. FAB berubah jadi spinner/"Menyiapkan…", atau overlay tipis) JANGAN
+     tunggu Python.
+  2. **Pindahkan kerja berat keluar thread UI:** `pushCode()` & auto-trim cukup
+     kirim sinyal/simpan state (defer), bukan `setCode` sinkron raksasa; bila
+     perlu ambil kode dari VM/bridge yang sudah otoritatif tanpa round-trip JS.
+  3. **Indikator cold-start "Menyalakan Python…" + pre-warm** (sudah direncanakan
+     di §1 B) sehingga layar terminal tidak kosong.
+  4. **Terminal sebagai overlay/layer** (jangan navigate yang bongkar editor) —
+     lihat akar #1 A. Ini sekaligus mempercepat kembali ke editor setelah Run.
+
 ## 2. Rencana perbaikan (PERF_PASS)
 
 | # | Perbaikan | Berkas utama | Risiko |
 |---|---|---|---|
 | 1 | Terminal jadi overlay (jangan recreate WebView) | `MainActivity.kt`, navigasi | Sedang — ubah struktur UI |
-| 2 | Indikator cold-start + pre-warm Python | `TerminalScreen.kt`, `WorkspaceViewModel.kt` | Rendah |
+| 2 | Indikator cold-start + pre-warm Python (termasuk feedback FAB Run) | `TerminalScreen.kt`, `WorkspaceViewModel.kt`, `WorkbenchScreen.kt` | Rendah |
 | 3 | Debounce save + thread-safety state | `WorkspaceViewModel.kt`, `FileManager.kt` | Rendah–sedang (jangan sampai hilang ketikan) |
 | 4 | Pecah composable + `derivedStateOf` | `WorkbenchScreen.kt` | Sedang (wajib regresi visual) |
 | 5 | Coalesce scroll + buffer terminal | `TerminalScreen.kt` | Rendah |
@@ -105,6 +136,8 @@ overlay** dan **(4) pecah composable** yang mengubah struktur.
    - [ ] Mengetik cepat di file panjang tidak patah-patah.
    - [ ] Teks tersimpan setelah berhenti (~<1 s); tetap tersimpan saat Run/pindah file/background.
    - [ ] Run pertama menampilkan "Menyalukan Python…", tidak ngehang.
+   - [ ] **Tap tombol Run langsung bereaksi (spinner/state) tanpa jeda**, bahkan
+         di file panjang; terminal tidak pernah layar kosong tanpa pesan.
    - [ ] Pindah ke terminal & kembali tidak me-reload editor/posisi kursor.
    - [ ] Output deras (mis. loop `print`) tidak bikin UI freeze; baris terakhir terlihat.
    - [ ] `input()` tetap berfungsi di terminal.
