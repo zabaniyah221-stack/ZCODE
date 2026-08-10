@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import com.zaba.zcode.core.editor.Checker
 import com.zaba.zcode.core.editor.Problem
 import com.zaba.zcode.core.editor.Severity
@@ -16,6 +18,7 @@ import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.core.plugins.PluginHost
+import com.zaba.zcode.core.plugins.PluginRegistry
 import com.zaba.zcode.core.plugins.PluginRunner
 import com.zaba.zcode.core.plugins.Snippet
 import com.zaba.zcode.ui.theme.ZcodeThemeType
@@ -87,7 +90,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
      * vs frontend localStorage).
      */
     var pluginFlags by mutableStateOf(
-        com.zaba.zcode.core.plugins.PluginRegistry.plugins
+        PluginRegistry.plugins
             .associate { it.id to it.enabledByDefault }.toMutableMap()
     )
         private set
@@ -114,9 +117,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun preWarmPython() {
         try {
-            if (com.zaba.zcode.core.plugins.PluginRunner.isChaquopyAvailable() && !com.chaquo.python.Python.isStarted()) {
-                com.chaquo.python.Python.start(com.chaquo.python.android.AndroidPlatform(getApplication()))
-                com.chaquo.python.Python.getInstance().getModule("zcode_runner")
+            if (PluginRunner.isChaquopyAvailable() && !Python.isStarted()) {
+                Python.start(AndroidPlatform(getApplication()))
+                Python.getInstance().getModule("zcode_runner")
             }
         } catch (e: Exception) {
             // fail-safe
@@ -125,7 +128,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun loadPluginFlags() {
         val m = pluginFlags.toMutableMap()
-        com.zaba.zcode.core.plugins.PluginRegistry.plugins.forEach { p ->
+        PluginRegistry.plugins.forEach { p ->
             m[p.id] = prefs.getBoolean("plugin_enabled_${p.id}", p.enabledByDefault)
         }
         pluginFlags = m
@@ -133,7 +136,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isPluginEnabled(id: String): Boolean =
         pluginFlags[id]
-            ?: (com.zaba.zcode.core.plugins.PluginRegistry.byId(id)?.enabledByDefault ?: false)
+            ?: (PluginRegistry.byId(id)?.enabledByDefault ?: false)
 
     fun setPluginEnabled(id: String, enabled: Boolean) {
         pluginFlags = pluginFlags.toMutableMap().apply { put(id, enabled) }
@@ -430,7 +433,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             val text = String(bytes, Charsets.UTF_8)
             // UTF-8 decode Kotlin tidak melempar error tapi menyisipkan U+FFFD
             // untuk byte rusak — tolak agar source code tidak corrupt diam-diam.
-            if ('�' in text) return false to "Encoding file bukan UTF-8 🙈"
+            // Char(0xFFFD) eksplisit (bukan literal U+FFFD mentah di source) agar
+            // tahan editor/tooling yang bisa merusak karakter replacement di file.
+            if (text.contains('\uFFFD')) return false to "Encoding file bukan UTF-8 🙈"
 
             val displayName = resolver.query(uri, null, null, null, null)?.use { cursor ->
                 val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)

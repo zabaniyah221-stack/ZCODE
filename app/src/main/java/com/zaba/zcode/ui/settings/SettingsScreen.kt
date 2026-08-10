@@ -495,4 +495,3 @@ private fun FontFamilyRow(
         }
     }
 }
-}

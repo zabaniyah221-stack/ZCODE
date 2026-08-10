@@ -73,7 +73,9 @@ android {
     }
 }
 
-// Chaquopy 15.0 — Python 3.11 in-process runtime (Fase 1: on-device execution).
+// Chaquopy 17.0.0 — Python 3.11 in-process runtime (Fase 1: on-device execution).
+// (Komentar lama menyebut "15.0" — versi plugin aktual dideklarasikan di root
+//  build.gradle.kts: 17.0.0; disamakan saat audit 2026-08.)
 // - version 3.11: satu-satunya yang masih mendukung armeabi-v7a (HP user)
 // - pip WAJIB di-bundle di sini: Chaquopy TIDAK menyertakan pip secara default.
 //   Tanpa blok pip{} runtime selalu gagal: ModuleNotFoundError: No module named 'pip'

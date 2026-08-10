@@ -81,7 +81,12 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 onBack = { nav.navigateUp() },
                 showPythonIndicator = vm.showPythonIndicator, // F2.4: toggle indikator Python
                 terminalOutputLimit = vm.terminalOutputLimit,
-                themeType = vm.themeType
+                themeType = vm.themeType,
+                // FIX (audit 2026-08): tanpa ini terminal full-screen pakai default
+                // 12px/Monospace dan mengabaikan pilihan user di Settings — overlay
+                // terminal di WorkbenchScreen sudah meneruskannya; samakan di sini.
+                editorFontSize = vm.editorFontSize,
+                editorFontFamily = vm.editorFontFamily
             )
         }
         composable("pip") {
