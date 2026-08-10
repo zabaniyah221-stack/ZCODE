@@ -144,6 +144,17 @@ fun WorkbenchScreen(
     val context = LocalContext.current
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
+    // F1.x (PERF): aksi dari drawer WAJIB menunggu drawer selesai menutup dulu.
+    // Tanpa ini, animasi drawer (≈200ms) tabrakan dengan compose layar baru /
+    // buka dialog di frame yang sama → terasa lag/jeda di HP ampas. Menutup dulu
+    // lalu bertindak membuat transisi ke layer baru terasa satu gerakan mulus.
+    fun closeDrawerThen(action: suspend () -> Unit) {
+        scope.launch {
+            drawerState.close()
+            action()
+        }
+    }
+
     fun pushCode() {
         webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
     }
@@ -242,12 +253,10 @@ fun WorkbenchScreen(
 
                 // ---------- tujuan aplikasi (tanpa label "NAVIGATION" — redesign 2026-08) ----------
                 DrawerItem("INSTALL MODULES") {
-                    scope.launch { drawerState.close() }
-                    onNavigateToPip()
+                    closeDrawerThen { onNavigateToPip() }
                 }
                 DrawerItem("SAMPLES") {
-                    scope.launch { drawerState.close() }
-                    onNavigateToSamples()
+                    closeDrawerThen { onNavigateToSamples() }
                 }
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
@@ -352,8 +361,7 @@ fun WorkbenchScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    scope.launch { drawerState.close() }
-                                    confirmClearAll = true
+                                    closeDrawerThen { confirmClearAll = true }
                                 }
                                 .padding(horizontal = 12.dp, vertical = 10.dp)
                         )
@@ -364,8 +372,7 @@ fun WorkbenchScreen(
 
                 // About — warga paling bontot di sidebar (permintaan user, redesign 2026-08)
                 DrawerItem("About & Contribute") {
-                    scope.launch { drawerState.close() }
-                    onNavigateToAbout()
+                    closeDrawerThen { onNavigateToAbout() }
                 }
             }
         }
