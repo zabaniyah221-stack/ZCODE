@@ -100,14 +100,14 @@ fun SettingsScreen(
 
             item {
                 FontSizeRow(
-                    current = vm.editorFontSize,
+                    current = vm.terminalFontSize,
                     onSelect = { vm.setFontSize(it) }
                 )
             }
 
             item {
                 FontFamilyRow(
-                    current = vm.editorFontFamily,
+                    current = vm.appFontFamily,
                     onSelect = { vm.setFontFamily(it) }
                 )
             }
@@ -425,7 +425,9 @@ private fun FontSizeRow(
             .padding(vertical = 8.dp)
     ) {
         Text(
-            "Ukuran Font (Editor & Terminal)",
+            // Audit 2026-08: jujur di label — ukuran hanya berlaku untuk terminal
+            // (editor fix 14px di bundle CM6).
+            "Ukuran Font Terminal",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -466,7 +468,8 @@ private fun FontFamilyRow(
             .padding(vertical = 8.dp)
     ) {
         Text(
-            "Jenis Font (Coding)",
+            // Audit 2026-08: jenis font berlaku untuk UI & editor (bukan terminal).
+            "Jenis Font (UI & Editor)",
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -475,7 +478,8 @@ private fun FontFamilyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
-            listOf("Monospace", "Roboto Mono", "Courier", "Consolas").forEach { family ->
+            // Audit 2026-08: font coding bundel (OFL) + default monospace device.
+            listOf("Monospace", "JetBrains Mono", "Fira Code", "Source Code Pro").forEach { family ->
                 val isSelected = family == current
                 Surface(
                     color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)

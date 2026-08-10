@@ -169,9 +169,11 @@ class TestCM6Bundled:
 # ===================================================================
 
 class TestUISpec:
-    def test_workbench_has_three_lines(self):
+    def test_workbench_drawer_swipe_only(self):
+        # Audit 2026-08: ikon ≡ dihapus atas permintaan user; drawer swipe-only.
+        # Marker DRAWER-SWIPE-ONLY wajib ada (guard tools/check.sh).
         txt = read(WORKBENCH_KT)
-        assert "≡" in txt, "Workbench should have ≡ three lines"
+        assert "DRAWER-SWIPE-ONLY" in txt, "Workbench should be swipe-only drawer"
 
     def test_workbench_no_hamburger_word(self):
         txt = read(WORKBENCH_KT)
@@ -351,4 +353,4 @@ class TestCheckSh:
         assert p.exists() and p.stat().st_size > 0
         assert "codemirror" in read(p).lower()
         assert "taskAffinity" in read(p)
-        assert "≡" in read(p) or "three lines" in read(p).lower()
+        assert "DRAWER-SWIPE-ONLY" in read(p) or "swipe" in read(p).lower()

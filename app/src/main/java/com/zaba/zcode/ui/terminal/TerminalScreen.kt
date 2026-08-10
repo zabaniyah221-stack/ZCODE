@@ -84,8 +84,10 @@ fun TerminalScreen(
     showPythonIndicator: Boolean = true, // F2.4: toggle indikator cold-start Python
     terminalOutputLimit: Int = 65536, // F2.2: Ring Buffer limit
     themeType: ZcodeThemeType = ZcodeThemeType.RETRO, // F2.8: follow active theme
-    editorFontSize: Int = 12,
-    editorFontFamily: String = "Monospace"
+    // Audit 2026-08: ukuran font setting kini KHUSUS terminal (label UI "Ukuran
+    // Font Terminal"); keluarga font terminal SELALU Monospace (console wajib
+    // alignment) — jenis font pilihan user berlaku untuk UI & editor saja.
+    terminalFontSize: Int = 14
 ) {
     var terminalText by remember { mutableStateOf("ZCODE Terminal — Running $filename\n" + "-".repeat(40) + "\n") }
     var inputVal by remember { mutableStateOf(TextFieldValue("")) }
@@ -176,14 +178,10 @@ fun TerminalScreen(
         label = "cursorAlpha"
     )
 
-    // Map fontFamily string ke FontFamily
-    val resolvedFontFamily = when (editorFontFamily) {
-        "Roboto Mono" -> FontFamily.Monospace
-        "Courier" -> FontFamily.Monospace
-        "Consolas" -> FontFamily.Monospace
-        else -> FontFamily.Monospace
-    }
-    val fontSizeSp = editorFontSize.sp
+    // Terminal selalu Monospace (keputusan audit 2026-08 — dulu selector mati:
+    // semua pilihan dipetakan ke Monospace juga).
+    val resolvedFontFamily = FontFamily.Monospace
+    val fontSizeSp = terminalFontSize.sp
 
     Scaffold(
         topBar = {
@@ -289,7 +287,7 @@ fun TerminalScreen(
                         text = annotatedText,
                         fontFamily = resolvedFontFamily,
                         fontSize = fontSizeSp,
-                        lineHeight = (editorFontSize + 4).sp
+                        lineHeight = (terminalFontSize + 4).sp
                     )
                     // Baris input aktif + kursor blok berkedip
                     Row(verticalAlignment = Alignment.CenterVertically) {

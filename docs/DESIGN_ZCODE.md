@@ -175,3 +175,18 @@ Jawab `D1-D5` (misal `D1 retro, D2 bottom, D3 sheet, D4 off, D5 visible`) — na
 - **Contribute** menggantikan `Premium` → langsung repo Issues/Feedback, iconless
 
 *— DESIGN v0.4, 2026-08-08 — faded grey #3A4452, FAB above handle, PTY pindah layer, Contribute Issues, ready for Fase 0.*
+
+## Audit 2026-08 — perubahan desain (session arena/019fed49-zcode)
+
+- **Drawer swipe-only**: ikon ≡ tiga garis dihapus atas permintaan user; sidebar
+  dibuka via swipe kiri (marker `DRAWER-SWIPE-ONLY` di WorkbenchScreen, dijaga
+  tools/check.sh). Tip swipe ditampilkan di seed main.py baru.
+- **Menu file di topbar**: ikon folder membuka dropdown Open / Save / Save as.
+  Save menimpa file asli device (izin SAF persisten saat import); Save as via
+  SAF CreateDocument lalu di-link untuk Save berikutnya.
+- **Tab strip** hanya muncul bila ≥ 2 tab.
+- **Font**: editor fix 14px (bundle CM6); setting ukuran font khusus terminal;
+  jenis font (Monospace/JetBrains Mono/Fira Code/Source Code Pro, semua OFL)
+  berlaku untuk UI Compose + editor, terminal tetap Monospace.
+- **Keyboard editor** hanya muncul saat tap terkonfirmasi (anti nongol saat swipe).
+- Ikon logo drawer dibesarkan 36dp → 56dp.

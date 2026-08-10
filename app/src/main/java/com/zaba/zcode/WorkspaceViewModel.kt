@@ -40,6 +40,15 @@ import java.io.File
  *   disimpan di SharedPreferences (pulih walau app di-swipe dari Recent Apps)
  * - Diagnostik sintaksis real-time (debounce 800ms, cancel job lama → tanpa race)
  */
+/** Seed main.py lama (tanpa tip swipe) — dipakai migrasi exact-match audit 2026-08. */
+private const val LEGACY_SEED_MAIN_PY = "# Welcome to ZCODE\nprint(\"Hello, ZCODE!\")\n"
+
+/** Seed main.py baru: sapaan + tip swipe drawer (drawer kini swipe-only). */
+private const val SEED_MAIN_PY =
+    "# Welcome to ZCODE\n" +
+        "# Tip: swipe dari pinggir kiri layar untuk membuka menu\n" +
+        "print(\"Hello, ZCODE!\")\n"
+
 class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private val filesDir: File = Paths.filesDir(app)
@@ -78,10 +87,15 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var terminalOutputLimit by mutableStateOf(65536)
         private set
 
-    /** F2.x: Editor font size & family — persist, dipakai Editor & Terminal. */
-    var editorFontSize by mutableStateOf(14)
+    /** Ukuran font TERMINAL saja (audit 2026-08; editor fix 14px di bundle CM6).
+     *  Nama lama: editorFontSize. Key SharedPreferences tetap "editor_font_size"
+     *  supaya preferensi user yang sudah tersimpan tidak hilang. */
+    var terminalFontSize by mutableStateOf(14)
         private set
-    var editorFontFamily by mutableStateOf("Monospace")
+
+    /** Jenis font untuk UI & editor (BUKAN terminal — terminal tetap Monospace,
+     *  keputusan audit 2026-08). Key SharedPreferences tetap "editor_font_family". */
+    var appFontFamily by mutableStateOf("Monospace")
         private set
 
     /**
@@ -97,6 +111,10 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private val fileDrafts = mutableMapOf<String, String>()
 
+    /** Audit 2026-08: asal-usul file eksternal (nama file workspace → URI SAF).
+     *  Dipakai menu Save (timpa file asli) & Save as (re-link). Persist di prefs. */
+    private val externalOrigins = mutableMapOf<String, String>()
+
     private var lastClosed: Pair<String, Long>? = null
 
     init {
@@ -108,6 +126,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         // pip{}), dan folder itu memuat file data pip yang sah (mis. cert bundle TLS).
         // backend eksekusi butuh cwd = folder workspace (plt.savefig / open() relatif)
         ExecutionEngine.workspaceDirPath = filesDir.absolutePath
+        loadExternalOrigins()
         loadSavedWorkspace()
         loadPluginFlags()
         scope.launch(Dispatchers.IO) {
@@ -233,7 +252,15 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     private fun loadSavedWorkspace() {
         val available = FileManager.listFiles(filesDir)
         if (available.isEmpty()) {
-            FileManager.saveFile(filesDir, "main.py", "# Welcome to ZCODE\nprint(\"Hello, ZCODE!\")\n")
+            FileManager.saveFile(filesDir, "main.py", SEED_MAIN_PY)
+        } else {
+            // Audit 2026-08: migrasi seed lama yang BELUM disentuh user — tambah
+            // tip swipe drawer. HANYA bila isi identik byte-per-byte dengan seed
+            // lama; file yang sudah diedit user tidak boleh disentuh (hukum #1).
+            val mainFile = File(filesDir, "main.py")
+            if (mainFile.exists() && mainFile.readText() == LEGACY_SEED_MAIN_PY) {
+                FileManager.saveFile(filesDir, "main.py", SEED_MAIN_PY)
+            }
         }
 
         val saved = try {
@@ -265,8 +292,8 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         // F2.4: Load preferensi indikator Python (default ON)
         showPythonIndicator = prefs.getBoolean("show_python_indicator", true)
         terminalOutputLimit = prefs.getInt("terminal_output_limit", 65536)
-        editorFontSize = prefs.getInt("editor_font_size", 14)
-        editorFontFamily = prefs.getString("editor_font_family", "Monospace") ?: "Monospace"
+        terminalFontSize = prefs.getInt("editor_font_size", 14)
+        appFontFamily = prefs.getString("editor_font_family", "Monospace") ?: "Monospace"
         // F1.5: Load tema yang dipersist (default RETRO jika belum ada)
         prefs.getString("theme_type", null)?.let { saved ->
             themeType = ZcodeThemeType.values().firstOrNull { it.name == saved } ?: ZcodeThemeType.RETRO
@@ -311,12 +338,12 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setFontSize(size: Int) {
-        editorFontSize = size
+        terminalFontSize = size
         prefs.edit().putInt("editor_font_size", size).apply()
     }
 
     fun setFontFamily(family: String) {
-        editorFontFamily = family
+        appFontFamily = family
         prefs.edit().putString("editor_font_family", family).apply()
     }
 
@@ -443,6 +470,19 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             }
             val finalName = uniqueFileName(displayName ?: "imported")
             FileManager.saveFile(filesDir, finalName, text)
+            // Audit 2026-08: catat asal file eksternal + tahan izin tulis persisten
+            // supaya menu SAVE bisa menimpa file asli tanpa minta izin lagi.
+            try {
+                resolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                // izin non-persisten tetap cukup untuk sesi ini; Save akan sopan gagal
+            }
+            externalOrigins[finalName] = uri.toString()
+            persistExternalOrigins()
             selectFile(finalName)
             true to "Diimport: $finalName"
         } catch (e: Exception) {
@@ -480,6 +520,78 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         var i = 2
         while ("${stem}_$i.py" in existing) i++
         return "${stem}_$i.py"
+    }
+
+    // ------------------------------------------------------------------
+    // Audit 2026-08: menu File di topbar (Open / Save / Save as)
+    // ------------------------------------------------------------------
+
+    /** Apakah file aktif berasal dari file manager (punya file asli di device)? */
+    fun hasExternalSource(): Boolean =
+        activeFile?.let { externalOrigins.containsKey(it) } == true
+
+    /**
+     * SAVE: timpa file asli di device (asal import / Save as terakhir).
+     * File internal workspace → pesan jujur: sudah tersimpan otomatis.
+     */
+    fun saveActiveToSource(): Pair<Boolean, String> {
+        val name = activeFile ?: return false to "Tidak ada file aktif"
+        val uriStr = externalOrigins[name]
+            ?: return false to "File internal tersimpan otomatis di workspace 🙂"
+        return try {
+            val resolver = getApplication<Application>().contentResolver
+            resolver.openOutputStream(Uri.parse(uriStr), "wt")?.use { out ->
+                out.write(activeCode.toByteArray(Charsets.UTF_8))
+            } ?: return false to "Gagal membuka stream tulis"
+            true to "Disimpan ke file asli ✔"
+        } catch (e: SecurityException) {
+            false to "Izin tulis dicabut Android — pakai Save as"
+        } catch (e: Exception) {
+            false to "Gagal save: ${e.message ?: "error tidak dikenal"}"
+        }
+    }
+
+    /**
+     * SAVE AS: tulis isi aktif ke URI pilihan user (SAF CreateDocument),
+     * lalu link URI itu sebagai asal file — Save berikutnya menimpa ke sana.
+     */
+    fun saveActiveAs(uri: Uri): Pair<Boolean, String> {
+        val name = activeFile ?: return false to "Tidak ada file aktif"
+        return try {
+            val resolver = getApplication<Application>().contentResolver
+            resolver.openOutputStream(uri, "wt")?.use { out ->
+                out.write(activeCode.toByteArray(Charsets.UTF_8))
+            } ?: return false to "Gagal membuka stream tulis"
+            try {
+                resolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (e: Exception) {
+                // best-effort; tanpa persisten Save tetap jalan sesi ini
+            }
+            externalOrigins[name] = uri.toString()
+            persistExternalOrigins()
+            true to "Disimpan sebagai file device ✔"
+        } catch (e: Exception) {
+            false to "Gagal save as: ${e.message ?: "error tidak dikenal"}"
+        }
+    }
+
+    private fun persistExternalOrigins() {
+        val o = JSONObject()
+        externalOrigins.forEach { (k, v) -> o.put(k, v) }
+        prefs.edit().putString("external_origins", o.toString()).apply()
+    }
+
+    private fun loadExternalOrigins() {
+        try {
+            val o = JSONObject(prefs.getString("external_origins", null) ?: "{}")
+            o.keys().forEach { k -> externalOrigins[k] = o.optString(k) }
+        } catch (e: Exception) {
+            externalOrigins.clear()
+        }
     }
 
     /**
@@ -534,6 +646,8 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                 if (activeFile == securedOld) activeFile = securedNew
                 val draft = fileDrafts.remove(securedOld)
                 if (draft != null) fileDrafts[securedNew] = draft
+                externalOrigins.remove(securedOld)?.let { externalOrigins[securedNew] = it }
+                persistExternalOrigins()
                 persistWorkspaceState()
                 return true
             }
@@ -545,6 +659,8 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         val secured = FileManager.secureFilename(filename) ?: return false
         val file = File(filesDir, secured)
         if (file.exists() && file.delete()) {
+            externalOrigins.remove(secured)
+            persistExternalOrigins()
             closeFile(secured)
             return true
         }
@@ -589,6 +705,8 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         openedFiles.forEach { FileManager.deleteFileIfExists(filesDir, it) }
         openedFiles.clear()
         fileDrafts.clear()
+        externalOrigins.clear()
+        persistExternalOrigins()
         activeFile = null
         activeCode = ""
         syntaxError = null
