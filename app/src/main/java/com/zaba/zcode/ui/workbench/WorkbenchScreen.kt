@@ -121,7 +121,8 @@ fun WorkbenchScreen(
     onRun: (String) -> Unit,
     onNavigateToPip: () -> Unit,
     onNavigateToAbout: () -> Unit,
-    onNavigateToSamples: () -> Unit
+    onNavigateToSamples: () -> Unit,
+    onNavigateToSettings: () -> Unit = {}
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -140,17 +141,21 @@ fun WorkbenchScreen(
     var showSnippets by remember { mutableStateOf(false) }
     var showTodoResults by remember { mutableStateOf(false) }
     var todoItems by remember { mutableStateOf<List<TodoItem>>(emptyList()) }
+    // F1.9: State cycle Change Case (upper → lower → title → upper…)
+    var changeCaseMode by remember { mutableStateOf("upper") }
 
     val context = LocalContext.current
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
     // F1.x (PERF): aksi dari drawer WAJIB menunggu drawer selesai menutup dulu.
-    // Tanpa ini, animasi drawer (≈200ms) tabrakan dengan compose layar baru /
+    // Tanpa ini, animasi drawer (≈250ms default Material3) tabrakan dengan compose layar baru /
     // buka dialog di frame yang sama → terasa lag/jeda di HP ampas. Menutup dulu
     // lalu bertindak membuat transisi ke layer baru terasa satu gerakan mulus.
+    // Duration diturunkan dari default 250ms → 150ms: cukup cepat terasa responsif,
+    // tapi tidak terlalu cepat sampai terasa kasar/snap di Infinix ARMv7.
     fun closeDrawerThen(action: suspend () -> Unit) {
         scope.launch {
-            drawerState.close()
+            drawerState.animateTo(DrawerValue.Closed, tween(durationMillis = 150))
             action()
         }
     }
@@ -199,6 +204,27 @@ fun WorkbenchScreen(
             }
             "snippets" -> {
                 showSnippets = true
+            }
+            // F1.9: Transform teks kecil (Kotlin/JS murni, tanpa pip)
+            "sort_lines" -> {
+                webViewRef.value?.evaluateJavascript("sortLines();", null)
+                pushCode()
+            }
+            "change_case" -> {
+                // F1.9: Cycle upper → lower → title → upper…
+                val mode = changeCaseMode
+                webViewRef.value?.evaluateJavascript("changeCase('$mode');", null)
+                pushCode()
+                // Cycle ke mode berikutnya
+                changeCaseMode = when (mode) {
+                    "upper" -> "lower"
+                    "lower" -> "title"
+                    else -> "upper"
+                }
+                toast("Change Case: ${mode.uppercase()}")
+            "trim_now" -> {
+                webViewRef.value?.evaluateJavascript("trimNow();", null)
+                pushCode()
             }
             "auto_trim_on_run" -> {
                 // BEHAVIOR: tidak ada eksekusi manual — jelaskan statusnya
@@ -351,24 +377,15 @@ fun WorkbenchScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
-                        Divider(color = Color.White.copy(alpha = 0.06f))
-
-                        // Clear All — aksi destruktif: merah + dialog konfirmasi tetap wajib
-                        Text(
-                            "Clear All Drafts & Files",
-                            fontSize = 14.sp,
-                            color = Color(0xFFFFB4AB),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    closeDrawerThen { confirmClearAll = true }
-                                }
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                        )
                     }
                 }
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
+
+                // F1.3: SETTINGS — di atas About (privasi & preferensi global)
+                DrawerItem("SETTINGS") {
+                    closeDrawerThen { onNavigateToSettings() }
+                }
 
                 // About — warga paling bontot di sidebar (permintaan user, redesign 2026-08)
                 DrawerItem("About & Contribute") {
@@ -507,7 +524,8 @@ fun WorkbenchScreen(
                     EditorScreen(
                         code = vm.activeCode,
                         onCodeChange = { vm.updateCode(it) },
-                        webViewRef = webViewRef
+                        webViewRef = webViewRef,
+                        vm = vm // F1.7 & F1.8: apply editor settings ke CM6 bridge
                     )
                 }
 
