@@ -168,6 +168,8 @@ Semua di folder `docs/`:
 - `TOOLS_CATALOG.md`
 - `TERMINAL_THEMES.md`
 - `SESSION_SUMMARY_2026_08.md` (dokumen ini)
+- `SETTINGS_DESIGN.md` — usulan isi halaman Settings
+- `TASK_ROADMAP_2026_08.md` — alur kerja terurut (dampak user dulu)
 
 ---
 
