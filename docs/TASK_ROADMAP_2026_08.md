@@ -25,12 +25,22 @@ teknis.
 - **Jangan mikro-commit berisik** ("typo", "ganti spasi" terpisah) — gabungkan
   dengan perubahan yang relevan.
 
-### B. Fase = PR, bukan commit
-- **Satu fase = satu Pull Request** berisi **banyak commit kecil** di dalamnya.
-- Fase dianggap selesai & boleh merge hanya setelah: (a) CI hijau, (b) **UAT di
-  Infinix lolos**, (c) user setuju.
-- **Fase 3 beda sendiri:** itemnya berisiko, jadi jalankan **satu per satu dalam
-  spike terisolasi** (jangan dibundel dalam satu PR besar). Gampang revert.
+### B. Branch & PR (model yang dipakai: "satu rumah sampai puas")
+- **Satu branch kerja** (`arena/019fe8ce-zcode`) menampung **semua fase** sampai user
+  puas; commit-nya tetap kecil per perubahan koheren.
+- **Satu PR (DRAFT)** dibuka dari branch ini sebagai penanda & tempat diskusi;
+  **TIDAK di-merge sampai user memberi lampu hijau di akhir.**
+- **CI tetap jalan per push ke branch/PR** walau belum merge — jadi APK/artifact
+  untuk UAT tetap dihasilkan. Alur: push → CI hijau → user download artifact →
+  UAT di Infinix → baru putuskan merge.
+- Fase yang sudah UAT-lolos tidak perlu terburu di-merge; cukup menumpuk di
+  branch. Pecah PR/merge hanya bila atas permintaan user.
+- Fase 3 tetap diperlakukan istimewa: item berisiko dikerjakan **satu per satu**
+  sebagai spike terisolasi (commit/branch eksperimen bila perlu), mudah revert.
+
+> Alasan model ini (berdasarkan pengalaman user): user tidak harus segera merge
+> (yang akan menandai akhir sesi), kode tetap aman di remote, dan ganti model/sesi
+> di Arena tidak menghilangkan pekerjaan karena semua terdokumentasi & ter-push.
 
 ### C. Guard & kejujuran keterbatasan
 - Guard sandbox: `pytest` (fase0/1/3), `bash tools/check.sh`, `py_compile`
@@ -148,12 +158,14 @@ revert. Dikerjakan **setelah Fase 1–2 stabil** dan atas persetujuan user.
 
 ## Cara bergerak (ringkas)
 
-1. Kerjakan **per item dalam fase**, buat commit per perubahan koheren.
-2. Satu fase = satu PR; CI hijau + UAT Infinix + approval user → merge.
-3. Selalu update dokumen bila kenyataan implementasi berbeda (rencana bukan kitab).
-4. Urutan bisa berubah atas persetujuan user bila ada keluhan lebih mendesak.
-5. Butuh ubah workflow? Serahkan file lengkap ke user. CI merah tak terbaca?
-   Minta log asli, jangan menebak.
+1. Kerjakan **per item dalam fase**, buat commit per perubahan koheren; push ke
+   branch kerja yang sama.
+2. Jangan merge apa pun tanpa perintah user. PR dibiarkan DRAFT sampai user puas.
+3. Tiap push memicu CI; kalau hijau, user UAT artifact di Infinix.
+4. Selalu update dokumen bila kenyataan implementasi berbeda (rencana bukan kitab).
+5. Urutan bisa berubah atas persetujuan user bila ada keluhan lebih mendesak.
+6. Butuh ubah workflow? Serahkan file lengkap + link raw ke user. CI merah tak
+   terbaca? Minta log asli, jangan menebak.
 
 ---
 
