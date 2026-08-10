@@ -35,6 +35,8 @@ import {
   bracketMatching,
   indentOnInput,
   HighlightStyle,
+  foldGutter,
+  foldKeymap,
 } from "@codemirror/language";
 import { search, searchKeymap, openSearchPanel, highlightSelectionMatches } from "@codemirror/search";
 import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
@@ -290,6 +292,7 @@ function buildState(doc) {
       history(),
       bracketMatching(),
       indentOnInput(),
+      foldGutter(),
       EditorView.lineWrapping, // wrap: true (perilaku Ace lama)
       EditorState.tabSize.of(4),
       indentUnit.of("    "), // useSoftTabs + tabSize 4
@@ -297,6 +300,7 @@ function buildState(doc) {
         ...defaultKeymap,
         ...historyKeymap,
         ...searchKeymap,
+        ...foldKeymap,
         indentWithTab,
       ]),
       python(),

@@ -56,6 +56,34 @@ object PluginRunner {
         return parse(json, code)
     }
 
+    private fun runChaquopyWithParam(context: Context, pluginId: String, code: String, param: String): PluginResult {
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(context.applicationContext))
+        }
+        return try {
+            val json = Python.getInstance()
+                .getModule("zcode_plugins")
+                .callAttr("run_json_with_param", pluginId, code, param)
+                .toString()
+            parse(json, code)
+        } catch (e: Exception) {
+            // fallback: coba panggil run_json lama bila fungsi baru belum ada
+            runChaquopy(context, pluginId, code)
+        }
+    }
+
+    fun runWithParam(context: Context?, pluginId: String, code: String, param: String): PluginResult = try {
+        if (context != null && isChaquopyAvailable()) {
+            runChaquopyWithParam(context, pluginId, code, param)
+        } else {
+            runSubprocessWithParam(pluginId, code, param)
+        }
+    } catch (e: PyException) {
+        PluginResult(false, code, "Python error: ${e.message}")
+    } catch (e: Exception) {
+        PluginResult(false, code, "Plugin runner error: ${e.message}")
+    }
+
     private fun runSubprocess(pluginId: String, code: String): PluginResult {
         val script = System.getenv("ZCODE_PLUGINS_PY")
             ?: listOf(
@@ -86,6 +114,41 @@ object PluginRunner {
             parse(out.trim().lines().lastOrNull() ?: "", code)
         } finally {
             tmp.delete()
+        }
+    }
+
+    private fun runSubprocessWithParam(pluginId: String, code: String, param: String): PluginResult {
+        val script = System.getenv("ZCODE_PLUGINS_PY")
+            ?: listOf(
+                "app/src/main/python/zcode_plugins.py",
+                "../app/src/main/python/zcode_plugins.py"
+            )
+                .map { File(it) }
+                .firstOrNull { it.isFile }
+                ?.absolutePath
+        if (script == null) {
+            return PluginResult(
+                false, code,
+                "Plugin Python backend tidak tersedia di mode dev (zcode_plugins.py tidak ditemukan — set ZCODE_PLUGINS_PY)."
+            )
+        }
+        val tmp = File.createTempFile("zcode_plugin_in_", ".py")
+        val paramFile = File.createTempFile("zcode_plugin_param_", ".txt")
+        return try {
+            tmp.writeText(code)
+            paramFile.writeText(param)
+            val proc = ProcessBuilder("python3", script, pluginId, tmp.absolutePath, paramFile.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+            val out = proc.inputStream.bufferedReader().readText()
+            if (!proc.waitFor(TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                proc.destroyForcibly()
+                return PluginResult(false, code, "Plugin timeout (> ${TIMEOUT_MS / 1000}s)")
+            }
+            parse(out.trim().lines().lastOrNull() ?: "", code)
+        } finally {
+            tmp.delete()
+            paramFile.delete()
         }
     }
 

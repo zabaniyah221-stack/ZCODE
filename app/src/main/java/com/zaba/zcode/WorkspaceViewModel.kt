@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.zaba.zcode.core.editor.Checker
+import com.zaba.zcode.core.editor.Problem
+import com.zaba.zcode.core.editor.Severity
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
@@ -42,12 +44,16 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         app.getSharedPreferences("zcode_workspace", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var validationJob: Job? = null
+    private var saveJob: Job? = null
+    private var pendingSave = false
 
     var themeType by mutableStateOf(ZcodeThemeType.RETRO)
     val openedFiles = mutableStateListOf<String>()
     var activeFile by mutableStateOf<String?>(null)
     var activeCode by mutableStateOf("")
     var syntaxError by mutableStateOf<String?>(null)
+    var problems by mutableStateOf<List<Problem>>(emptyList())
+        private set
 
     /** Symbol bar (QuickTools) di bawah editor — toggle user, persist di SharedPreferences. */
     var symbolBarEnabled by mutableStateOf(true)
@@ -63,6 +69,16 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     /** F2.4: Toggle indikator "Menyalakan Python…" di terminal — persist di SharedPreferences. */
     var showPythonIndicator by mutableStateOf(true)
+        private set
+
+    /** F2.2: Batas output terminal (64KB, 256KB, 1MB). Default 64KB (65536 char). */
+    var terminalOutputLimit by mutableStateOf(65536)
+        private set
+
+    /** F2.x: Editor font size & family — persist, dipakai Editor & Terminal. */
+    var editorFontSize by mutableStateOf(14)
+        private set
+    var editorFontFamily by mutableStateOf("Monospace")
         private set
 
     /**
@@ -91,6 +107,20 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         ExecutionEngine.workspaceDirPath = filesDir.absolutePath
         loadSavedWorkspace()
         loadPluginFlags()
+        scope.launch(Dispatchers.IO) {
+            preWarmPython()
+        }
+    }
+
+    private fun preWarmPython() {
+        try {
+            if (com.zaba.zcode.core.plugins.PluginRunner.isChaquopyAvailable() && !com.chaquo.python.Python.isStarted()) {
+                com.chaquo.python.Python.start(com.chaquo.python.android.AndroidPlatform(getApplication()))
+                com.chaquo.python.Python.getInstance().getModule("zcode_runner")
+            }
+        } catch (e: Exception) {
+            // fail-safe
+        }
     }
 
     private fun loadPluginFlags() {
@@ -119,6 +149,23 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 PluginRunner.run(getApplication(), pythonId, code)
+            }
+            if (result.ok && result.code != code) {
+                updateCode(result.code)
+            }
+            onDone(result.ok, result.report)
+        }
+    }
+
+    /**
+     * Overload untuk plugin yang butuh parameter tambahan (go_to_definition, rename_symbol).
+     * Param diteruskan ke PluginRunner.runWithParam.
+     */
+    fun runPythonPlugin(pythonId: String, param: String, onDone: (Boolean, String) -> Unit) {
+        val code = activeCode
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                PluginRunner.runWithParam(getApplication(), pythonId, code, param)
             }
             if (result.ok && result.code != code) {
                 updateCode(result.code)
@@ -214,6 +261,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         highlightSelectionMatchesEnabled = prefs.getBoolean("highlight_selection_matches", true)
         // F2.4: Load preferensi indikator Python (default ON)
         showPythonIndicator = prefs.getBoolean("show_python_indicator", true)
+        terminalOutputLimit = prefs.getInt("terminal_output_limit", 65536)
+        editorFontSize = prefs.getInt("editor_font_size", 14)
+        editorFontFamily = prefs.getString("editor_font_family", "Monospace") ?: "Monospace"
         // F1.5: Load tema yang dipersist (default RETRO jika belum ada)
         prefs.getString("theme_type", null)?.let { saved ->
             themeType = ZcodeThemeType.values().firstOrNull { it.name == saved } ?: ZcodeThemeType.RETRO
@@ -252,6 +302,21 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("show_python_indicator", enabled).apply()
     }
 
+    fun setOutputLimit(limit: Int) {
+        terminalOutputLimit = limit
+        prefs.edit().putInt("terminal_output_limit", limit).apply()
+    }
+
+    fun setFontSize(size: Int) {
+        editorFontSize = size
+        prefs.edit().putInt("editor_font_size", size).apply()
+    }
+
+    fun setFontFamily(family: String) {
+        editorFontFamily = family
+        prefs.edit().putString("editor_font_family", family).apply()
+    }
+
     /**
      * Cycle tema satu tombol (redesign 2026-08): tap-tap sampai cocok.
      * Urutan mengikuti enum ZcodeThemeType: RETRO → DRACULA → TOKYO_NIGHT → RETRO…
@@ -286,6 +351,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (filename !in openedFiles) {
             openedFiles.add(filename)
         }
+        flushSaveSync()
         activeFile = filename
         activeCode = FileManager.readFile(filesDir, filename).getOrDefault("")
         fileDrafts[filename] = activeCode
@@ -293,12 +359,34 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         persistWorkspaceState()
     }
 
+    fun flushSaveSync() {
+        val current = activeFile ?: return
+        val codeToSave = activeCode
+        if (pendingSave) {
+            saveJob?.cancel()
+            try {
+                FileManager.saveFile(filesDir, current, codeToSave)
+            } catch (e: Exception) {
+                // ignore
+            }
+            pendingSave = false
+        }
+    }
+
     fun updateCode(newCode: String) {
         if (newCode == activeCode) return
         activeCode = newCode
         val current = activeFile ?: return
         fileDrafts[current] = newCode
-        FileManager.saveFile(filesDir, current, newCode)
+
+        pendingSave = true
+        saveJob?.cancel()
+        saveJob = scope.launch {
+            delay(600)
+            withContext(Dispatchers.IO) {
+                flushSaveSync()
+            }
+        }
         validateSyntaxDebounced(newCode)
     }
 
@@ -407,6 +495,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun closeFile(filename: String) {
+        if (activeFile == filename) {
+            flushSaveSync()
+        }
         val idx = openedFiles.indexOf(filename)
         if (idx == -1) return
         openedFiles.removeAt(idx)
@@ -466,8 +557,10 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         validationJob = scope.launch {
             delay(800)
             withContext(Dispatchers.Default) {
-                val err = Checker.checkSyntax(code)
+                val list = Checker.checkSyntaxList(code)
+                val err = if (list.isNotEmpty()) list.first().message else null
                 withContext(Dispatchers.Main) {
+                    problems = list
                     syntaxError = err
                 }
             }
@@ -484,8 +577,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun optimizeActiveImports() {
-        val optimized = PluginHost.optimizeImports(activeCode)
-        updateCode(optimized)
+        runPythonPlugin("organize_imports") { _, _ -> }
     }
 
     fun clearAllDrafts() {
@@ -502,6 +594,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         super.onCleared()
+        flushSaveSync()
         scope.cancel()
     }
 }
