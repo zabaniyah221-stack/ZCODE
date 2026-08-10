@@ -33,6 +33,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        vm.flushSaveSync()
+    }
 }
 
 @Composable
@@ -74,7 +79,9 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 filesDir = Paths.filesDir(appContext),
                 context = appContext,
                 onBack = { nav.navigateUp() },
-                showPythonIndicator = vm.showPythonIndicator // F2.4: toggle indikator Python
+                showPythonIndicator = vm.showPythonIndicator, // F2.4: toggle indikator Python
+                terminalOutputLimit = vm.terminalOutputLimit,
+                themeType = vm.themeType
             )
         }
         composable("pip") {

@@ -7,7 +7,7 @@ plugins {
     // Chaquopy 15.0.1 — Python 3.11 in-process runtime (Fase 1 on-device execution)
     // Versi ini mendukung AGP 7.0–8.5 (kita 8.2.2) + Python 3.11 (armv7 masih didukung;
     // 3.12+ drop 32-bit, lihat changelog #709)
-    id("com.chaquo.python") version "15.0.1" apply false
+    id("com.chaquo.python") version "17.0.0" apply false
 }
 
 // Version catalog is single source — no hardcoded 1.2.0 drift

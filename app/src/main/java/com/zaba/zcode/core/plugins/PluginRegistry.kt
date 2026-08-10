@@ -36,7 +36,7 @@ object PluginRegistry {
         PluginInfo(
             "optimize_imports", "Optimize Auto-Imports",
             "Tambahkan import standar (os, sys, math, …) yang terpakai",
-            PluginKind.ACTION
+            PluginKind.ACTION, pythonId = "organize_imports"
         ),
         PluginInfo(
             "duplicate_line", "Duplicate Active Line",
@@ -70,6 +70,21 @@ object PluginRegistry {
         PluginInfo(
             "todo_extractor", "TODO Extractor",
             "Kumpulkan TODO/FIXME/HACK — tap item untuk lompat ke baris",
+            PluginKind.ACTION
+        ),
+        PluginInfo(
+            "outline_generator", "Outline & Symbols",
+            "Daftar fungsi dan kelas dari AST Python — tap untuk lompat ke baris",
+            PluginKind.ACTION
+        ),
+        PluginInfo(
+            "go_to_definition", "Go to Definition",
+            "Lompat ke definisi fungsi, kelas, atau variabel terpilih",
+            PluginKind.ACTION
+        ),
+        PluginInfo(
+            "rename_symbol", "Rename Symbol",
+            "Ganti nama simbol terpilih di seluruh file secara aman",
             PluginKind.ACTION
         ),
         PluginInfo(

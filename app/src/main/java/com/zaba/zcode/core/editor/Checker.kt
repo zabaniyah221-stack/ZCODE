@@ -1,5 +1,15 @@
 package com.zaba.zcode.core.editor
 
+enum class Severity { ERROR, WARNING, INFO }
+
+data class Problem(
+    val severity: Severity,
+    val message: String,
+    val line: Int,
+    val column: Int? = null,
+    val source: String = "checker"
+)
+
 /**
  * Checker — offline lightweight Python syntax validator (Fase 2).
  * Single-pass scanner, tanpa parser berat:
@@ -177,5 +187,50 @@ object Checker {
             return "Unterminated string literal on line $line"
         }
         return checkBrackets(code)
+    }
+
+
+    fun checkSyntaxList(code: String): List<Problem> {
+        val list = mutableListOf<Problem>()
+
+        val line = unterminatedStringLine(code)
+        if (line != null) {
+            list.add(Problem(Severity.ERROR, "Unterminated string literal on line $line", line))
+        }
+
+        val stripped = stripCommentsAndStrings(code)
+        val stack = mutableListOf<Pair<Char, Int>>()
+        var lineNum = 1
+        for (ch in stripped) {
+            if (ch == '\n') {
+                lineNum++
+                continue
+            }
+            when (ch) {
+                '(', '[', '{' -> stack.add(ch to lineNum)
+                ')', ']', '}' -> {
+                    if (stack.isEmpty()) {
+                        list.add(Problem(Severity.ERROR, "Unexpected closed bracket '$ch' on line $lineNum", lineNum))
+                    } else {
+                        val (open, openLine) = stack.removeAt(stack.size - 1)
+                        val match = when (ch) {
+                            ')' -> open == '('
+                            ']' -> open == '['
+                            else -> open == '{'
+                        }
+                        if (!match) {
+                            list.add(Problem(Severity.ERROR, "Mismatched bracket on line $lineNum: '$ch' does not match '$open' on line $openLine", lineNum))
+                        }
+                    }
+                }
+            }
+        }
+
+        if (stack.isNotEmpty()) {
+            val (open, openLine) = stack.last()
+            list.add(Problem(Severity.ERROR, "Unbalanced brackets: '$open' on line $openLine has no matching closed bracket", openLine))
+        }
+
+        return list
     }
 }

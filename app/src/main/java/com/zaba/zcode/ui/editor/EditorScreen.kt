@@ -149,12 +149,16 @@ class EditorBridge(
 ) {
     @android.webkit.JavascriptInterface
     fun onCodeChange(code: String) {
-        onChange(code)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            onChange(code)
+        }
     }
 
     @android.webkit.JavascriptInterface
     fun onEditorReady() {
-        onReady()
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            onReady()
+        }
     }
 
     @android.webkit.JavascriptInterface

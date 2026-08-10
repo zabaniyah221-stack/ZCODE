@@ -58,6 +58,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -127,6 +129,7 @@ fun WorkbenchScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
+    var showTerminalOverlay by rememberSaveable { mutableStateOf(false) }
 
     // state dialog
     var fileToRename by remember { mutableStateOf<String?>(null) }
@@ -141,6 +144,13 @@ fun WorkbenchScreen(
     var showSnippets by remember { mutableStateOf(false) }
     var showTodoResults by remember { mutableStateOf(false) }
     var todoItems by remember { mutableStateOf<List<TodoItem>>(emptyList()) }
+    var showOutlineResults by remember { mutableStateOf(false) }
+    var outlineSymbols by remember { mutableStateOf<List<OutlineItem>>(emptyList()) }
+    var showGoToDefinitionDialog by remember { mutableStateOf(false) }
+    var goToDefinitionQuery by remember { mutableStateOf("") }
+    var showRenameSymbolDialog by remember { mutableStateOf(false) }
+    var renameOldName by remember { mutableStateOf("") }
+    var renameNewSymbolName by remember { mutableStateOf("") }
     // F1.9: State cycle Change Case (upper → lower → title → upper…)
     var changeCaseMode by remember { mutableStateOf("upper") }
 
@@ -202,6 +212,31 @@ fun WorkbenchScreen(
                 todoItems = TodoExtractor.extract(vm.activeCode)
                 showTodoResults = true
             }
+            "outline_generator" -> {
+                toast("Membaca Outline/Simbol…")
+                vm.runPythonPlugin("outline_generator") { ok, report ->
+                    if (ok) {
+                        outlineSymbols = report.lines().filter { it.isNotBlank() }.mapNotNull { line ->
+                            val parts = line.split(":")
+                            if (parts.size >= 3) {
+                                val type = parts[0]
+                                val name = parts[1]
+                                val lineNum = parts[2].toIntOrNull() ?: 1
+                                OutlineItem(type, name, lineNum)
+                            } else null
+                        }
+                        showOutlineResults = true
+                    } else {
+                        toast("Gagal membaca outline: $report")
+                    }
+                }
+            }
+            "go_to_definition" -> {
+                showGoToDefinitionDialog = true
+            }
+            "rename_symbol" -> {
+                showRenameSymbolDialog = true
+            }
             "snippets" -> {
                 showSnippets = true
             }
@@ -246,6 +281,7 @@ fun WorkbenchScreen(
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -420,9 +456,8 @@ fun WorkbenchScreen(
                     onClick = {
                         // BEHAVIOR auto_trim_on_run berjalan di sini (F5)
                         vm.applyAutoTrimIfEnabled()
-                        pushCode()
-                        val active = vm.activeFile ?: "main.py"
-                        onRun(active)
+                        vm.flushSaveSync()
+                        showTerminalOverlay = true
                     },
                     // S6: FAB syntax-aware — MERAH saat ada error syntax tapi TETAP
                     // BISA RUN (warn-only never block; lesson RUN-mati Zabacode)
@@ -502,23 +537,8 @@ fun WorkbenchScreen(
                     }
                 }
 
-                // Banner syntax warning — soft, membulat, tidak mengganggu
-                vm.syntaxError?.let { err ->
-                    Surface(
-                        color = Color(0x1AFF4B4B),
-                        shape = RoundedCornerShape(6.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            "⚠ Syntax: $err",
-                            fontSize = 11.sp,
-                            color = Color(0xFFFFB4AB),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
+                // F2.5: Problems Banner (VPP - Visual Problems Panel)
+                ProblemsBanner(problems = vm.problems, onGotoLine = { gotoLine(it) })
 
                 // Editor (CodeMirror 6 WebView)
                 Box(modifier = Modifier.weight(1f)) {
@@ -536,6 +556,26 @@ fun WorkbenchScreen(
                 }
             }
         }
+    }
+    } // End of ModalNavigationDrawer wrapping Box
+
+    if (showTerminalOverlay) {
+        BackHandler(enabled = showTerminalOverlay) {
+            showTerminalOverlay = false
+        }
+        val activeFileForTerminal = vm.activeFile ?: "main.py"
+        val terminalFilesDir = com.zaba.zcode.core.files.Paths.filesDir(context)
+        com.zaba.zcode.ui.terminal.TerminalScreen(
+            filename = activeFileForTerminal,
+            filesDir = terminalFilesDir,
+            context = context,
+            onBack = { showTerminalOverlay = false },
+            showPythonIndicator = vm.showPythonIndicator,
+            terminalOutputLimit = vm.terminalOutputLimit,
+            themeType = vm.themeType,
+            editorFontSize = vm.editorFontSize,
+            editorFontFamily = vm.editorFontFamily
+        )
     }
 
     // ---------- Dialog: Rename ----------
@@ -650,6 +690,99 @@ fun WorkbenchScreen(
             onJump = { line ->
                 showTodoResults = false
                 gotoLine(line)
+            }
+        )
+    }
+
+    // ---------- Dialog: Outline / Symbols ----------
+    if (showOutlineResults) {
+        OutlineDialog(
+            items = outlineSymbols,
+            onDismiss = { showOutlineResults = false },
+            onJump = { line ->
+                showOutlineResults = false
+                gotoLine(line)
+            }
+        )
+    }
+
+    // ---------- Dialog: Go to Definition ----------
+    if (showGoToDefinitionDialog) {
+        AlertDialog(
+            onDismissRequest = { showGoToDefinitionDialog = false },
+            title = { Text("Go to Definition", fontSize = 16.sp) },
+            text = {
+                OutlinedTextField(
+                    value = goToDefinitionQuery,
+                    onValueChange = { goToDefinitionQuery = it },
+                    label = { Text("Nama Simbol (Fungsi/Kelas/Variabel)", fontSize = 12.sp) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showGoToDefinitionDialog = false
+                    if (goToDefinitionQuery.isNotBlank()) {
+                        vm.runPythonPlugin("go_to_definition", goToDefinitionQuery) { ok, report ->
+                            val line = report.trim().toIntOrNull() ?: 0
+                            if (line > 0) {
+                                gotoLine(line)
+                                toast("Lompat ke baris $line!")
+                            } else {
+                                toast("Definisi simbol '$goToDefinitionQuery' tidak ditemukan.")
+                            }
+                        }
+                    }
+                }) { Text("Cari") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGoToDefinitionDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
+    // ---------- Dialog: Rename Symbol ----------
+    if (showRenameSymbolDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameSymbolDialog = false },
+            title = { Text("Rename Symbol (Satu File)", fontSize = 16.sp) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = renameOldName,
+                        onValueChange = { renameOldName = it },
+                        label = { Text("Nama Simbol Lama", fontSize = 12.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = renameNewSymbolName,
+                        onValueChange = { renameNewSymbolName = it },
+                        label = { Text("Nama Simbol Baru", fontSize = 12.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRenameSymbolDialog = false
+                    if (renameOldName.isNotBlank() && renameNewSymbolName.isNotBlank()) {
+                        vm.runPythonPlugin("rename_symbol", "$renameOldName:$renameNewSymbolName") { ok, report ->
+                            if (ok) {
+                                pushCode()
+                                toast(report)
+                            } else {
+                                toast("Gagal: $report")
+                            }
+                        }
+                    }
+                }) { Text("Ganti Nama") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameSymbolDialog = false }) { Text("Batal") }
             }
         )
     }
@@ -1149,6 +1282,177 @@ private fun DrawerItem(label: String, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     )
+
+
+@Composable
+private fun ProblemsBanner(
+    problems: List<com.zaba.zcode.core.editor.Problem>,
+    onGotoLine: (Int) -> Unit
+) {
+    if (problems.isEmpty()) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    val bgColor = Color(0x1AFF4B4B)
+    val textColor = Color(0xFFFFB4AB)
+    val icon = "❌"
+
+    Surface(
+        color = bgColor,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .clickable { expanded = !expanded }
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "$icon ",
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = problems.first().message,
+                    fontSize = 11.sp,
+                    color = textColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (problems.size > 1 && !expanded) {
+                    Surface(
+                        color = textColor.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp)
+                    ) {
+                        Text(
+                            text = "(+${problems.size - 1})",
+                            fontSize = 10.sp,
+                            color = textColor,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = if (expanded) "▴" else "▾",
+                    fontSize = 12.sp,
+                    color = textColor
+                )
+            }
+
+            if (expanded) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Divider(color = textColor.copy(alpha = 0.15f))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Daftar Masalah (${problems.size}):",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textColor,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 140.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    problems.forEach { problem ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onGotoLine(problem.line)
+                                }
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "❌ Baris ${problem.line}: ",
+                                fontSize = 11.sp,
+                                color = textColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = problem.message.replace("on line ${problem.line}", "").trim(),
+                                fontSize = 11.sp,
+                                color = textColor.copy(alpha = 0.9f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+data class OutlineItem(val type: String, val name: String, val line: Int)
+
+@Composable
+fun OutlineDialog(
+    items: List<OutlineItem>,
+    onDismiss: () -> Unit,
+    onJump: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Outline / Symbols", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            if (items.isEmpty()) {
+                Text("Tidak ada kelas atau fungsi ditemukan njiir 🤷", fontSize = 13.sp)
+            } else {
+                Column(modifier = Modifier.heightIn(max = 280.dp)) {
+                    Text("Pilih simbol untuk lompat ke baris:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(items) { item ->
+                            val icon = when (item.type) {
+                                "CLASS" -> "🗂️"
+                                "FUNC" -> "λ"
+                                "METHOD" -> "⚙️"
+                                else -> "⚓"
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onJump(item.line) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(icon, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = item.name,
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Text(
+                                        text = "Baris ${item.line}",
+                                        fontSize = 10.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                            Divider(color = Color.White.copy(alpha = 0.05f))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Tutup") }
+        }
+    )
+}
 }
 
 

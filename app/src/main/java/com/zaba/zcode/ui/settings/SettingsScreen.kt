@@ -1,6 +1,8 @@
 package com.zaba.zcode.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -96,6 +98,20 @@ fun SettingsScreen(
                 )
             }
 
+            item {
+                FontSizeRow(
+                    current = vm.editorFontSize,
+                    onSelect = { vm.setFontSize(it) }
+                )
+            }
+
+            item {
+                FontFamilyRow(
+                    current = vm.editorFontFamily,
+                    onSelect = { vm.setFontFamily(it) }
+                )
+            }
+
             item { SettingsDivider() }
 
             // ===========================================================
@@ -157,6 +173,14 @@ fun SettingsScreen(
                     description = "Tampilkan status cold-start Python di terminal",
                     checked = vm.showPythonIndicator,
                     onCheckedChange = { vm.setPythonIndicator(it) }
+                )
+            }
+
+            // F2.2: Batas Output Terminal (Ring Buffer)
+            item {
+                OutputLimitRow(
+                    current = vm.terminalOutputLimit,
+                    onSelect = { vm.setOutputLimit(it) }
                 )
             }
 
@@ -324,7 +348,8 @@ private fun ThemePickerRow(
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
         ) {
             ZcodeThemeType.values().forEach { theme ->
                 val isSelected = theme == current
@@ -345,4 +370,129 @@ private fun ThemePickerRow(
             }
         }
     }
+
+
+@Composable
+private fun OutputLimitRow(
+    current: Int,
+    onSelect: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            "Batas Output Terminal",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            listOf(65536 to "64 KB", 262144 to "256 KB", 1048576 to "1 MB").forEach { (limit, label) ->
+                val isSelected = limit == current
+                Surface(
+                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.clickable { onSelect(limit) }
+                ) {
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun FontSizeRow(
+    current: Int,
+    onSelect: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            "Ukuran Font (Editor & Terminal)",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            listOf(10, 12, 14, 16, 18, 20).forEach { size ->
+                val isSelected = size == current
+                Surface(
+                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.clickable { onSelect(size) }
+                ) {
+                    Text(
+                        text = "${size}px",
+                        fontSize = 12.sp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FontFamilyRow(
+    current: String,
+    onSelect: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Text(
+            "Jenis Font (Coding)",
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            listOf("Monospace", "Roboto Mono", "Courier", "Consolas").forEach { family ->
+                val isSelected = family == current
+                Surface(
+                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.clickable { onSelect(family) }
+                ) {
+                    Text(
+                        text = family,
+                        fontSize = 12.sp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 }
