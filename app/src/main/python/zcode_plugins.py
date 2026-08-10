@@ -229,6 +229,219 @@ class VariableTypeHintGenerator:
 
 
 # ---------------------------------------------------------------------------
+class OrganizeImports:
+    """Sorts imports according to PEP-8 (stdlib -> third-party -> local) and removes unused ones."""
+
+    STDLIB_MODULES = {
+        "os", "sys", "math", "json", "time", "random", "datetime", "urllib", "collections",
+        "itertools", "functools", "re", "xml", "csv", "hashlib", "socket", "threading",
+        "multiprocessing", "subprocess", "logging", "ast", "typing", "shutil", "tempfile",
+        "io", "pathlib", "argparse", "uuid", "base64", "select", "selectors", "asyncio"
+    }
+
+    @staticmethod
+    def generate(code: str) -> tuple:
+        report = []
+        try:
+            tree = ast.parse(code)
+        except Exception as e:
+            return code, [f"Gagal parse AST karena kesalahan sintaksis: {str(e)}"]
+
+        # 1. Kumpulkan semua nama yang dipakai di seluruh file (selain statement import)
+        used_names = set()
+        class NameVisitor(ast.NodeVisitor):
+            def visit_Name(self, node):
+                used_names.add(node.id)
+                self.generic_visit(node)
+            def visit_Attribute(self, node):
+                if isinstance(node.value, ast.Name):
+                    used_names.add(node.value.id)
+                used_names.add(node.attr)
+                self.generic_visit(node)
+
+        visitor = NameVisitor()
+        for node in tree.body:
+            if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                visitor.visit(node)
+
+        # 2. Cari semua statement import di level paling atas
+        imports_stdlib = []
+        imports_thirdparty = []
+        imports_local = []
+
+        import_nodes = []
+        removed_lines_intervals = []
+
+        for node in tree.body:
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                import_nodes.append(node)
+                end_line = getattr(node, "end_lineno", node.lineno)
+                removed_lines_intervals.append((node.lineno - 1, end_line))
+
+        if not import_nodes:
+            return code, ["Tidak ada statement import yang ditemukan."]
+
+        for node in import_nodes:
+            used_names_in_node = []
+            for name_alias in node.names:
+                imported_name = name_alias.asname or name_alias.name.split(".")[0]
+                if imported_name in used_names:
+                    used_names_in_node.append(name_alias)
+                else:
+                    report.append(f"Membuang import tidak terpakai: '''{name_alias.name}'''")
+
+            if not used_names_in_node:
+                continue
+
+            module_name = ""
+            if isinstance(node, ast.Import):
+                module_name = node.names[0].name.split(".")[0]
+            elif isinstance(node, ast.ImportFrom):
+                if node.module:
+                    module_name = node.module.split(".")[0]
+
+            is_stdlib = module_name in OrganizeImports.STDLIB_MODULES
+            is_local = isinstance(node, ast.ImportFrom) and node.level > 0
+
+            import_str = ""
+            if isinstance(node, ast.Import):
+                import_str = "import " + ", ".join(f"{n.name} as {n.asname}" if n.asname else n.name for n in used_names_in_node)
+            elif isinstance(node, ast.ImportFrom):
+                dots = "." * node.level
+                import_str = f"from {dots}{node.module or '''''' } import " + ", ".join(f"{n.name} as {n.asname}" if n.asname else n.name for n in used_names_in_node)
+
+            if is_stdlib:
+                imports_stdlib.append(import_str)
+            elif is_local:
+                imports_local.append(import_str)
+            else:
+                imports_thirdparty.append(import_str)
+
+        imports_stdlib.sort()
+        imports_thirdparty.sort()
+        imports_local.sort()
+
+        import_blocks = []
+        if imports_stdlib:
+            import_blocks.append("\n".join(imports_stdlib))
+        if imports_thirdparty:
+            import_blocks.append("\n".join(imports_thirdparty))
+        if imports_local:
+            import_blocks.append("\n".join(imports_local))
+
+        new_imports_text = "\n\n".join(import_blocks)
+
+        lines = code.split("\n")
+        to_delete = set()
+        for start, end in removed_lines_intervals:
+            for l in range(start, end):
+                to_delete.add(l)
+
+        cleaned_lines = [line for idx, line in enumerate(lines) if idx not in to_delete]
+
+        while cleaned_lines and not cleaned_lines[0].strip():
+            cleaned_lines.pop(0)
+
+        new_code = new_imports_text + "\n\n" + "\n".join(cleaned_lines)
+        report.append("Imports berhasil diurutkan berdasarkan standar PEP-8.")
+        return new_code, report
+
+
+
+class OutlineGenerator:
+    """Parses Python AST to extract a list of classes and functions/methods."""
+
+    @staticmethod
+    def generate(code: str) -> tuple:
+        try:
+            tree = ast.parse(code)
+        except Exception as e:
+            return code, [f"Error: {str(e)}"]
+
+        symbols = []
+        class OutlineVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.current_class = None
+
+            def visit_ClassDef(self, node):
+                symbols.append(f"CLASS:{node.name}:{node.lineno}")
+                old_class = self.current_class
+                self.current_class = node.name
+                self.generic_visit(node)
+                self.current_class = old_class
+
+            def visit_FunctionDef(self, node):
+                prefix = f"METHOD:{self.current_class}." if self.current_class else "FUNC:"
+                symbols.append(f"{prefix}{node.name}:{node.lineno}")
+
+            def visit_AsyncFunctionDef(self, node):
+                prefix = f"METHOD:{self.current_class}." if self.current_class else "FUNC:"
+                symbols.append(f"{prefix}{node.name}:{node.lineno}")
+
+        visitor = OutlineVisitor()
+        visitor.visit(tree)
+        return code, symbols
+
+
+
+class GoToDefinition:
+    """Finds the line number of a symbol definition (function, class, or variable) inside the same file."""
+
+    @staticmethod
+    def find(code: str, symbol: str) -> tuple:
+        symbol = symbol.strip()
+        if not symbol:
+            return code, ["0"]
+        try:
+            tree = ast.parse(code)
+        except Exception as e:
+            return code, ["0"]
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == symbol:
+                return code, [str(node.lineno)]
+            if isinstance(node, ast.ClassDef) and node.name == symbol:
+                return code, [str(node.lineno)]
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == symbol:
+                return code, [str(node.lineno)]
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == symbol:
+                        return code, [str(node.lineno)]
+        return code, ["0"]
+
+
+class RenameSymbol:
+    """Renames all occurrences of a symbol inside the same file safely."""
+
+    @staticmethod
+    def rename(code: str, params: str) -> tuple:
+        parts = params.split(":")
+        if len(parts) != 2:
+            return code, ["Format parameter salah."]
+        old = parts[0].strip()
+        new = parts[1].strip()
+
+        if not old or not new:
+            return code, ["Nama simbol kosong."]
+
+        import re
+        pattern = re.compile(r'\b' + re.escape(old) + r'\b')
+        lines = code.split('\n')
+        new_lines = []
+        for line in lines:
+            if "#" in line:
+                code_part, comment_part = line.split("#", 1)
+                code_part = pattern.sub(new, code_part)
+                new_lines.append(code_part + "#" + comment_part)
+            else:
+                new_lines.append(pattern.sub(new, line))
+
+        final_code = '\n'.join(new_lines)
+        return final_code, [f"Simbol '{old}' berhasil diganti menjadi '{new}'."]
+
+
+
 # Antarmuka ZCODE (baru — bukan bagian port)
 # ---------------------------------------------------------------------------
 
@@ -236,6 +449,14 @@ _RUNNERS = {
     "docstring_generator": SmartCommentGenerator.generate,
     "type_hint_generator": VariableTypeHintGenerator.generate,
     "duplicate_line_detector": DuplicateLineDetector.detect,
+    "organize_imports": OrganizeImports.generate,
+    "outline_generator": OutlineGenerator.generate,
+}
+
+# Runner yang butuh param ekstra (dipisah agar run() single-arg tetap aman)
+_RUNNERS_WITH_PARAM = {
+    "go_to_definition": GoToDefinition.find,
+    "rename_symbol": RenameSymbol.rename,
 }
 
 
@@ -243,6 +464,10 @@ def run(plugin_id: str, code: str) -> dict:
     """Eksekusi satu transform. Return {ok, code, report} — tidak pernah raise."""
     runner = _RUNNERS.get(plugin_id)
     if runner is None:
+        # Coba runner dengan param tapi dipanggil tanpa param → beri pesan jelas
+        if plugin_id in _RUNNERS_WITH_PARAM:
+            return {"ok": False, "code": code,
+                    "report": f"Plugin '{plugin_id}' butuh parameter (gunakan run_with_param)."}
         return {"ok": False, "code": code,
                 "report": f"Plugin '{plugin_id}' tidak dikenal backend."}
     try:
@@ -252,17 +477,40 @@ def run(plugin_id: str, code: str) -> dict:
         return {"ok": False, "code": code, "report": f"Error: {e}"}
 
 
+def run_with_param(plugin_id: str, code: str, param: str) -> dict:
+    """Eksekusi plugin yang butuh param (go_to_definition, rename_symbol)."""
+    runner = _RUNNERS_WITH_PARAM.get(plugin_id)
+    if runner is None:
+        # fallback ke runner biasa (abaikan param)
+        return run(plugin_id, code)
+    try:
+        new_code, report = runner(code, param)
+        return {"ok": True, "code": new_code, "report": "\n".join(report)}
+    except Exception as e:
+        return {"ok": False, "code": code, "report": f"Error: {e}"}
+
+
 def run_json(plugin_id: str, code: str) -> str:
     """JSON string — satu format parse untuk Chaquopy bridge & subprocess."""
     return json.dumps(run(plugin_id, code), ensure_ascii=False)
 
 
+def run_json_with_param(plugin_id: str, code: str, param: str) -> str:
+    """JSON string untuk runner dengan param (dipakai Chaquopy & subprocess)."""
+    return json.dumps(run_with_param(plugin_id, code, param), ensure_ascii=False)
+
+
 if __name__ == "__main__":
-    # Backend desktop/dev: python3 zcode_plugins.py <plugin_id> <input_file>
-    if len(sys.argv) != 3:
+    # Backend desktop/dev: python3 zcode_plugins.py <plugin_id> <input_file> [param_file]
+    if len(sys.argv) not in (3, 4):
         print(json.dumps({"ok": False, "code": "",
-                          "report": "usage: zcode_plugins.py <plugin_id> <file>"}))
+                          "report": "usage: zcode_plugins.py <plugin_id> <file> [param_file]"}))
         sys.exit(2)
     with open(sys.argv[2], "r", encoding="utf-8", errors="replace") as f:
         _code = f.read()
-    print(run_json(sys.argv[1], _code))
+    if len(sys.argv) == 4:
+        with open(sys.argv[3], "r", encoding="utf-8", errors="replace") as pf:
+            _param = pf.read()
+        print(run_json_with_param(sys.argv[1], _code, _param))
+    else:
+        print(run_json(sys.argv[1], _code))

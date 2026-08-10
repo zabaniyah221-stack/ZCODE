@@ -54,10 +54,16 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zaba.zcode.core.execution.ExecutionEngine
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontWeight
+import com.zaba.zcode.ui.theme.ZcodeThemeType
+import com.zaba.zcode.ui.theme.getTerminalPalette
 
 /**
  * TerminalScreen — layer Terminal full-screen (pindah layer, bukan panel).
@@ -75,7 +81,11 @@ fun TerminalScreen(
     filesDir: File,
     context: Context,
     onBack: () -> Unit,
-    showPythonIndicator: Boolean = true // F2.4: toggle indikator cold-start Python
+    showPythonIndicator: Boolean = true, // F2.4: toggle indikator cold-start Python
+    terminalOutputLimit: Int = 65536, // F2.2: Ring Buffer limit
+    themeType: ZcodeThemeType = ZcodeThemeType.RETRO, // F2.8: follow active theme
+    editorFontSize: Int = 12,
+    editorFontFamily: String = "Monospace"
 ) {
     var terminalText by remember { mutableStateOf("ZCODE Terminal — Running $filename\n" + "-".repeat(40) + "\n") }
     var inputVal by remember { mutableStateOf(TextFieldValue("")) }
@@ -87,16 +97,34 @@ fun TerminalScreen(
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
 
+    // F2.2: Coalesce scroll variables
+    var lastScrollTime by remember { mutableStateOf(0L) }
+    var scrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
     fun append(text: String) {
         val combined = terminalText + text
-        terminalText = if (combined.length > ExecutionEngine.MAX_OUTPUT_CHARS) {
-            "\n…[output truncated: >${ExecutionEngine.MAX_OUTPUT_CHARS} chars]…\n" +
-                combined.takeLast(ExecutionEngine.MAX_OUTPUT_CHARS)
+        terminalText = if (combined.length > terminalOutputLimit) {
+            "\n…[output truncated: >$terminalOutputLimit chars]…\n" +
+                combined.takeLast(terminalOutputLimit)
         } else {
             combined
         }
-        scope.launch {
-            scrollState.scrollTo(scrollState.maxValue)
+
+        val isUserScrollingUp = scrollState.value < scrollState.maxValue - 120
+        if (!isUserScrollingUp) {
+            val now = System.currentTimeMillis()
+            if (now - lastScrollTime > 120) {
+                lastScrollTime = now
+                scope.launch {
+                    scrollState.scrollTo(scrollState.maxValue)
+                }
+            } else {
+                scrollJob?.cancel()
+                scrollJob = scope.launch {
+                    delay(120)
+                    scrollState.scrollTo(scrollState.maxValue)
+                }
+            }
         }
     }
 
@@ -147,6 +175,15 @@ fun TerminalScreen(
         animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
         label = "cursorAlpha"
     )
+
+    // Map fontFamily string ke FontFamily
+    val resolvedFontFamily = when (editorFontFamily) {
+        "Roboto Mono" -> FontFamily.Monospace
+        "Courier" -> FontFamily.Monospace
+        "Consolas" -> FontFamily.Monospace
+        else -> FontFamily.Monospace
+    }
+    val fontSizeSp = editorFontSize.sp
 
     Scaffold(
         topBar = {
@@ -246,20 +283,21 @@ fun TerminalScreen(
                     }
                 }
                 Column {
+                    val palette = getTerminalPalette(themeType)
+                    val annotatedText = parseAnsiToAnnotatedString(terminalText, palette)
                     Text(
-                        text = terminalText,
-                        color = Color(0xFF39FF14), // phosphor green
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp, // font size 12 (keputusan tim)
-                        lineHeight = 16.sp
+                        text = annotatedText,
+                        fontFamily = resolvedFontFamily,
+                        fontSize = fontSizeSp,
+                        lineHeight = (editorFontSize + 4).sp
                     )
                     // Baris input aktif + kursor blok berkedip
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = inputVal.text,
                             color = Color.White,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp
+                            fontFamily = resolvedFontFamily,
+                            fontSize = fontSizeSp
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Box(
@@ -288,7 +326,7 @@ fun TerminalScreen(
                     unfocusedIndicatorColor = Color.Transparent,
                     cursorColor = Color.Transparent
                 ),
-                textStyle = TextStyle(fontSize = 12.sp),
+                textStyle = TextStyle(fontSize = fontSizeSp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
                     onDone = {
@@ -302,4 +340,86 @@ fun TerminalScreen(
             )
         }
     }
+}
+
+fun parseAnsiToAnnotatedString(text: String, palette: com.zaba.zcode.ui.theme.TerminalPalette): AnnotatedString {
+    val builder = AnnotatedString.Builder()
+    var i = 0
+    val len = text.length
+
+    var currentFg: Color? = null
+    var currentBg: Color? = null
+    var bold = false
+
+    fun getSpanStyle(): SpanStyle {
+        return SpanStyle(
+            color = currentFg ?: palette.foreground,
+            background = currentBg ?: Color.Transparent,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+
+    var styleStartIndex = 0
+
+    while (i < len) {
+        if (i + 1 < len && text[i] == '\u001B' && text[i + 1] == '[') {
+            val currentStyle = getSpanStyle()
+            builder.addStyle(currentStyle, styleStartIndex, builder.length)
+
+            i += 2
+            val startCode = i
+            while (i < len && text[i] != 'm') {
+                i++
+            }
+            if (i < len && text[i] == 'm') {
+                val codeSeq = text.substring(startCode, i)
+                i++ // Skip 'm'
+                val codes = codeSeq.split(';').mapNotNull { it.toIntOrNull() }
+                if (codes.isEmpty()) {
+                    currentFg = null
+                    currentBg = null
+                    bold = false
+                } else {
+                    var idx = 0
+                    while (idx < codes.size) {
+                        val c = codes[idx]
+                        when (c) {
+                            0 -> {
+                                currentFg = null
+                                currentBg = null
+                                bold = false
+                            }
+                            1 -> bold = true
+                            22 -> bold = false
+                            in 30..37 -> {
+                                currentFg = palette.ansiColors[c - 30]
+                            }
+                            39 -> currentFg = null
+                            in 40..47 -> {
+                                currentBg = palette.ansiColors[c - 40]
+                            }
+                            49 -> currentBg = null
+                            in 90..97 -> {
+                                currentFg = palette.ansiColors[c - 90 + 8]
+                            }
+                            in 100..107 -> {
+                                currentBg = palette.ansiColors[c - 100 + 8]
+                            }
+                        }
+                        idx++
+                    }
+                }
+            }
+            styleStartIndex = builder.length
+            continue
+        }
+
+        builder.append(text[i])
+        i++
+    }
+
+    val finalStyle = getSpanStyle()
+    builder.addStyle(finalStyle, styleStartIndex, builder.length)
+
+    return builder.toAnnotatedString()
 }
