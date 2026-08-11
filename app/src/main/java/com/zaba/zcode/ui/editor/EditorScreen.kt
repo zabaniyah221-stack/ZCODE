@@ -29,7 +29,8 @@ import com.zaba.zcode.WorkspaceViewModel
  *   duplicateRows/toggleCommentLines + onEditorReady handshake PR #5) — lihat
  *   docs/MIGRASI_CM6.md §3.
  * - ZMUX lesson: debounce resize 100ms di MainActivity agar prompt tidak loncat 4-5 baris.
- * - Font editor 12px (keputusan tim) — di-set di bundle CM6.
+ * - Font editor fix 14px (audit 2026-08; sebelumnya 12px) — di-set di bundle CM6.
+ * - Jenis font (UI & editor) via bridge setFontFamily + @font-face injeksi (audit 2026-08).
  */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
@@ -52,6 +53,7 @@ fun EditorScreen(
     bridge.onReady = {
         webViewRef.value?.post {
             webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+            applyEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
             webViewRef.value?.requestLayout()
             webViewRef.value?.invalidate()
         }
@@ -59,11 +61,13 @@ fun EditorScreen(
 
     // F1.7 & F1.8: Apply editor settings (closeBrackets, highlightSelectionMatches) ke CM6 bridge.
     // Dipanggil setiap recomposition agar perubahan dari SettingsScreen langsung berefek.
+    // Audit 2026-08: jenis font (UI & editor) ikut di-apply via setFontFamily.
     webViewRef.value?.post {
         val closeBrackets = vm?.closeBracketsEnabled ?: true
         val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
         webViewRef.value?.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
         webViewRef.value?.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
+        applyEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
     }
 
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {
@@ -86,11 +90,33 @@ fun EditorScreen(
                     isFocusable = true
                     isFocusableInTouchMode = true
 
+                    // FIX (audit 2026-08): keyboard HANYA saat tap terkonfirmasi
+                    // (jarak < touch slop & durasi singkat). Versi lama memanggil
+                    // showSoftInput di ACTION_DOWN — setiap sentuhan (termasuk awal
+                    // swipe buka drawer / scroll) dianggap "mau ngetik" → keyboard
+                    // nongol saat swipe sidebar. Tap biasa tetap memunculkan keyboard.
+                    var downX = 0f
+                    var downY = 0f
+                    var downTime = 0L
                     setOnTouchListener { v, event ->
-                        if (event.action == MotionEvent.ACTION_DOWN) {
-                            v.requestFocus()
-                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                            imm?.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT)
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                downX = event.x
+                                downY = event.y
+                                downTime = System.currentTimeMillis()
+                            }
+                            MotionEvent.ACTION_UP -> {
+                                val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+                                val isTap = Math.abs(event.x - downX) < slop &&
+                                    Math.abs(event.y - downY) < slop &&
+                                    System.currentTimeMillis() - downTime <
+                                    android.view.ViewConfiguration.getLongPressTimeout()
+                                if (isTap) {
+                                    v.requestFocus()
+                                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                                    imm?.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT)
+                                }
+                            }
                         }
                         false
                     }
@@ -118,6 +144,41 @@ fun EditorScreen(
         )
     }
 }
+
+/**
+ * Audit 2026-08: jenis font editor mengikuti pilihan user (Settings → UI & editor).
+ * @font-face di-inject sekali (guard id), lalu bridge setFontFamily (compartment CM6)
+ * mengganti keluarga font .cm-scroller — gutter ikut (inherit). Idempoten & aman
+ * dipanggil tiap recomposition; no-op bila bundle belum siap (typeof guard).
+ */
+private fun applyEditorFontFamily(webView: android.webkit.WebView?, family: String) {
+    webView ?: return
+    webView.evaluateJavascript(FONT_FACE_JS, null)
+    webView.evaluateJavascript(
+        "if(typeof setFontFamily==='function')setFontFamily(\"${fontFamilyCss(family)}\");",
+        null
+    )
+}
+
+/** Map nama pilihan Settings → CSS font-family (fallback monospace selalu). */
+private fun fontFamilyCss(family: String): String = when (family) {
+    "JetBrains Mono" -> "'ZCodeJetBrainsMono', monospace"
+    "Fira Code" -> "'ZCodeFiraCode', monospace"
+    "Source Code Pro" -> "'ZCodeSourceCodePro', monospace"
+    else -> "monospace"
+}
+
+/** @font-face untuk font bundel di assets/editor/fonts/ (offline-first, tanpa CDN). */
+private const val FONT_FACE_JS =
+    "(function(){if(document.getElementById('zcode-fontfaces'))return;" +
+        "var s=document.createElement('style');s.id='zcode-fontfaces';" +
+        "s.textContent=\"@font-face{font-family:'ZCodeJetBrainsMono';" +
+        "src:url('file:///android_asset/editor/fonts/jetbrains_mono.ttf')}" +
+        "@font-face{font-family:'ZCodeFiraCode';" +
+        "src:url('file:///android_asset/editor/fonts/fira_code.ttf')}" +
+        "@font-face{font-family:'ZCodeSourceCodePro';" +
+        "src:url('file:///android_asset/editor/fonts/source_code_pro.ttf')}\";" +
+        "document.head.appendChild(s);})();"
 
 /** Escape string ke JS string literal yang aman (baris baru, kutip, backslash, unicode). */
 fun escapeJavaScriptString(value: String): String {

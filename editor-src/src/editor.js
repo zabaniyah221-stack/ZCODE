@@ -145,11 +145,12 @@ const zcodeTheme = EditorView.theme(
     "&": {
       backgroundColor: "#050806",
       color: "#CCCCCC",
-      fontSize: "12px", // font 12px — keputusan tim (tidak berubah)
+      fontSize: "14px", // font 14px — keputusan audit 2026-08 (sebelumnya 12px)
       height: "100%",
     },
     ".cm-scroller": {
-      fontFamily: "monospace",
+      // fontFamily TIDAK statis di sini — dikendalikan fontFamilyCompartment
+      // (bridge setFontFamily dari Settings, audit 2026-08).
       lineHeight: "1.5",
       overflow: "auto",
     },
@@ -278,6 +279,9 @@ let isSettingValue = false; // guard anti echo-loop (sama dengan versi Ace)
 // via bridge Kotlin↔JS (reconfigure tanpa recreate editor — anti jank di HP ampas).
 const closeBracketsCompartment = new Compartment();
 const highlightSelectionMatchesCompartment = new Compartment();
+// Audit 2026-08: compartment fontFamily — jenis font dipilih user di Settings
+// (UI & editor; terminal tetap Monospace di sisi Compose). Default monospace.
+const fontFamilyCompartment = new Compartment();
 
 function buildState(doc) {
   return EditorState.create({
@@ -316,6 +320,10 @@ function buildState(doc) {
       closeBracketsCompartment.of(closeBrackets()),
       // F1.8: Selection match highlight (CM6) — default ON, toggle via bridge setHighlightSelectionMatches().
       highlightSelectionMatchesCompartment.of(highlightSelectionMatches()),
+      // Audit 2026-08: fontFamily dinamis (default monospace) — toggle via bridge setFontFamily().
+      fontFamilyCompartment.of(
+        EditorView.theme({ ".cm-scroller": { fontFamily: "monospace" } }, { dark: true })
+      ),
       zcodeTheme,
       EditorView.updateListener.of((update) => {
         if (update.docChanged && !isSettingValue && window.ZCODE) {
@@ -516,6 +524,18 @@ function setHighlightSelectionMatches(enabled) {
   });
 }
 
+// Audit 2026-08: jenis font (UI & editor) — Kotlin mengirim CSS font-family
+// (mis. "'ZCodeFiraCode', monospace"); @font-face di-inject Kotlin via <style>.
+// Gutter ikut karena berada di dalam .cm-scroller (inherit).
+function setFontFamily(cssFamily) {
+  if (!view) return;
+  view.dispatch({
+    effects: fontFamilyCompartment.reconfigure(
+      EditorView.theme({ ".cm-scroller": { fontFamily: cssFamily } }, { dark: true })
+    ),
+  });
+}
+
 // BARU (batch anti-sepi F2): lompat ke baris n (1-based, di-clamp).
 // Dipakai 🔍 mode Line, hasil mode Find, dan TODO Extractor — 1 fungsi
 // 3 pemakai (lihat PLAN_BATCH_ANTI_SEPI.md §3 F2).
@@ -542,7 +562,7 @@ try {
     host.style.color = "#FF4B4B";
     host.style.padding = "16px";
     host.style.fontFamily = "monospace";
-    host.style.fontSize = "12px";
+    host.style.fontSize = "14px";
     host.textContent =
       "⚠ Editor gagal dimuat (WebView mungkin terlalu lama). " +
       "Coba update 'Android System WebView' lalu buka ulang ZCODE. (" +
@@ -563,6 +583,7 @@ window.openFind = openFind;
 window.gotoLine = gotoLine;
 window.setCloseBrackets = setCloseBrackets;
 window.setHighlightSelectionMatches = setHighlightSelectionMatches;
+window.setFontFamily = setFontFamily;
 window.sortLines = sortLines;
 window.changeCase = changeCase;
 window.trimNow = trimNow;

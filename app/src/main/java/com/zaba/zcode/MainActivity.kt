@@ -17,6 +17,7 @@ import com.zaba.zcode.ui.settings.PipScreen
 import com.zaba.zcode.ui.settings.SettingsScreen
 import com.zaba.zcode.ui.terminal.TerminalScreen
 import com.zaba.zcode.ui.theme.ZcodeTheme
+import com.zaba.zcode.ui.theme.fontFamilyFor
 import com.zaba.zcode.ui.workbench.WorkbenchScreen
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -28,7 +29,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            ZcodeTheme(themeType = vm.themeType) {
+            // Audit 2026-08: jenis font pilihan user berlaku untuk seluruh UI.
+            ZcodeTheme(
+                themeType = vm.themeType,
+                fontFamily = fontFamilyFor(vm.appFontFamily)
+            ) {
                 AppNavHost(vm = vm)
             }
         }
@@ -81,7 +86,9 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 onBack = { nav.navigateUp() },
                 showPythonIndicator = vm.showPythonIndicator, // F2.4: toggle indikator Python
                 terminalOutputLimit = vm.terminalOutputLimit,
-                themeType = vm.themeType
+                themeType = vm.themeType,
+                // Audit 2026-08: ukuran font setting kini khusus terminal.
+                terminalFontSize = vm.terminalFontSize
             )
         }
         composable("pip") {

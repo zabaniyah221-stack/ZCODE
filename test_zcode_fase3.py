@@ -101,8 +101,9 @@ class TestTopbarIcons:
             assert kw in vm, f"VM {kw} hilang"
 
     def test_guard_lama_tetap(self):
-        # Anti-regresi: ≡ guard tools/check.sh tetap terpenuhi
-        assert "≡" in read(WORKBENCH)
+        # Anti-regresi audit 2026-08: drawer swipe-only marker tetap ada
+        # (menggantikan guard ≡ yang dihapus bersama ikonnya).
+        assert "DRAWER-SWIPE-ONLY" in read(WORKBENCH)
 
 
 # ===================================================================

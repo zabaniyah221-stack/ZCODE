@@ -5,6 +5,8 @@ import android.webkit.WebView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -17,6 +19,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +39,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -85,13 +90,14 @@ import com.zaba.zcode.ui.components.ZIcons
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
 import com.zaba.zcode.ui.theme.ZcodeThemeType
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * WorkbenchScreen — workspace utama ZCODE (Fase 1 + Fase 2).
  *
  * Tata letak (dari atas ke bawah):
- *   Topbar (judul file di samping ≡, tanpa subtitle) → Tab bar (tanpa underline,
+ *   Topbar (judul file, drawer swipe-only — ≡ dihapus audit 2026-08) → Tab bar (tanpa underline,
  *   long-press = close) → banner syntax → Editor CodeMirror 6 OLED → QuickTools/Symbol
  *   bar (opsional, toggle di drawer) → FAB ▶.
  *
@@ -100,13 +106,14 @@ import kotlinx.coroutines.launch
  * THEME cycle satu tombol + Clear All) → About & Contribute (paling bawah).
  * Seksi NAVIGATION / EDITOR / SELECT THEME / FILES MANAGER dibuang total.
  *
- * Topbar: ≡ | nama file (tap → dialog Rename/Delete) | folder (import dari file
- * manager HP via SAF, filter tipe teks) | kaca pembesar polos (palette: Line &
- * Find) | plus.
+ * Topbar (DRAWER-SWIPE-ONLY, audit 2026-08): nama file (tap → dialog Rename/Delete) |
+ * folder → menu file Open/Save/Save as | kaca pembesar polos (palette: Line &
+ * Find) | plus. Sidebar dibuka via swipe kiri (ModalNavigationDrawer); ikon ≡
+ * tiga garis dihapus atas permintaan user.
  * Ikon vektor polos ZIcons (di-tint mengikuti tema) menggantikan emoji topbar.
  *
  * Anti-regresi:
- * - "≡" = tiga garis (ikon menu teks — jangan ganti dengan kata lain)
+ * - Drawer swipe-only: marker "DRAWER-SWIPE-ONLY" wajib ada (digrep tools/check.sh)
  * - Semua tombol ter-wire ke WorkspaceViewModel / onRun / navigate ke layer output
  * - JANGAN menulis glob bintang mentah (mis. MIME tipe teks-slash-bintang) apa
  *   adanya di dalam block comment mana pun — Kotlin block comment BERSARANG,
@@ -128,6 +135,13 @@ fun WorkbenchScreen(
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+
+    // EASTER EGG (audit 2026-08): tap logo {Z} 7x → Frieren bawa papan ngeledek
+    // 2.8 dtk lalu fade out & wordmark+logo balik sendiri. State sengaja TIDAK
+    // persist — easter egg yang cuma sekali itu sedih.
+    var eggTaps by remember { mutableStateOf(0) }
+    var lastEggTap by remember { mutableStateOf(0L) }
+    var showEgg by remember { mutableStateOf(false) }
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
     var showTerminalOverlay by rememberSaveable { mutableStateOf(false) }
 
@@ -290,28 +304,78 @@ fun WorkbenchScreen(
                 modifier = Modifier.width(300.dp)
             ) {
                 // Header drawer — "ZCODE" + logo app baru di kanan (tanpa subtitle, permintaan user)
-                Row(
+                // EASTER EGG: tap logo 7x (jeda <800ms) → header melar mulus,
+                // wordmark+logo crossfade ke Frieren bawa papan 2.8 dtk, fade out,
+                // lalu wordmark+logo balik sendiri (coroutine delay, tanpa persist).
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .animateContentSize(animationSpec = tween(300))
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
                 ) {
-                    Text(
-                        "ZCODE",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Image(
-                        painter = painterResource(id = R.drawable.zcode_logo),
-                        contentDescription = "Logo ZCODE",
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                    )
+                    // Crossfade (bukan AnimatedVisibility): di dalam drawer ada
+                    // receiver ColumnScope, sehingga overload ColumnScope.
+                    // AnimatedVisibility yang terpilih dan menolak align 2D.
+                    // Crossfade komposable umum — mulus dua arah.
+                    Crossfade(
+                        targetState = showEgg,
+                        animationSpec = tween(400),
+                        label = "headerEasterEgg"
+                    ) { egg ->
+                        if (egg) {
+                            // 120dp + aspect 16:9 → gambar utuh tanpa crop; header ≈ ×1.7.
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.easter_frieren),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .height(120.dp)
+                                        .aspectRatio(16f / 9f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "ZCODE",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                // Audit 2026-08: ikon dibesarkan 36dp → 56dp (dulu kelihatan
+                                // kayak "stiker nyasar"); aset 512px tetap tajam.
+                                // Sekaligus pemicu easter egg: 7 tap cepat.
+                                Image(
+                                    painter = painterResource(id = R.drawable.zcode_logo),
+                                    contentDescription = "Logo ZCODE",
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            val now = System.currentTimeMillis()
+                                            eggTaps = if (now - lastEggTap > 800) 1 else eggTaps + 1
+                                            lastEggTap = now
+                                            if (eggTaps >= 7 && !showEgg) {
+                                                eggTaps = 0
+                                                showEgg = true
+                                                scope.launch {
+                                                    delay(2800)
+                                                    showEgg = false
+                                                }
+                                            }
+                                        }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 // ---------- tujuan aplikasi (tanpa label "NAVIGATION" — redesign 2026-08) ----------
@@ -433,9 +497,9 @@ fun WorkbenchScreen(
     ) {
         Scaffold(
             topBar = {
+                // DRAWER-SWIPE-ONLY: tidak ada lagi onOpenDrawer — sidebar via swipe.
                 WorkbenchTopBar(
                     vm, webViewRef,
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
                     onOpenPalette = { showPalette = true },
                     onPickFile = { importLauncher.launch(arrayOf("text/*")) },
                     onOpenFileActions = { if (vm.activeFile != null) showFileActions = true }
@@ -493,10 +557,11 @@ fun WorkbenchScreen(
                     .padding(padding)
                     .background(OledBlack)
             ) {
-                // Tab bar — multi-file, long-press untuk close (tanpa tombol ×)
+                // Tab bar — audit 2026-08: HANYA muncul kalau ≥ 2 tab (tidak menuhin
+                // editor saat satu file; konteks nama file tetap ada di topbar).
                 // Fix anti double-trigger: seleksi & close ditangani SATU combinedClickable di
                 // wrapper Box; Tab(onClick = {}) no-op sehingga tidak ada event ganda.
-                ScrollableTabRow(
+                if (vm.openedFiles.size > 1) ScrollableTabRow(
                     selectedTabIndex = (vm.openedFiles.indexOf(vm.activeFile ?: "").coerceAtLeast(0)),
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     contentColor = MaterialTheme.colorScheme.primary,
@@ -529,8 +594,7 @@ fun WorkbenchScreen(
                             ) {
                                 Text(
                                     text = filename,
-                                    fontSize = 12.sp, // font size 12 (keputusan tim)
-                                    fontFamily = FontFamily.Monospace
+                                    fontSize = 12.sp // font size 12 (keputusan tim)
                                 )
                             }
                         }
@@ -573,8 +637,7 @@ fun WorkbenchScreen(
             showPythonIndicator = vm.showPythonIndicator,
             terminalOutputLimit = vm.terminalOutputLimit,
             themeType = vm.themeType,
-            editorFontSize = vm.editorFontSize,
-            editorFontFamily = vm.editorFontFamily
+            terminalFontSize = vm.terminalFontSize
         )
     }
 
@@ -842,11 +905,20 @@ fun WorkbenchScreen(
 private fun WorkbenchTopBar(
     vm: WorkspaceViewModel,
     webViewRef: androidx.compose.runtime.MutableState<WebView?>,
-    onOpenDrawer: () -> Unit,
     onOpenPalette: () -> Unit,
     onPickFile: () -> Unit,
     onOpenFileActions: () -> Unit
 ) {
+    // Audit 2026-08: menu file di ikon folder (Open/Save/Save as) + toast hasil.
+    val topbarContext = LocalContext.current
+    val saveAsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val (_, msg) = vm.saveActiveAs(uri)
+            Toast.makeText(topbarContext, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
     Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
         Row(
             modifier = Modifier
@@ -855,42 +927,78 @@ private fun WorkbenchTopBar(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ≡ tiga garis — buka drawer
-            Text(
-                "≡",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .clickable(onClick = onOpenDrawer)
-                    .padding(10.dp)
-            )
+            // DRAWER-SWIPE-ONLY (audit 2026-08): sidebar dibuka HANYA dengan swipe
+            // dari pinggir kiri (gesture bawaan ModalNavigationDrawer). Ikon ≡
+            // dihapus atas permintaan user — topbar lebih bersih & judul file
+            // dapat ruang lebih lebar. (Marker ini digrep tools/check.sh.)
 
-            // Judul file di samping ≡ — TAP membuka dialog Rename/Delete
+            // Judul file — TAP membuka dialog Rename/Delete
             // (pengganti FILES MANAGER drawer, keputusan redesign 2026-08)
             Text(
                 vm.activeFile ?: "No Active File",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface,
-                fontFamily = FontFamily.Monospace,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
                     .clickable(onClick = onOpenFileActions)
-                    .padding(vertical = 8.dp)
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
             )
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // 📁 ikon folder → file manager HP (import copy ke workspace; SAF text/*)
-                Icon(
-                    imageVector = ZIcons.Folder,
-                    contentDescription = "Buka file dari file manager",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier
-                        .clickable(onClick = onPickFile)
-                        .padding(10.dp)
-                        .size(20.dp)
-                )
+                // 📁 ikon folder → menu file (audit 2026-08): Open / Save / Save as.
+                // Open = perilaku import SAF lama; Save = timpa file asli di device
+                // (izin tulis persisten diambil saat import); Save as = file device
+                // baru via SAF CreateDocument lalu di-link untuk Save berikutnya.
+                Box {
+                    var showFileMenu by remember { mutableStateOf(false) }
+                    Icon(
+                        imageVector = ZIcons.Folder,
+                        contentDescription = "Menu file (Open/Save/Save as)",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .clickable { showFileMenu = true }
+                            .padding(10.dp)
+                            .size(20.dp)
+                    )
+                    DropdownMenu(
+                        expanded = showFileMenu,
+                        onDismissRequest = { showFileMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Open") },
+                            leadingIcon = {
+                                Icon(ZIcons.Folder, null, modifier = Modifier.size(20.dp))
+                            },
+                            onClick = {
+                                showFileMenu = false
+                                onPickFile()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Save") },
+                            leadingIcon = {
+                                Icon(ZIcons.Save, null, modifier = Modifier.size(20.dp))
+                            },
+                            onClick = {
+                                showFileMenu = false
+                                val (_, msg) = vm.saveActiveToSource()
+                                Toast.makeText(topbarContext, msg, Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Save as") },
+                            leadingIcon = {
+                                Icon(ZIcons.SaveAs, null, modifier = Modifier.size(20.dp))
+                            },
+                            onClick = {
+                                showFileMenu = false
+                                saveAsLauncher.launch(vm.activeFile ?: "zcode.py")
+                            }
+                        )
+                    }
+                }
                 // 🔍 lama → kaca pembesar polos (palette: Line & Find) — ikut warna tema
                 Icon(
                     imageVector = ZIcons.Search,

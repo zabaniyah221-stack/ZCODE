@@ -106,7 +106,8 @@ class TestEditorWebView:
         # Migrasi CM6: index.html kini hanya me-load bundle; implementasi bridge
         # (onCodeChange/setCode) hidup di dalam bundle (test_cm6_bridge_contract).
         txt = read(ASSETS / "editor/index.html")
-        for kw in ["codemirror.bundle.js", "12px", "#050806"]:
+        # audit 2026-08: font editor fix 14px (sebelumnya 12px)
+        for kw in ["codemirror.bundle.js", "14px", "#050806"]:
             assert kw in txt, f"index.html missing {kw}"
 
     def test_bundle_plugins(self):

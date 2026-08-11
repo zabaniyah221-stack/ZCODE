@@ -5,6 +5,40 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import com.zaba.zcode.R
+
+/**
+ * Audit 2026-08: map nama jenis font (Settings) → FontFamily.
+ * Font coding dibundel di res/font (OFL — lisensi di assets/editor/fonts/).
+ * Terminal TIDAK memakai ini (selalu Monospace di TerminalScreen).
+ */
+fun fontFamilyFor(name: String): FontFamily = when (name) {
+    "JetBrains Mono" -> FontFamily(Font(R.font.jetbrains_mono))
+    "Fira Code" -> FontFamily(Font(R.font.fira_code))
+    "Source Code Pro" -> FontFamily(Font(R.font.source_code_pro))
+    else -> FontFamily.Monospace
+}
+
+/** Terapkan satu keluarga font ke SEMUA style typography (UI ikut pilihan user). */
+private fun Typography.withFamily(f: FontFamily): Typography = Typography(
+    displayLarge = displayLarge.copy(fontFamily = f),
+    displayMedium = displayMedium.copy(fontFamily = f),
+    displaySmall = displaySmall.copy(fontFamily = f),
+    headlineLarge = headlineLarge.copy(fontFamily = f),
+    headlineMedium = headlineMedium.copy(fontFamily = f),
+    headlineSmall = headlineSmall.copy(fontFamily = f),
+    titleLarge = titleLarge.copy(fontFamily = f),
+    titleMedium = titleMedium.copy(fontFamily = f),
+    titleSmall = titleSmall.copy(fontFamily = f),
+    bodyLarge = bodyLarge.copy(fontFamily = f),
+    bodyMedium = bodyMedium.copy(fontFamily = f),
+    bodySmall = bodySmall.copy(fontFamily = f),
+    labelLarge = labelLarge.copy(fontFamily = f),
+    labelMedium = labelMedium.copy(fontFamily = f),
+    labelSmall = labelSmall.copy(fontFamily = f)
+)
 
 /**
  * ZCODE themes — port of zabacode/themes/definitions.py + CSS vars.
@@ -302,6 +336,9 @@ private val Cobalt2ColorScheme = darkColorScheme(
 @Composable
 fun ZcodeTheme(
     themeType: ZcodeThemeType = ZcodeThemeType.RETRO,
+    // Audit 2026-08: jenis font pilihan user berlaku untuk seluruh UI Compose
+    // (topbar, drawer, settings, dll.) + editor; terminal tetap Monospace.
+    fontFamily: FontFamily = FontFamily.Monospace,
     content: @Composable () -> Unit
 ) {
     val colors = when (themeType) {
@@ -318,7 +355,7 @@ fun ZcodeTheme(
     }
     MaterialTheme(
         colorScheme = colors,
-        typography = Typography(),
+        typography = Typography().withFamily(fontFamily),
         content = content
     )
 }
