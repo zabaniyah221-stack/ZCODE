@@ -5,11 +5,10 @@ import android.webkit.WebView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -315,62 +314,67 @@ fun WorkbenchScreen(
                         .animateContentSize(animationSpec = tween(300))
                         .padding(horizontal = 20.dp, vertical = 18.dp)
                 ) {
-                    AnimatedVisibility(
-                        visible = !showEgg,
-                        enter = fadeIn(tween(300)),
-                        exit = fadeOut(tween(200))
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "ZCODE",
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            // Audit 2026-08: ikon dibesarkan 36dp → 56dp (dulu kelihatan
-                            // kayak "stiker nyasar"); aset 512px tetap tajam.
-                            // Sekaligus pemicu easter egg: 7 tap cepat.
-                            Image(
-                                painter = painterResource(id = R.drawable.zcode_logo),
-                                contentDescription = "Logo ZCODE",
-                                modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .clickable {
-                                        val now = System.currentTimeMillis()
-                                        eggTaps = if (now - lastEggTap > 800) 1 else eggTaps + 1
-                                        lastEggTap = now
-                                        if (eggTaps >= 7 && !showEgg) {
-                                            eggTaps = 0
-                                            showEgg = true
-                                            scope.launch {
-                                                delay(2800)
-                                                showEgg = false
+                    // Crossfade (bukan AnimatedVisibility): di dalam drawer ada
+                    // receiver ColumnScope, sehingga overload ColumnScope.
+                    // AnimatedVisibility yang terpilih dan menolak align 2D.
+                    // Crossfade komposable umum — mulus dua arah.
+                    Crossfade(
+                        targetState = showEgg,
+                        animationSpec = tween(400),
+                        label = "headerEasterEgg"
+                    ) { egg ->
+                        if (egg) {
+                            // 120dp + aspect 16:9 → gambar utuh tanpa crop; header ≈ ×1.7.
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.easter_frieren),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .height(120.dp)
+                                        .aspectRatio(16f / 9f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+                            }
+                        } else {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "ZCODE",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                // Audit 2026-08: ikon dibesarkan 36dp → 56dp (dulu kelihatan
+                                // kayak "stiker nyasar"); aset 512px tetap tajam.
+                                // Sekaligus pemicu easter egg: 7 tap cepat.
+                                Image(
+                                    painter = painterResource(id = R.drawable.zcode_logo),
+                                    contentDescription = "Logo ZCODE",
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable {
+                                            val now = System.currentTimeMillis()
+                                            eggTaps = if (now - lastEggTap > 800) 1 else eggTaps + 1
+                                            lastEggTap = now
+                                            if (eggTaps >= 7 && !showEgg) {
+                                                eggTaps = 0
+                                                showEgg = true
+                                                scope.launch {
+                                                    delay(2800)
+                                                    showEgg = false
+                                                }
                                             }
                                         }
-                                    }
-                            )
+                                )
+                            }
                         }
-                    }
-                    AnimatedVisibility(
-                        visible = showEgg,
-                        enter = fadeIn(tween(300)),
-                        exit = fadeOut(tween(400)),
-                        modifier = Modifier.align(Alignment.Center)
-                    ) {
-                        // 120dp + aspect 16:9 → gambar utuh tanpa crop; header ≈ ×1.7.
-                        Image(
-                            painter = painterResource(id = R.drawable.easter_frieren),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .height(120.dp)
-                                .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
                     }
                 }
 
