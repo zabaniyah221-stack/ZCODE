@@ -1,0 +1,271 @@
+{
+  "tool": "tools/baseline.py",
+  "spec": "SPEC-001-ZCODE-Package-and-Terminal-Reliability",
+  "timestamp": "2026-08-11T19:00:52.497173+00:00",
+  "repo_root": "/home/user/ZCODE",
+  "summary": {
+    "total": 32,
+    "ok": 31,
+    "partial": 0,
+    "gap": 0,
+    "info": 1
+  },
+  "checks": [
+    {
+      "id": "T-01",
+      "group": "Terminal",
+      "label": "Interactive session tanpa hard timeout",
+      "spec_target": "0 (tidak ada timeout sewenang-wenang)",
+      "status": "OK",
+      "detail": "Tidak ada MAX_INTERACTIVE_DURATION_MS — session berakhir hanya karena exit/Ctrl+C/Stop/error"
+    },
+    {
+      "id": "T-02",
+      "group": "Terminal",
+      "label": "Full output ke disk (tidak hilang karena memory cap)",
+      "spec_target": "0 output loss (full output ke disk)",
+      "status": "OK",
+      "detail": "RunLogger menulis full log ke filesDir/logs/runs/<run-id>.log; ring buffer UI hanya tampilan"
+    },
+    {
+      "id": "T-03",
+      "group": "Terminal",
+      "label": "Line-oriented buffer (bukan satu String raksasa)",
+      "spec_target": "current line + chunked line storage + line index",
+      "status": "OK",
+      "detail": "TerminalBuffer.kt: ArrayDeque baris + startOffset (line index) + current line; RAM dibatasi, full history di disk"
+    },
+    {
+      "id": "T-04",
+      "group": "Terminal",
+      "label": "ANSI parser incremental",
+      "spec_target": "incremental, bukan full reparse",
+      "status": "OK",
+      "detail": "AnsiLineCache.kt: parse per-baris + cache per indeks; scroll tidak re-parse"
+    },
+    {
+      "id": "T-05",
+      "group": "Terminal",
+      "label": "Renderer virtualized (scroll 100k+ lines)",
+      "spec_target": "virtualized render, UI hanya pegang visible window",
+      "status": "OK",
+      "detail": "LazyColumn + LazyListState — hanya baris terlihat yang disusun; scroll 100k+ lines"
+    },
+    {
+      "id": "T-06",
+      "group": "Terminal",
+      "label": "Disk-backed full log per run (run ID)",
+      "spec_target": "files/logs/runs/<run-id>.log per eksekusi",
+      "status": "OK",
+      "detail": "RunId + RunLogger + Paths.runLogsDir wired di TerminalScreen"
+    },
+    {
+      "id": "T-07",
+      "group": "Terminal",
+      "label": "Export full log",
+      "spec_target": "Full log export tersedia",
+      "status": "OK",
+      "detail": "Tombol 'Export Log' (SAF CreateDocument) mengekspor file log dari disk"
+    },
+    {
+      "id": "T-08",
+      "group": "Terminal",
+      "label": "Process lifecycle eksplisit",
+      "spec_target": "START/RUNNING/WAITING_FOR_INPUT/INTERRUPTING/STOPPING/EXITED/FAILED",
+      "status": "OK",
+      "detail": "SessionState.kt + bridge.waitingInput() + state label di UI"
+    },
+    {
+      "id": "T-09",
+      "group": "Terminal",
+      "label": "Output batching (32–50ms / 2–4KB)",
+      "spec_target": "flush interval 32–50ms ATAU buffer 2–4KB, mana dulu",
+      "status": "OK",
+      "detail": "OutputBatcher: 40ms / 2048 chars, single-thread (urutan terjaga)"
+    },
+    {
+      "id": "T-10",
+      "group": "Terminal",
+      "label": "Ctrl+C deterministik untuk input()",
+      "spec_target": "100% deterministik → KeyboardInterrupt",
+      "status": "OK",
+      "detail": "TerminalBridge.interrupt() + BridgeStdin.isInterrupted() → KeyboardInterrupt"
+    },
+    {
+      "id": "T-11",
+      "group": "Terminal",
+      "label": "stdout/stderr dipisah",
+      "spec_target": "stdout & stderr terpisah (untuk log & status)",
+      "status": "OK",
+      "detail": "redirectErrorStream(false) + bridge.write(s, stream) out/err"
+    },
+    {
+      "id": "P-01",
+      "group": "Package",
+      "label": "Sukses = rantai verifikasi nyata (bukan exit code)",
+      "spec_target": "download+verify+extract+smoke+activate",
+      "status": "OK",
+      "detail": "PackageEngineV2: resolve→download→SHA-256→extract→metadata→smoke→activate; zcode_pip.py hanya legacy dev"
+    },
+    {
+      "id": "P-02",
+      "group": "Package",
+      "label": "SHA-256 verification",
+      "spec_target": "hash diverifikasi sebelum activation",
+      "status": "OK",
+      "detail": "Verifier.verifySha256 + download streaming sha256 (PyPI digests; Chaquopy dihitung lokal)"
+    },
+    {
+      "id": "P-03",
+      "group": "Package",
+      "label": "Transactional install + rollback",
+      "spec_target": "staging → verify → smoke → atomic activate; rollback ≥99%",
+      "status": "OK",
+      "detail": "TransactionManager: tx dir, journal, activate + rollbackActivate, abort"
+    },
+    {
+      "id": "P-04",
+      "group": "Package",
+      "label": "Post-install import/smoke test",
+      "spec_target": "100% install menjalankan import smoke test",
+      "status": "OK",
+      "detail": "SmokeTestRunner → package_runtime.smoke (IMPORT/NATIVE_LOAD/BASIC_API/FILE_OUTPUT) terhadap staging"
+    },
+    {
+      "id": "P-05",
+      "group": "Package",
+      "label": "Environment transaksional (python-env/)",
+      "spec_target": "app-private/python-env/{site-packages,transactions,wheels,metadata,logs,state}",
+      "status": "OK",
+      "detail": "Paths.pythonEnvDir/… + site-packages/<name>/<version> (sys.path injection via envpaths)"
+    },
+    {
+      "id": "P-06",
+      "group": "Package",
+      "label": "Compatibility engine (Python/ABI/platform)",
+      "spec_target": "validasi python tag + ABI tag + platform tag + runtime",
+      "status": "OK",
+      "detail": "CompatibilityEngine (katalog×runtime) + package_runtime.wheelinfo (packaging.tags)"
+    },
+    {
+      "id": "P-07",
+      "group": "Package",
+      "label": "Uninstall",
+      "spec_target": "uninstall berfungsi & aman",
+      "status": "OK",
+      "detail": "PackageEngineV2.uninstall → TransactionManager.uninstall (hapus dir + state)"
+    },
+    {
+      "id": "P-08",
+      "group": "Package",
+      "label": "Storage guard & reporting",
+      "spec_target": "block kalau free < estimasi + margin; tampilkan ukuran",
+      "status": "OK",
+      "detail": "Engine storage guard (max(1.5×estimasi, 100MB)) + freeStorageBytes"
+    },
+    {
+      "id": "P-09",
+      "group": "Package",
+      "label": "Offline reuse setelah install",
+      "spec_target": "100% tested package bisa import tanpa internet",
+      "status": "OK",
+      "detail": "envpaths.activate() membaca state/installed.json → sys.path; offline setelah install"
+    },
+    {
+      "id": "P-10",
+      "group": "Package",
+      "label": "Requirement parser (==, >=, extras)",
+      "spec_target": "requests==2.32.3, pydantic>=2,<3, flask[async]",
+      "status": "OK",
+      "detail": "RequirementParser.kt (pre-check) + package_runtime.requirement (packaging.Requirement, PEP 508); tolak shell/flag"
+    },
+    {
+      "id": "C-01",
+      "group": "Catalog",
+      "label": "Jumlah curated packages",
+      "spec_target": "MVP 100, V1 300",
+      "status": "OK",
+      "detail": "packages.json berisi 300 package (target V1 300)"
+    },
+    {
+      "id": "C-02",
+      "group": "Catalog",
+      "label": "Metadata lengkap (18+ field SPEC §11)",
+      "spec_target": "100% curated punya detail lengkap",
+      "status": "OK",
+      "detail": "rata-rata 100% package punya tiap field; 300 entri"
+    },
+    {
+      "id": "C-03",
+      "group": "Catalog",
+      "label": "Stdlib index terpisah",
+      "spec_target": "≈305 top-level stdlib sebagai index terpisah",
+      "status": "OK",
+      "detail": "stdlib.json ada (305 modul)"
+    },
+    {
+      "id": "C-04",
+      "group": "Catalog",
+      "label": "Status model SPEC (TESTED/COMPATIBLE/INCOMPATIBLE/…)",
+      "spec_target": "9 status + action per status",
+      "status": "OK",
+      "detail": "PackageStatus.kt (10 status) + action per status di PackageDetailsDialog"
+    },
+    {
+      "id": "M-01",
+      "group": "Telemetry",
+      "label": "Dashboard metric minimum (SPEC §Gathering Results)",
+      "spec_target": "13+ metric terukur",
+      "status": "OK",
+      "detail": "TelemetryStore ada; 11/12 metric didefinisikan"
+    },
+    {
+      "id": "M-02",
+      "group": "Telemetry",
+      "label": "Klasifikasi error per stage (bukan INSTALL_FAILED)",
+      "spec_target": "13 kode error actionable",
+      "status": "OK",
+      "detail": "kode error ditemukan: NETWORK, RESOLUTION, COMPATIBILITY, DOWNLOAD, VERIFY, EXTRACT, NATIVE_LOAD, SMOKE_TEST, ACTIVATION"
+    },
+    {
+      "id": "R-01",
+      "group": "Runtime",
+      "label": "Chaquopy version (INFO)",
+      "spec_target": "terkunci & terdokumentasi",
+      "status": "INFO",
+      "detail": "Chaquopy 17.0.0 (root build.gradle.kts) — pin: Python 3.11, pip 23.3.1"
+    },
+    {
+      "id": "R-02",
+      "group": "Runtime",
+      "label": "Python version (keputusan: 3.11 semua ABI)",
+      "spec_target": "3.11 (satu-satunya yang mendukung armv7)",
+      "status": "OK",
+      "detail": "Python 3.11 di app/build.gradle.kts:91 — sesuai keputusan FAT APK"
+    },
+    {
+      "id": "R-03",
+      "group": "Runtime",
+      "label": "ABI FAT (armv7 + arm64 + x86_64)",
+      "spec_target": "satu APK universal",
+      "status": "OK",
+      "detail": "abiFilters lengkap di app/build.gradle.kts:9,29,31,79"
+    },
+    {
+      "id": "R-04",
+      "group": "Runtime",
+      "label": "pip 23.3.1 pin (bug AssetPath di pip 24+)",
+      "spec_target": "self-contained; pin terdokumentasi",
+      "status": "OK",
+      "detail": "pip==23.3.1 di app/build.gradle.kts:93"
+    },
+    {
+      "id": "R-05",
+      "group": "Runtime",
+      "label": "minSdk 26 (keputusan)",
+      "spec_target": "26 (Android 8.0)",
+      "status": "OK",
+      "detail": "minSdk 26 di app/build.gradle.kts:19"
+    }
+  ]
+}

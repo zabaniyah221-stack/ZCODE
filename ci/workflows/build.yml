@@ -18,10 +18,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run strict tests (Fase 0 + Fase 1/2)
+      - name: Run strict tests (Fase 0 + Fase 1/2 + Package Runtime SPEC-001)
         run: |
-          pip install --break-system-packages pillow pytest
+          pip install --break-system-packages pillow pytest packaging
           python -m pytest test_zcode_fase0.py -v
+          python -m pytest test_zcode_package_runtime.py -v
           bash tools/check.sh
 
   build:

@@ -1,0 +1,127 @@
+{
+ "requests": [
+  {
+   "name": "import requests",
+   "type": "IMPORT",
+   "target": "requests"
+  },
+  {
+   "name": "requests.get smoke",
+   "type": "BASIC_API",
+   "code": "import requests; assert requests.__version__"
+  }
+ ],
+ "httpx": [
+  {
+   "name": "import httpx",
+   "type": "IMPORT",
+   "target": "httpx"
+  },
+  {
+   "name": "httpx client",
+   "type": "BASIC_API",
+   "code": "import httpx; c = httpx.Client(); assert c is not None; c.close()"
+  }
+ ],
+ "flask": [
+  {
+   "name": "import flask",
+   "type": "IMPORT",
+   "target": "flask"
+  },
+  {
+   "name": "flask app",
+   "type": "BASIC_API",
+   "code": "from flask import Flask; app = Flask(__name__); assert app is not None"
+  }
+ ],
+ "beautifulsoup4": [
+  {
+   "name": "import bs4",
+   "type": "IMPORT",
+   "target": "bs4"
+  },
+  {
+   "name": "bs4 parse",
+   "type": "BASIC_API",
+   "code": "from bs4 import BeautifulSoup; s = BeautifulSoup('<p>x</p>', 'html.parser'); assert s.p is not None"
+  }
+ ],
+ "tqdm": [
+  {
+   "name": "import tqdm",
+   "type": "IMPORT",
+   "target": "tqdm"
+  },
+  {
+   "name": "tqdm iter",
+   "type": "BASIC_API",
+   "code": "from tqdm import tqdm; n = 0; [n for _ in tqdm(range(10), disable=True)]; assert n == 0"
+  }
+ ],
+ "rich": [
+  {
+   "name": "import rich",
+   "type": "IMPORT",
+   "target": "rich"
+  },
+  {
+   "name": "rich render",
+   "type": "BASIC_API",
+   "code": "from rich.console import Console; from rich.table import Table; t = Table(); t.add_column('x'); assert len(t.columns) == 1"
+  }
+ ],
+ "openpyxl": [
+  {
+   "name": "import openpyxl",
+   "type": "IMPORT",
+   "target": "openpyxl"
+  },
+  {
+   "name": "openpyxl roundtrip",
+   "type": "FILE_OUTPUT",
+   "code": "import openpyxl, tempfile, os\nwb = openpyxl.Workbook(); ws = wb.active; ws['A1'] = 42\np = os.path.join(tempfile.gettempdir(), 'zcode_smoke.xlsx')\nwb.save(p); wb2 = openpyxl.load_workbook(p); assert wb2.active['A1'].value == 42"
+  }
+ ],
+ "numpy": [
+  {
+   "name": "import numpy",
+   "type": "IMPORT",
+   "target": "numpy"
+  },
+  {
+   "name": "numpy basic",
+   "type": "BASIC_API",
+   "code": "import numpy as np; a = np.arange(6).reshape(2, 3); assert a.sum() == 15"
+  }
+ ],
+ "matplotlib": [
+  {
+   "name": "import matplotlib",
+   "type": "IMPORT",
+   "target": "matplotlib"
+  },
+  {
+   "name": "import matplotlib.pyplot",
+   "type": "IMPORT",
+   "target": "matplotlib.pyplot"
+  },
+  {
+   "name": "matplotlib Agg PNG",
+   "type": "FILE_OUTPUT",
+   "code": "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\nimport tempfile, os\nplt.plot([1, 2, 3]); p = os.path.join(tempfile.gettempdir(), 'zcode_smoke.png')\nplt.savefig(p); assert os.path.getsize(p) > 0"
+  }
+ ],
+ "pillow": [
+  {
+   "name": "import PIL",
+   "type": "IMPORT",
+   "target": "PIL"
+  },
+  {
+   "name": "pillow roundtrip",
+   "type": "FILE_OUTPUT",
+   "code": "from PIL import Image\nimport tempfile, os\nim = Image.new('RGB', (4, 4), 'red')\np = os.path.join(tempfile.gettempdir(), 'zcode_smoke.png')\nim.save(p); im2 = Image.open(p); assert im2.size == (4, 4)"
+  }
+ ]
+}

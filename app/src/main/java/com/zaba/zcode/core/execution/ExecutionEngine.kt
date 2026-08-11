@@ -1,6 +1,7 @@
 package com.zaba.zcode.core.execution
 
 import android.content.Context
+import android.os.StatFs
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
@@ -22,25 +23,35 @@ import java.util.concurrent.atomic.AtomicInteger
  *      tombol Send — keputusan tim)
  *    - Ctrl+C: flag interrupt → KeyboardInterrupt deterministik untuk script yang
  *      nge-blok di input(); best-effort interrupt() thread worker
- *    - pip runtime: `zcode_pip.py` (pip_main in-process) → log streaming
+ *    - pip runtime: `zcode_pip.py` (legacy) / PackageEngineV2 (baru, SPEC-001)
  * 2. ProcessBuilder (desktop/sandbox/dev): `python3 -u <file>` subprocess nyata,
  *    dipakai untuk pengujian lokal & CI logic verification.
  *
  * Guards (tidak boleh dihapus):
  * - MAX_CODE_BYTES 512KB (S-18, F-07 off-by-9 fixed: no prelude injection — kode user
  *   dieksekusi apa adanya, tanpa patch stdin 9 baris di depan)
- * - MAX_OUTPUT_CHARS 256KB, MAX_INTERACTIVE_QUEUE 10k
- * - timeout 30s (batch), interactive 120s lifetime / 60s inactivity / 8KB per send
+ * - MAX_OUTPUT_CHARS 256KB — cap log IN-MEMORY (batch run & layar Pip). Full output
+ *   interactive TIDAK di-cap: disimpan ke disk via RunLogger (SPEC-001 §16).
+ * - MAX_INTERACTIVE_QUEUE 10k, MAX_IMAGE_BYTES 8MB
+ * - DEFAULT_TIMEOUT_MS 30s — HANYA untuk batch run (bukan interactive, SPEC-001 §17:
+ *   interactive session TIDAK punya hard timeout)
+ *
+ * SPEC-001 Phase 0 (implemented di sini):
+ * - interactive hard timeout DIHAPUS (waitForExit() menunggu sampai process selesai)
+ * - explicit process lifecycle (SessionState) + run ID (RunId) per session
+ * - output batching (OutputBatcher: 40ms / 2KB)
+ * - stdout/stderr dipisah (stream "out"/"err") → disk log (RunLogger)
+ * - storage metrics (freeStorageBytes) untuk storage guard
  */
 object ExecutionEngine {
     const val MAX_CODE_BYTES = 512 * 1024 // 512 KB
-    const val MAX_OUTPUT_CHARS = 256 * 1024 // 256 KB
-    const val DEFAULT_TIMEOUT_MS = 30_000L // batch timeout 30s
-    const val MAX_INTERACTIVE_DURATION_MS = 120_000L
-    const val MAX_INTERACTIVE_INACTIVITY_MS = 60_000L
+    const val MAX_OUTPUT_CHARS = 256 * 1024 // 256 KB — cap log in-memory (bukan interactive disk log)
+    const val DEFAULT_TIMEOUT_MS = 30_000L // batch timeout 30s — interactive TIDAK memakai ini
+    const val MAX_INTERACTIVE_INACTIVITY_MS = 60_000L // (tidak dipakai sebagai killer; hanya info)
     const val MAX_INTERACTIVE_BYTES = 8192 // 8KB per send
     const val MAX_INTERACTIVE_QUEUE = 10000
     const val MAX_IMAGE_BYTES = 8 * 1024 * 1024 // 8 MB skip (target Fase 3: matplotlib inline)
+    const val MIN_FREE_STORAGE_BYTES = 50L * 1024 * 1024 // storage guard terminal (50MB)
 
     /** Folder workspace (filesDir) — di-set oleh WorkspaceViewModel, jadi cwd script = workspace. */
     @Volatile
@@ -53,8 +64,6 @@ object ExecutionEngine {
         val timeout: Boolean,
         val images: List<String> = emptyList()
     )
-
-    data class OutputChunk(val stream: String, val text: String)
 
     // ------------------------------------------------------------------
     // Backend selection
@@ -71,31 +80,49 @@ object ExecutionEngine {
     fun describeBackend(): String =
         if (isChaquopyAvailable()) "Python 3.11 (Chaquopy in-process)" else "python3 subprocess"
 
+    /** Storage guard: free bytes pada partisi tempat `path` berada. -1 bila gagal. */
+    fun freeStorageBytes(path: File): Long = try {
+        StatFs(path.absolutePath).availableBytes
+    } catch (e: Exception) {
+        -1L
+    }
+
     // ------------------------------------------------------------------
     // Interactive session (PTY layer)
     // ------------------------------------------------------------------
 
     interface InteractiveSession {
+        val runId: String
+        val state: SessionState
         fun sendInput(line: String)
         fun sendCtrlC()
         fun sendKill()
         fun isAlive(): Boolean
+        /** Menunggu sampai process selesai — TANPA hard timeout (SPEC-001 §17). */
         fun waitForExit(): Int
     }
 
+    /**
+     * Mulai interactive session.
+     * onOutput(stream, text): stream = "out" | "err" | "sys".
+     * logger: opsional RunLogger untuk disk-backed full log; TIDAK memengaruhi UI.
+     */
     fun startInteractiveSession(
         context: Context?,
         file: File,
-        onOutput: (String) -> Unit,
-        onExit: (Int) -> Unit
+        runId: String = RunId.newId("run"),
+        logger: RunLogger? = null,
+        onOutput: (stream: String, text: String) -> Unit,
+        onExit: (code: Int) -> Unit,
+        onState: (SessionState) -> Unit = {}
     ): InteractiveSession {
         return if (context != null && isChaquopyAvailable()) {
-            ChaquopySession(context, file, onOutput, onExit)
+            ChaquopySession(context, file, runId, logger, onOutput, onExit, onState)
         } else {
             // Backend desktop/dev: spawn subprocess python3 (bukan ProcessSession(file))
             val pb = ProcessBuilder("python3", "-u", file.absolutePath)
-            pb.redirectErrorStream(true)
-            ProcessSession(pb.start(), onOutput, onExit)
+            pb.redirectErrorStream(false) // stdout/stderr terpisah (SPEC-001)
+            ProcessSession(pb.start(), runId, logger, onOutput, onExit, onState)
         }
     }
 
@@ -105,35 +132,80 @@ object ExecutionEngine {
 
     private class ProcessSession(
         private val process: Process,
-        private val onOutput: (String) -> Unit,
-        private val onExit: (Int) -> Unit
+        override val runId: String,
+        private val logger: RunLogger?,
+        private val onOutput: (String, String) -> Unit,
+        private val onExit: (Int) -> Unit,
+        private val onState: (SessionState) -> Unit
     ) : InteractiveSession {
         private val exitValue = AtomicInteger(-1)
         private val done = CountDownLatch(1)
+        @Volatile
+        private var stateValue = SessionState.START
+        override val state: SessionState get() = stateValue
+
+        private fun setState(s: SessionState) {
+            if (stateValue != s) {
+                stateValue = s
+                onState(s)
+            }
+        }
 
         init {
+            // stdout reader
             Thread {
                 try {
-                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
+                    val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8), 8192)
                     val batch = StringBuilder()
                     var c: Int
                     while (reader.read().also { c = it } != -1) {
                         batch.append(c.toChar())
-                        if (batch.length >= 256) {
-                            val chunk = batch.toString()
+                        if (batch.length >= 2048) {
+                            emit("out", batch.toString())
                             batch.clear()
-                            onOutput(chunk)
                         }
                     }
-                    if (batch.isNotEmpty()) onOutput(batch.toString())
+                    if (batch.isNotEmpty()) emit("out", batch.toString())
                     exitValue.set(process.waitFor())
                 } catch (e: Exception) {
-                    exitValue.set(-1)
+                    // abaikan — stdout thread yang menyelesaikan latch
                 } finally {
-                    onExit(exitValue.get())
-                    done.countDown()
+                    finish()
                 }
             }.start()
+            // stderr reader — dipisah dari stdout (SPEC-001 Phase 0)
+            Thread {
+                try {
+                    val reader = BufferedReader(InputStreamReader(process.errorStream, Charsets.UTF_8), 8192)
+                    val batch = StringBuilder()
+                    var c: Int
+                    while (reader.read().also { c = it } != -1) {
+                        batch.append(c.toChar())
+                        if (batch.length >= 2048) {
+                            emit("err", batch.toString())
+                            batch.clear()
+                        }
+                    }
+                    if (batch.isNotEmpty()) emit("err", batch.toString())
+                } catch (e: Exception) {
+                    // abaikan — stdout thread yang menyelesaikan latch
+                }
+            }.start()
+        }
+
+        private fun emit(stream: String, text: String) {
+            setState(SessionState.RUNNING)
+            onOutput(stream, text)
+            logger?.append(stream, text)
+        }
+
+        private fun finish() {
+            val code = exitValue.get()
+            setState(if (code == 0) SessionState.EXITED else SessionState.FAILED)
+            logger?.writeExit(state, code)
+            logger?.close()
+            onExit(code)
+            done.countDown()
         }
 
         override fun sendInput(line: String) {
@@ -149,6 +221,7 @@ object ExecutionEngine {
 
         override fun sendCtrlC() {
             if (!process.isAlive) return
+            setState(SessionState.INTERRUPTING)
             // `Process.pid()` butuh Java 9+ dan pernah gagal resolve di CI
             // (Unresolved reference: pid) — ambil via reflection agar kompilasi
             // aman di semua JDK; kalau gagal, fallback ke destroy().
@@ -174,6 +247,7 @@ object ExecutionEngine {
         }
 
         override fun sendKill() {
+            setState(SessionState.STOPPING)
             try {
                 process.destroyForcibly()
             } catch (e: Exception) {
@@ -184,11 +258,8 @@ object ExecutionEngine {
         override fun isAlive(): Boolean = process.isAlive
 
         override fun waitForExit(): Int {
-            done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
-            if (done.count > 0) {
-                sendKill()
-                done.await(5, TimeUnit.SECONDS)
-            }
+            // SPEC-001 §17: TIDAK ada hard timeout interactive.
+            done.await() // menunggu sampai process selesai (exit/Ctrl+C/Stop/error)
             return exitValue.get()
         }
     }
@@ -200,12 +271,18 @@ object ExecutionEngine {
     private class ChaquopySession(
         context: Context,
         file: File,
-        onOutput: (String) -> Unit,
-        onExit: (Int) -> Unit
+        override val runId: String,
+        private val logger: RunLogger?,
+        private val onOutput: (String, String) -> Unit,
+        private val onExit: (Int) -> Unit,
+        private val onState: (SessionState) -> Unit
     ) : InteractiveSession {
-        private val bridge = TerminalBridge(onOutput, onExit)
+        private val bridge = TerminalBridge(onOutput, { code -> onExit(code) }, onState)
         private val exitValue = AtomicInteger(-1)
         private val done = CountDownLatch(1)
+        @Volatile
+        private var stateValue = SessionState.START
+        override val state: SessionState get() = stateValue
 
         init {
             val appContext = context.applicationContext
@@ -223,6 +300,9 @@ object ExecutionEngine {
                     bridge.abort("\nRuntime error: ${e.message}\n")
                 } finally {
                     exitValue.set(if (bridge.isExited) bridge.exitCode else -1)
+                    stateValue = if (bridge.isExited) bridge.state else SessionState.FAILED
+                    logger?.writeExit(stateValue, exitValue.get())
+                    logger?.close()
                     done.countDown()
                 }
             }.start()
@@ -233,33 +313,34 @@ object ExecutionEngine {
         }
 
         override fun sendCtrlC() {
+            stateValue = SessionState.INTERRUPTING
+            onState(stateValue)
             bridge.interrupt()
         }
 
         override fun sendKill() {
+            stateValue = SessionState.STOPPING
+            onState(stateValue)
             bridge.interrupt()
         }
 
         override fun isAlive(): Boolean = done.count > 0
 
         override fun waitForExit(): Int {
-            done.await(MAX_INTERACTIVE_DURATION_MS, TimeUnit.MILLISECONDS)
-            if (done.count > 0) {
-                bridge.interrupt()
-                done.await(5, TimeUnit.SECONDS)
-            }
+            // SPEC-001 §17: TIDAK ada hard timeout interactive.
+            done.await()
             return exitValue.get()
         }
     }
 
     // ------------------------------------------------------------------
-    // Pip (Settings → Pip)
+    // Pip (Settings → Pip) — LEGACY path; UI baru memakai PackageEngineV2.
     // ------------------------------------------------------------------
 
     /** Validasi nama package pip (anti shell injection). */
     fun isSafePackageName(name: String): Boolean =
         name.isNotBlank() && name.length <= 200 &&
-            Regex("^[A-Za-z0-9_\\-\\[\\]=.<>!]+$").matches(name)
+            Regex("^[A-Za-z0-9_\\-\\[\\]=.<>!, ]+$").matches(name)
 
     /** Spawn proses pip install (backend desktop). */
     fun startPipProcess(packageName: String): Process? {
@@ -274,9 +355,8 @@ object ExecutionEngine {
     }
 
     /**
-     * Pip install dengan streaming log real-time. Kembalikan false bila nama invalid.
-     * `onDone(success, exitCode)` dipanggil tepat sekali setelah proses selesai.
-     * Di Android memakai pip in-process Chaquopy; di desktop memakai subprocess.
+     * Pip install dengan streaming log real-time (LEGACY — dipakai dev/desktop
+     * dan fallback; UI utama memakai PackageEngineV2 dengan verifikasi nyata).
      */
     fun startPipStream(
         context: Context?,
@@ -292,7 +372,7 @@ object ExecutionEngine {
                     if (!Python.isStarted()) {
                         Python.start(AndroidPlatform(appContext))
                     }
-                    val bridge = TerminalBridge(onLog) { code -> onDone(code == 0, code) }
+                    val bridge = TerminalBridge({ _, text -> onLog(text) }) { code -> onDone(code == 0, code) }
                     Python.getInstance()
                         .getModule("zcode_pip")
                         .callAttr("install_package", bridge, packageName)
@@ -326,7 +406,7 @@ object ExecutionEngine {
     }
 
     // ------------------------------------------------------------------
-    // Batch run (non-interaktif; dipakai dev/test)
+    // Batch run (non-interaktif; dipakai dev/test — boleh 30s timeout)
     // ------------------------------------------------------------------
 
     suspend fun runIsolated(code: String, stdin: String = ""): RunResult = withContext(Dispatchers.IO) {

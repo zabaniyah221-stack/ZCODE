@@ -1,6 +1,8 @@
 package com.zaba.zcode.ui.terminal
 
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -20,10 +22,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,10 +41,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -54,6 +60,14 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zaba.zcode.core.execution.ExecutionEngine
+import com.zaba.zcode.core.execution.OutputBatcher
+import com.zaba.zcode.core.execution.RunId
+import com.zaba.zcode.core.execution.RunLogger
+import com.zaba.zcode.core.execution.SessionState
+import com.zaba.zcode.core.execution.TerminalBuffer
+import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.packageengine.TelemetryStore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -67,13 +81,23 @@ import com.zaba.zcode.ui.theme.getTerminalPalette
 
 /**
  * TerminalScreen — layer Terminal full-screen (pindah layer, bukan panel).
- * - Ketik langsung di terminal: TextField transparan 1dp mengikat keyboard Android,
- *   Enter mengirim baris ke stdin (tanpa tombol Send) — dual backend:
- *   Chaquopy in-process (Android) / python3 subprocess (desktop).
- * - Ctrl+C: deterministik untuk input() yang nge-blok (flag interrupt), best-effort
- *   interrupt thread worker untuk loop CPU.
- * - Back di pojok kiri atas; proses dibersihkan saat keluar.
- * - Output di-cap MAX_OUTPUT_CHARS (S-18).
+ *
+ * SPEC-001 Phase 0 + Phase 3 terminal (implemented):
+ * - interactive hard timeout DIHAPUS (session selesai karena exit/Ctrl+C/Stop/error)
+ * - run ID per session + disk-backed full log (filesDir/logs/runs/<run-id>.log)
+ * - output batching (OutputBatcher: 40ms / 2KB) — AI streaming → 1 UI update/batch
+ * - stdout/stderr dipisah (stream "out"/"err") di disk log
+ * - session state eksplisit (START/RUNNING/WAITING_FOR_INPUT/INTERRUPTING/…)
+ * - line-oriented buffer (TerminalBuffer) — bukan satu String raksasa
+ * - incremental ANSI parser (AnsiLineCache per baris)
+ * - virtualized renderer (LazyColumn — UI hanya menyusun baris yang terlihat)
+ * - metrik: visible memory (chars), log bytes, free storage
+ * - Export Log (SAF) — full log dari disk, bukan dari ring buffer
+ *
+ * In-memory cap: TerminalBuffer(maxLines) membatasi RAM (SPEC Rule 5:
+ * full output ≠ full RAM). Full history di disk via RunLogger — TIDAK hilang.
+ * Batas MAX_OUTPUT_CHARS (S-18) berlaku untuk log in-memory di layar Pip;
+ * disk log interactive tidak di-cap.
  */
 @Composable
 fun TerminalScreen(
@@ -82,79 +106,131 @@ fun TerminalScreen(
     context: Context,
     onBack: () -> Unit,
     showPythonIndicator: Boolean = true, // F2.4: toggle indikator cold-start Python
-    terminalOutputLimit: Int = 65536, // F2.2: Ring Buffer limit
+    terminalOutputLimit: Int = 65536, // F2.2: legacy ring-buffer chars (dipertahankan utk kompatibilitas param)
     themeType: ZcodeThemeType = ZcodeThemeType.RETRO, // F2.8: follow active theme
     // Audit 2026-08: ukuran font setting kini KHUSUS terminal (label UI "Ukuran
     // Font Terminal"); keluarga font terminal SELALU Monospace (console wajib
     // alignment) — jenis font pilihan user berlaku untuk UI & editor saja.
     terminalFontSize: Int = 14
 ) {
-    var terminalText by remember { mutableStateOf("ZCODE Terminal — Running $filename\n" + "-".repeat(40) + "\n") }
+    val buffer = remember { TerminalBuffer(maxLines = 10_000) }
+    val ansiCache = remember(themeType) { AnsiLineCache(getTerminalPalette(themeType)) }
     var inputVal by remember { mutableStateOf(TextFieldValue("")) }
     var session by remember { mutableStateOf<ExecutionEngine.InteractiveSession?>(null) }
     // F1.2 (PERF_PASS B,F): indikator cold-start Python. Di ARMv7 Python.start()
     // bisa 1-3 dtk; tanpa ini layar terlihat kosong/diam seolah tap Run telat.
     var startingPython by remember { mutableStateOf(true) }
-    val scrollState = rememberScrollState()
+    var sessionState by remember { mutableStateOf(SessionState.START) }
+    var logBytes by remember { mutableStateOf(0L) }
+    var memChars by remember { mutableLongStateOf(0L) }
+    var runId by remember { mutableStateOf(RunId.newId("run")) }
+    var logger by remember { mutableStateOf<RunLogger?>(null) }
+    var logFilePath by remember { mutableStateOf<File?>(null) }
+    val listState: LazyListState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
+    var stickToBottom by remember { mutableStateOf(true) }
+    var scrollJob by remember { mutableStateOf<Job?>(null) }
 
-    // F2.2: Coalesce scroll variables
-    var lastScrollTime by remember { mutableStateOf(0L) }
-    var scrollJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    // Output batching (SPEC-001 §14) — thread consumer menjaga urutan.
+    val batcher = remember {
+        OutputBatcher(
+            onBatch = { stream, text ->
+                scope.launch { appendToTerminal(stream, text) }
+            }
+        )
+    }
+    batcher.start()
 
-    fun append(text: String) {
-        val combined = terminalText + text
-        terminalText = if (combined.length > terminalOutputLimit) {
-            "\n…[output truncated: >$terminalOutputLimit chars]…\n" +
-                combined.takeLast(terminalOutputLimit)
-        } else {
-            combined
+    fun appendToTerminal(stream: String, text: String) {
+        // 1) line-oriented buffer (RAM terbatas) — hanya baris baru di-parse
+        buffer.append(text)
+        memChars += text.length
+        TelemetryStore.recordPeak("terminal_memory_peak_chars", memChars)
+        // 2) disk log lengkap (tidak terpotong)
+        logger?.append(stream, text)
+        logBytes = logger?.bytesWritten ?: 0L
+        TelemetryStore.recordPeak("terminal_log_bytes", logBytes)
+
+        // auto-scroll bila user masih di bawah (stickToBottom)
+        if (stickToBottom) {
+            val target = (buffer.lastLineIndex() - buffer.startOffset + 1).toInt().coerceAtLeast(0)
+            scrollJob?.cancel()
+            scrollJob = scope.launch {
+                delay(16)
+                listState.scrollToItem(target)
+            }
         }
+    }
 
-        val isUserScrollingUp = scrollState.value < scrollState.maxValue - 120
-        if (!isUserScrollingUp) {
-            val now = System.currentTimeMillis()
-            if (now - lastScrollTime > 120) {
-                lastScrollTime = now
-                scope.launch {
-                    scrollState.scrollTo(scrollState.maxValue)
+    // Deteksi posisi scroll: di bawah → ikut output; scroll naik → jangan ganggu
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.layoutInfo.totalItemsCount }
+            .collect { (first, total) ->
+                stickToBottom = total == 0 || first >= total - 8
+            }
+    }
+
+    // Export full log (SAF) — dari DISK, bukan buffer (SPEC-001 §16)
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val src = logFilePath
+                if (src != null && src.exists()) {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        src.inputStream().use { it.copyTo(out) }
+                    }
+                    scope.launch { appendToTerminal("sys", "\n✅ Log diekspor (${src.name}).\n") }
+                } else {
+                    scope.launch { appendToTerminal("sys", "\n⚠️ Belum ada log (proses belum jalan).\n") }
                 }
-            } else {
-                scrollJob?.cancel()
-                scrollJob = scope.launch {
-                    delay(120)
-                    scrollState.scrollTo(scrollState.maxValue)
-                }
+            } catch (e: Exception) {
+                scope.launch { appendToTerminal("sys", "\n❌ Export gagal: ${e.message}\n") }
             }
         }
     }
 
     // Jalankan proses saat terminal dibuka (callback datang dari thread background)
     LaunchedEffect(filename) {
+        TelemetryStore.increment("terminal_runs")
         val targetFile = File(filesDir, filename)
         if (!targetFile.exists()) {
-            append("\nError: File $filename not found!\n")
+            appendToTerminal("err", "\nError: File $filename not found!\n")
             startingPython = false
             return@LaunchedEffect
         }
+        // RunLogger: disk-backed full log (SPEC-001 §16)
+        val rl = RunLogger(File(Paths.runLogsDir(context), "$runId.log"))
+        rl.start("ZCODE run $runId — $filename")
+        logger = rl
+        logFilePath = File(Paths.runLogsDir(context), "$runId.log")
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
-        // (Python.start() yang berat berjalan di dalamnya). Layar tidak lagi kosong.
-        // F2.4: indikator bisa dimatikan user via Settings.
-        if (showPythonIndicator) append("\u2699 Menyalakan Python\u2026\n")
-        // Beri satu frame agar pesan tergambar sebelum pemanggilan sinkron yang berat.
+        if (showPythonIndicator) appendToTerminal("sys", "\u2699 Menyalakan Python\u2026\n")
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
         val activeSession = ExecutionEngine.startInteractiveSession(
             context = context,
             file = targetFile,
-            onOutput = { chunk -> scope.launch { append(chunk) } },
+            runId = runId,
+            logger = rl,
+            onOutput = { stream, chunk -> batcher.append(stream, chunk) },
             onExit = { code ->
                 startingPython = false
-                scope.launch { append("\n\nProcess finished with exit code $code\n") }
-            }
+                scope.launch {
+                    appendToTerminal(
+                        "sys",
+                        "\n\nProcess finished with exit code $code (state: ${sessionState.name})\n"
+                    )
+                }
+                rl.writeExit(sessionState, code)
+                rl.close()
+            },
+            onState = { st -> sessionState = st }
         )
         session = activeSession
         startingPython = false
+        // waitForExit TANPA hard timeout (SPEC-001 §17) — menunggu sampai selesai
         withContext(Dispatchers.IO) {
             activeSession.waitForExit()
         }
@@ -167,6 +243,8 @@ fun TerminalScreen(
     DisposableEffect(Unit) {
         onDispose {
             session?.sendKill()
+            batcher.close()
+            logger?.close()
         }
     }
 
@@ -178,10 +256,13 @@ fun TerminalScreen(
         label = "cursorAlpha"
     )
 
-    // Terminal selalu Monospace (keputusan audit 2026-08 — dulu selector mati:
-    // semua pilihan dipetakan ke Monospace juga).
+    // Terminal selalu Monospace (keputusan audit 2026-08).
     val resolvedFontFamily = FontFamily.Monospace
     val fontSizeSp = terminalFontSize.sp
+    val freeStorageMb = ExecutionEngine.freeStorageBytes(filesDir).let {
+        if (it < 0) -1 else it / 1024 / 1024
+    }
+    val lineHeightSp = (terminalFontSize + 4).sp
 
     Scaffold(
         topBar = {
@@ -193,7 +274,6 @@ fun TerminalScreen(
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Back di pojok kiri atas (keputusan tim)
                     Text(
                         "◀ Back",
                         color = MaterialTheme.colorScheme.onSurface,
@@ -211,34 +291,71 @@ fun TerminalScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.titleSmall
                     )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        stateLabel(sessionState),
+                        color = stateColor(sessionState),
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
                 }
             }
         },
         bottomBar = {
-            // bottom bar ramping (permintaan user): padding vertikal & tombol diperkecil
             Surface(color = Color(0xFF1E1F29)) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 3.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        onClick = {
-                            session?.sendCtrlC()
-                            append("^C\nProcess Interrupted\n")
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 3.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Ctrl+C", fontSize = 11.sp, color = Color.White)
+                        Button(
+                            onClick = {
+                                TelemetryStore.increment("terminal_interrupts")
+                                session?.sendCtrlC()
+                                appendToTerminal("sys", "^C\nProcess Interrupted\n")
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)
+                        ) {
+                            Text("Ctrl+C", fontSize = 11.sp, color = Color.White)
+                        }
+                        Text(
+                            "Tap terminal untuk mengetik langsung",
+                            color = Color.Gray,
+                            fontSize = 10.sp
+                        )
+                        Button(
+                            onClick = { exportLauncher.launch("zcode_${runId}.log") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        ) {
+                            Text("Export Log", fontSize = 11.sp, color = Color.White)
+                        }
                     }
-                    Text(
-                        "Tap terminal untuk mengetik langsung",
-                        color = Color.Gray,
-                        fontSize = 10.sp
-                    )
+                    // Metrik (SPEC-001 Phase 0 #8): memori tampilan, log disk, storage
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris · log ${logBytes / 1024}KB · $runId",
+                            color = Color.Gray,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1
+                        )
+                        Text(
+                            if (freeStorageMb < 0) "storage ?" else "storage ${freeStorageMb}MB",
+                            color = if (freeStorageMb in 1 until 100) Color(0xFFFFB000) else Color.Gray,
+                            fontSize = 9.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
             }
         }
@@ -249,62 +366,77 @@ fun TerminalScreen(
                 .padding(padding)
                 .background(Color(0xFF050806)) // terminal SELALU true-black (keputusan tim)
                 .clickable { focusRequester.requestFocus() }
-                .padding(12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)
         ) {
-            Box(
+            if (startingPython && showPythonIndicator) {
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Menyalakan Python\u2026",
+                        color = Color(0xFF8A9BB0),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(13.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFF39FF14)
+                    )
+                }
+            }
+
+            // Virtualized renderer: LazyColumn hanya menyusun baris yang terlihat
+            LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .verticalScroll(scrollState)
             ) {
-                if (startingPython && showPythonIndicator) {
-                    // F1.2 + F2.4: indikator tak menghalangi; user paham app sedang bekerja.
-                    // F2.4: bisa dimatikan via Settings.
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                val relCount = buffer.lineCount
+                items(relCount, key = { it -> (buffer.startOffset + it) }) { rel ->
+                    val abs = buffer.startOffset + rel
+                    val lineText = buffer.get(abs) ?: ""
+                    if (lineText.isNotEmpty()) {
                         Text(
-                            "Menyalakan Python\u2026",
-                            color = Color(0xFF8A9BB0),
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(13.dp),
-                            strokeWidth = 2.dp,
-                            color = Color(0xFF39FF14)
+                            text = ansiCache.render(abs, lineText),
+                            fontFamily = resolvedFontFamily,
+                            fontSize = fontSizeSp,
+                            lineHeight = lineHeightSp
                         )
                     }
                 }
-                Column {
-                    val palette = getTerminalPalette(themeType)
-                    val annotatedText = parseAnsiToAnnotatedString(terminalText, palette)
-                    Text(
-                        text = annotatedText,
-                        fontFamily = resolvedFontFamily,
-                        fontSize = fontSizeSp,
-                        lineHeight = (terminalFontSize + 4).sp
-                    )
-                    // Baris input aktif + kursor blok berkedip
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = inputVal.text,
-                            color = Color.White,
-                            fontFamily = resolvedFontFamily,
-                            fontSize = fontSizeSp
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Box(
-                            modifier = Modifier
-                                .width(8.dp)
-                                .height(14.dp)
-                                .alpha(blinkAlpha)
-                                .background(Color(0xFF39FF14))
-                        )
+                // current line (output yang belum diakhiri newline) + input + cursor
+                item(key = { -1L }) {
+                    Column {
+                        val partial = buffer.currentLine()
+                        if (partial.isNotEmpty()) {
+                            Text(
+                                text = ansiCache.render(buffer.totalLines, partial),
+                                fontFamily = resolvedFontFamily,
+                                fontSize = fontSizeSp,
+                                lineHeight = lineHeightSp
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = inputVal.text,
+                                color = Color.White,
+                                fontFamily = resolvedFontFamily,
+                                fontSize = fontSizeSp
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(8.dp)
+                                    .height(14.dp)
+                                    .alpha(blinkAlpha)
+                                    .background(Color(0xFF39FF14))
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
                     }
                 }
             }
@@ -329,7 +461,7 @@ fun TerminalScreen(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         val line = inputVal.text
-                        append(line + "\n")
+                        appendToTerminal("out", line + "\n")
                         session?.sendInput(line + "\n")
                         inputVal = TextFieldValue("")
                         focusRequester.requestFocus()
@@ -338,6 +470,24 @@ fun TerminalScreen(
             )
         }
     }
+}
+
+private fun stateLabel(s: SessionState): String = when (s) {
+    SessionState.START -> "START"
+    SessionState.RUNNING -> "RUNNING"
+    SessionState.WAITING_FOR_INPUT -> "INPUT…"
+    SessionState.INTERRUPTING -> "INTERRUPTING"
+    SessionState.STOPPING -> "STOPPING"
+    SessionState.EXITED -> "EXITED"
+    SessionState.FAILED -> "FAILED"
+}
+
+private fun stateColor(s: SessionState): Color = when (s) {
+    SessionState.EXITED -> Color(0xFF2E7D32)
+    SessionState.FAILED -> Color(0xFFB3261E)
+    SessionState.WAITING_FOR_INPUT -> Color(0xFFFFB000)
+    SessionState.INTERRUPTING, SessionState.STOPPING -> Color(0xFFFFB000)
+    else -> Color(0xFF8A9BB0)
 }
 
 fun parseAnsiToAnnotatedString(text: String, palette: com.zaba.zcode.ui.theme.TerminalPalette): AnnotatedString {
