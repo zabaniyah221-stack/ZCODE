@@ -152,7 +152,7 @@ fun PipScreen(
         scope.launch(Dispatchers.Default) {
             val result = try {
                 engine.install(trimmed, plan) { step ->
-                    kotlinx.coroutines.withContext(Dispatchers.Main) { handleEngineStep(step) }
+                    scope.launch { handleEngineStep(step) }
                 }
             } catch (e: Exception) {
                 PackageEngineV2.InstallResult(
@@ -190,7 +190,7 @@ fun PipScreen(
         scope.launch(Dispatchers.Default) {
             val plan = try {
                 engine.analyze(trimmed) { step ->
-                    kotlinx.coroutines.withContext(Dispatchers.Main) { handleEngineStep(step) }
+                    scope.launch { handleEngineStep(step) }
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -238,7 +238,7 @@ fun PipScreen(
     fun doUninstall(canonical: String) {
         scope.launch(Dispatchers.Default) {
             val (ok, msg) = engine.uninstall(canonical) { line ->
-                kotlinx.coroutines.withContext(Dispatchers.Main) { appendLog(line) }
+                scope.launch { appendLog(line) }
             }
             withContext(Dispatchers.Main) {
                 appendLog(if (ok) "\n✅ Uninstall $canonical berhasil.\n" else "\n❌ $msg\n")
@@ -430,7 +430,7 @@ data class ConsoleLine(val text: String, val kind: ConsoleKind)
 // =====================================================================
 
 @Composable
-private fun TabBox(label: String, active: Boolean, onClick: () -> Unit) {
+private fun androidx.compose.foundation.layout.RowScope.TabBox(label: String, active: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .weight(1f)

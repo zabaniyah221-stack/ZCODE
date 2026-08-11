@@ -372,7 +372,10 @@ object ExecutionEngine {
                     if (!Python.isStarted()) {
                         Python.start(AndroidPlatform(appContext))
                     }
-                    val bridge = TerminalBridge({ _, text -> onLog(text) }) { code -> onDone(code == 0, code) }
+                    val bridge = TerminalBridge(
+                        onOutput = { _, text -> onLog(text) },
+                        onExit = { code -> onDone(code == 0, code) }
+                    )
                     Python.getInstance()
                         .getModule("zcode_pip")
                         .callAttr("install_package", bridge, packageName)

@@ -132,16 +132,6 @@ fun TerminalScreen(
     var stickToBottom by remember { mutableStateOf(true) }
     var scrollJob by remember { mutableStateOf<Job?>(null) }
 
-    // Output batching (SPEC-001 §14) — thread consumer menjaga urutan.
-    val batcher = remember {
-        OutputBatcher(
-            onBatch = { stream, text ->
-                scope.launch { appendToTerminal(stream, text) }
-            }
-        )
-    }
-    batcher.start()
-
     fun appendToTerminal(stream: String, text: String) {
         // 1) line-oriented buffer (RAM terbatas) — hanya baris baru di-parse
         buffer.append(text)
@@ -162,6 +152,16 @@ fun TerminalScreen(
             }
         }
     }
+
+    // Output batching (SPEC-001 §14) — thread consumer menjaga urutan.
+    val batcher = remember {
+        OutputBatcher(
+            onBatch = { stream, text ->
+                scope.launch { appendToTerminal(stream, text) }
+            }
+        )
+    }
+    batcher.start()
 
     // Deteksi posisi scroll: di bawah → ikut output; scroll naik → jangan ganggu
     LaunchedEffect(listState) {
