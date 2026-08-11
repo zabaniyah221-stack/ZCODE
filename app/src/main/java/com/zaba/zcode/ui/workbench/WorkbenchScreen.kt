@@ -5,8 +5,11 @@ import android.webkit.WebView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -17,6 +20,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +91,7 @@ import com.zaba.zcode.ui.components.ZIcons
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
 import com.zaba.zcode.ui.theme.ZcodeThemeType
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -131,6 +136,13 @@ fun WorkbenchScreen(
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+
+    // EASTER EGG (audit 2026-08): tap logo {Z} 7x → Frieren bawa papan ngeledek
+    // 2.8 dtk lalu fade out & wordmark+logo balik sendiri. State sengaja TIDAK
+    // persist — easter egg yang cuma sekali itu sedih.
+    var eggTaps by remember { mutableStateOf(0) }
+    var lastEggTap by remember { mutableStateOf(0L) }
+    var showEgg by remember { mutableStateOf(false) }
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
     var showTerminalOverlay by rememberSaveable { mutableStateOf(false) }
 
@@ -293,29 +305,73 @@ fun WorkbenchScreen(
                 modifier = Modifier.width(300.dp)
             ) {
                 // Header drawer — "ZCODE" + logo app baru di kanan (tanpa subtitle, permintaan user)
-                Row(
+                // EASTER EGG: tap logo 7x (jeda <800ms) → header melar mulus,
+                // wordmark+logo crossfade ke Frieren bawa papan 2.8 dtk, fade out,
+                // lalu wordmark+logo balik sendiri (coroutine delay, tanpa persist).
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                        .padding(horizontal = 20.dp, vertical = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .animateContentSize(animationSpec = tween(300))
+                        .padding(horizontal = 20.dp, vertical = 18.dp)
                 ) {
-                    Text(
-                        "ZCODE",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    // Audit 2026-08: ikon dibesarkan 36dp → 56dp (dulu kelihatan
-                    // kayak "stiker nyasar"); aset 512px tetap tajam.
-                    Image(
-                        painter = painterResource(id = R.drawable.zcode_logo),
-                        contentDescription = "Logo ZCODE",
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                    )
+                    AnimatedVisibility(
+                        visible = !showEgg,
+                        enter = fadeIn(tween(300)),
+                        exit = fadeOut(tween(200))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "ZCODE",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            // Audit 2026-08: ikon dibesarkan 36dp → 56dp (dulu kelihatan
+                            // kayak "stiker nyasar"); aset 512px tetap tajam.
+                            // Sekaligus pemicu easter egg: 7 tap cepat.
+                            Image(
+                                painter = painterResource(id = R.drawable.zcode_logo),
+                                contentDescription = "Logo ZCODE",
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .clickable {
+                                        val now = System.currentTimeMillis()
+                                        eggTaps = if (now - lastEggTap > 800) 1 else eggTaps + 1
+                                        lastEggTap = now
+                                        if (eggTaps >= 7 && !showEgg) {
+                                            eggTaps = 0
+                                            showEgg = true
+                                            scope.launch {
+                                                delay(2800)
+                                                showEgg = false
+                                            }
+                                        }
+                                    }
+                            )
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = showEgg,
+                        enter = fadeIn(tween(300)),
+                        exit = fadeOut(tween(400)),
+                        modifier = Modifier.align(Alignment.Center)
+                    ) {
+                        // 120dp + aspect 16:9 → gambar utuh tanpa crop; header ≈ ×1.7.
+                        Image(
+                            painter = painterResource(id = R.drawable.easter_frieren),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .height(120.dp)
+                                .aspectRatio(16f / 9f)
+                                .clip(RoundedCornerShape(12.dp))
+                        )
+                    }
                 }
 
                 // ---------- tujuan aplikasi (tanpa label "NAVIGATION" — redesign 2026-08) ----------

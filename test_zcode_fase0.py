@@ -220,9 +220,10 @@ class TestUISpec:
         assert "ZIcons." in txt, "ikon polos ZIcons hilang dari topbar/FAB"
         low = txt.lower()
         assert "icons.outlined" not in low and "icons.filled" not in low
-        # painter dikecualikan hanya untuk logo drawer era lama (≤1 pemakaian
-        # call-site; tanda "(" membedakan pemakaian dari baris import-nya)
-        assert low.count("painterresource(") <= 1
+        # painter dibatasi untuk chrome drawer saja: logo app + banner easter
+        # egg Frieren (audit 2026-08) — ≤2 call-site; tanda "(" membedakan
+        # pemakaian dari baris import-nya
+        assert low.count("painterresource(") <= 2
 
 # ===================================================================
 # Execution guards — S-18, F-07
