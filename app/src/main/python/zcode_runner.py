@@ -2,16 +2,19 @@
 zcode_runner — runner dalam proses Chaquopy untuk ZCODE.
 
 Alur: Kotlin memanggil `run_script(bridge, script_path)`.
-- sys.stdout / sys.stderr diarahkan ke bridge (muncul di Terminal UI)
+- sys.stdout / sys.stderr diarahkan ke bridge (muncul di Terminal UI),
+  DIBEDAKAN stream-nya (SPEC-001 Phase 0: "Separate stdout/stderr"):
+  stdout → bridge.write(s, "out"), stderr → bridge.write(s, "err")
 - sys.stdin diganti BridgeStdin: input() membaca baris dari queue Kotlin
   (ketik langsung + Enter, tanpa tombol Send — sesuai keputusan tim)
 - Ctrl+C: bridge.isInterrupted() dicek BridgeStdin → KeyboardInterrupt
   deterministik untuk script yang sedang nge-blok di input()
 - cwd = folder workspace, jadi plt.savefig("out.png") / open("data.txt")
   relatif bekerja seperti di desktop
-- sys.path menyertakan workspace + workspace/user_packages, jadi package
-  hasil `pip install` dari PipScreen (install via --target) langsung bisa
-  di-import tanpa restart aplikasi
+- sys.path menyertakan workspace + workspace/user_packages (legacy pip
+  install) + python-env (PackageEngineV2, lihat package_runtime.envpaths)
+- bridge.waitingInput(True/False) memberitahu Kotlin state WAITING_FOR_INPUT
+  (SPEC-001: process lifecycle eksplisit)
 """
 import os
 import runpy
@@ -20,14 +23,15 @@ import threading
 
 
 class BridgeStdout:
-    """Alihkan print()/traceback ke Terminal UI lewat bridge Java."""
+    """Alihkan print()/traceback ke Terminal UI lewat bridge Java (stream 'out')."""
 
-    def __init__(self, bridge):
+    def __init__(self, bridge, stream="out"):
         self._bridge = bridge
+        self._stream = stream
 
     def write(self, s):
         if s:
-            self._bridge.write(str(s))
+            self._bridge.write(str(s), self._stream)
         return len(s)
 
     def flush(self):
@@ -35,6 +39,13 @@ class BridgeStdout:
 
     def isatty(self):
         return True
+
+
+class BridgeStderr(BridgeStdout):
+    """Stream 'err' — dipakai sys.stderr supaya log bisa membedakan stderr."""
+
+    def __init__(self, bridge):
+        super().__init__(bridge, stream="err")
 
 
 class BridgeStdin:
@@ -49,7 +60,9 @@ class BridgeStdin:
         while "\n" not in self._buffer:
             if self._bridge.isInterrupted():
                 raise KeyboardInterrupt
+            self._bridge.waitingInput(True)
             chunk = self._bridge.readLine()
+            self._bridge.waitingInput(False)
             if chunk is None:
                 # tidak ada input & belum di-interupsi → tetap menunggu (bukan EOF palsu)
                 continue
@@ -69,6 +82,16 @@ class BridgeStdin:
         return True
 
 
+def _activate_package_env(bridge):
+    """Aktivasi package dari PackageEngineV2 (python-env) + legacy user_packages."""
+    try:
+        from package_runtime.envpaths import activate
+        activate(bridge.workspaceDir())
+    except Exception:
+        # kalau package_runtime belum tersedia (dev), lewati tanpa crash
+        pass
+
+
 def run_script(bridge, script_path):
     try:
         # cwd = workspace filesDir → path relatif script berfungsi
@@ -77,13 +100,15 @@ def run_script(bridge, script_path):
         except OSError:
             pass
         sys.stdin = BridgeStdin(bridge)
-        sys.stdout = BridgeStdout(bridge)
-        sys.stderr = BridgeStdout(bridge)
+        sys.stdout = BridgeStdout(bridge, stream="out")
+        sys.stderr = BridgeStderr(bridge)
         sys.path.insert(0, bridge.workspaceDir())
-        # user_packages: target `pip install` dari zcode_pip (--target <workspace>/user_packages)
+        # user_packages: target `pip install` legacy (--target <workspace>/user_packages)
         user_pkg = os.path.join(bridge.workspaceDir(), "user_packages")
         if user_pkg not in sys.path:
             sys.path.insert(0, user_pkg)
+        # python-env: package hasil PackageEngineV2
+        _activate_package_env(bridge)
 
         # best-effort: daftarkan thread worker agar Kotlin bisa coba interrupt()
         worker = threading.current_thread()

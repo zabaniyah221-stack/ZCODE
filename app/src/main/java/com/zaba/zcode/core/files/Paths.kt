@@ -22,4 +22,32 @@ object Paths {
     fun userPackagesDir(context: Context): File = File(appDir(context), "user_packages").apply { mkdirs() }
     fun keysFile(context: Context): File = File(appDir(context), ".zabacode_keys_encrypted.json")
     fun tokenFile(context: Context): File = File(appDir(context), ".zabacode_auth_token")
+
+    // ------------------------------------------------------------------
+    // python-env — environment package ZCODE (SPEC-001 §2)
+    //   python-env/
+    //     site-packages/<normalized>/<version>/   ← versi terpasang
+    //     transactions/<tx-id>/                   ← staging install
+    //     wheels/                                 ← cache wheel (offline reuse)
+    //     metadata/                               ← metadata package lokal
+    //     logs/<tx-id>.log                        ← log install
+    //     state/                                  ← runtime.json, installed.json, dll
+    // ------------------------------------------------------------------
+    fun pythonEnvDir(context: Context): File = File(appDir(context), "python-env").apply { mkdirs() }
+    fun pythonSitePackages(context: Context): File =
+        File(pythonEnvDir(context), "site-packages").apply { mkdirs() }
+    fun pythonTransactions(context: Context): File =
+        File(pythonEnvDir(context), "transactions").apply { mkdirs() }
+    fun pythonWheels(context: Context): File =
+        File(pythonEnvDir(context), "wheels").apply { mkdirs() }
+    fun pythonMetadata(context: Context): File =
+        File(pythonEnvDir(context), "metadata").apply { mkdirs() }
+    fun pythonLogs(context: Context): File =
+        File(pythonEnvDir(context), "logs").apply { mkdirs() }
+    fun pythonState(context: Context): File =
+        File(pythonEnvDir(context), "state").apply { mkdirs() }
+
+    /** Log full-output terminal per run: <filesDir>/logs/runs/<run-id>.log */
+    fun runLogsDir(context: Context): File =
+        File(appDir(context), "logs/runs").apply { mkdirs() }
 }
