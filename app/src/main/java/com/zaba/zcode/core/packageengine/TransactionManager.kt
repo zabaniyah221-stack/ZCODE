@@ -24,9 +24,9 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class TransactionManager(private val context: Context) {
 
-    data class Transaction(val id: String, val dir: File) {
+    data class Transaction(val id: String, val dir: File, val logDir: File) {
         val stagingSitePackages: File get() = File(dir, "site-packages")
-        fun logFile(): File = File(Paths.pythonLogs(context), "$id.log")
+        fun logFile(): File = File(logDir, "$id.log")
     }
 
     data class PlanPackage(
@@ -47,7 +47,7 @@ class TransactionManager(private val context: Context) {
         val dir = File(Paths.pythonTransactions(context), id)
         File(dir, "site-packages").mkdirs()
         journal(id, operation, "CREATED", null, null)
-        return Transaction(id, dir)
+        return Transaction(id, dir, Paths.pythonLogs(context))
     }
 
     fun appendTxLog(tx: Transaction, line: String) {

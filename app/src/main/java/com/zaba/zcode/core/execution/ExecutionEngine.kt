@@ -277,7 +277,11 @@ object ExecutionEngine {
         private val onExit: (Int) -> Unit,
         private val onState: (SessionState) -> Unit
     ) : InteractiveSession {
-        private val bridge = TerminalBridge(onOutput, { code -> onExit(code) }, onState)
+        private val bridge = TerminalBridge(
+            onOutput = onOutput,
+            onExit = { code -> onExit(code) },
+            onState = onState
+        )
         private val exitValue = AtomicInteger(-1)
         private val done = CountDownLatch(1)
         @Volatile
