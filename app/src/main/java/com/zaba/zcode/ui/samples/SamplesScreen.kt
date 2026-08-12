@@ -101,7 +101,7 @@ fun SamplesScreen(
                         title = category.title,
                         description = category.description,
                         onClick = {
-                            Breadcrumb.log("SAMPLES_KATEGORI", category)
+                            Breadcrumb.log("SAMPLES_KATEGORI", category.id)
                             activeCategory = category
                         }
                     )

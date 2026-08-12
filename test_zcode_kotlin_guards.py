@@ -1328,3 +1328,70 @@ class TestCakupanBreadcrumb:
     def test_pilih_sample_tercatat(self):
         src = strip_kt_comments(read(UI / "samples/SamplesScreen.kt"))
         assert "SAMPLES_PILIH" in src, "tap sample tidak berjejak"
+
+
+# ---------------------------------------------------------------------------
+# ERROR CI 2026-08-13 (run 31640290111) — Breadcrumb.log() diberi objek
+#
+# `Breadcrumb.log(step: String, detail: String = "")`. Panggilan
+# `Breadcrumb.log("SAMPLES_KATEGORI", category)` mengoper SampleCategory ke
+# parameter String → type mismatch, dan CI merah di compileDebugKotlin.
+#
+# Lolos dari SEMUA cek lokal karena tools/kotlin_sanity_check.py hanya
+# memeriksa keseimbangan leksikal, bukan tipe. Guard ini menutup celah itu
+# untuk pemanggilan Breadcrumb: argumen kedua wajib berupa sesuatu yang
+# jelas-jelas String.
+# ---------------------------------------------------------------------------
+class TestBreadcrumbArgumenString:
+    def test_detail_selalu_string(self):
+        """Daripada menebak dari nama variabel (rapuh — `filename`, `runId`,
+        `trimmed` semuanya String yang sah), telusuri DEKLARASI argumennya di
+        file yang sama dan tolak yang terbukti bukan String."""
+        pola = re.compile(r'Breadcrumb\.log\(\s*"[^"]+"\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)')
+        salah = []
+        for f in sorted(APP.rglob("*.kt")):
+            src = strip_kt_comments(read(f))
+            for m in pola.finditer(src):
+                nama = m.group(1)
+                # Cari deklarasi: parameter `nama: Tipe` atau `val/var nama =`
+                param = re.search(r"\b" + nama + r"\s*:\s*([A-Za-z0-9_.<>?]+)", src)
+                if param:
+                    tipe = param.group(1)
+                    if tipe.rstrip("?") != "String":
+                        salah.append("%s: %s bertipe %s" % (f.name, nama, tipe))
+                    continue
+                # Variabel lambda (`items(x) { entry -> ... }`) tidak punya
+                # deklarasi val/var maupun anotasi tipe, jadi DULU lolos diam-
+                # diam (bocor uji mutasi 2026-08-13). Telusuri sumber koleksinya.
+                lam = re.search(r"\(([A-Za-z0-9_.]+)\)\s*\{\s*" + nama + r"\s*->", src)
+                if lam:
+                    salah.append(
+                        "%s: %s adalah variabel lambda dari %s — oper properti "
+                        "String-nya (mis. %s.id), bukan objeknya"
+                        % (f.name, nama, lam.group(1), nama)
+                    )
+                    continue
+                decl = re.search(r"\b(?:val|var)\s+" + nama + r"\s*=\s*([^\n]+)", src)
+                if decl:
+                    rhs = decl.group(1)
+                    string_jelas = (
+                        rhs.lstrip().startswith('"')
+                        or ".trim()" in rhs or ".name" in rhs or ".id" in rhs
+                        or "toString()" in rhs or "newId(" in rhs
+                        or "mutableStateOf(" in rhs
+                    )
+                    if not string_jelas:
+                        salah.append("%s: %s = %s" % (f.name, nama, rhs.strip()[:60]))
+        assert not salah, (
+            "argumen kedua Breadcrumb.log harus String — objek akan gagal "
+            "compile di CI (kejadian nyata 2026-08-13, SampleCategory):\n  "
+            + "\n  ".join(salah)
+        )
+
+    def test_kategori_sample_pakai_id(self):
+        """Kasus persis yang membuat CI merah."""
+        src = strip_kt_comments(read(UI / "samples/SamplesScreen.kt"))
+        assert 'Breadcrumb.log("SAMPLES_KATEGORI", category)' not in src, (
+            "SampleCategory dioper ke parameter String"
+        )
+        assert 'category.id' in src
