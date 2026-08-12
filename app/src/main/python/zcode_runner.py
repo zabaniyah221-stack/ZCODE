@@ -18,8 +18,24 @@ Alur: Kotlin memanggil `run_script(bridge, script_path)`.
 """
 import os
 import runpy
+import socket
 import sys
 import threading
+
+# Batas waktu default untuk SEMUA koneksi jaringan yang dibuat script user
+# (urllib.request, http.client, requests, socket) — fix 2026-08-12.
+#
+# Kenapa perlu: hard timeout 120 detik pada session interaktif sudah dihapus
+# (SPEC-001 §17) karena dulu ia membunuh script yang menunggu input() — script
+# chat AI user berhenti sendiri dengan "exit code 0" setelah ~2 menit. Efek
+# sampingnya, script yang menunggu server yang tidak pernah menjawab kini bisa
+# menggantung SELAMANYA tanpa ada yang menyelamatkan.
+#
+# Ini memutus koneksi yang mati, BUKAN membunuh script: script tetap berjalan
+# dan menerima socket.timeout yang bisa ditangani sendiri. Script boleh
+# menimpanya kapan saja dengan socket.setdefaulttimeout() atau argumen
+# timeout= per panggilan.
+DEFAULT_SOCKET_TIMEOUT_S = 30.0
 
 
 class BridgeStdout:
@@ -99,6 +115,13 @@ def run_script(bridge, script_path):
             os.chdir(bridge.workspaceDir())
         except OSError:
             pass
+        # Jaring pengaman jaringan (lihat DEFAULT_SOCKET_TIMEOUT_S di atas).
+        try:
+            if socket.getdefaulttimeout() is None:
+                socket.setdefaulttimeout(DEFAULT_SOCKET_TIMEOUT_S)
+        except Exception:
+            pass
+
         sys.stdin = BridgeStdin(bridge)
         sys.stdout = BridgeStdout(bridge, stream="out")
         sys.stderr = BridgeStderr(bridge)

@@ -518,9 +518,14 @@ fun WorkbenchScreen(
                 )
                 FloatingActionButton(
                     onClick = {
+                        // Breadcrumb: titik paling awal jalur Run. Kalau file jejak
+                        // berhenti tepat setelah baris ini, berarti crash terjadi
+                        // sebelum layar terminal sempat dikomposisi (diagnostik 2026-08-12).
+                        com.zaba.zcode.core.diagnostics.Breadcrumb.log("FAB_TAP", vm.activeFile ?: "-")
                         // BEHAVIOR auto_trim_on_run berjalan di sini (F5)
                         vm.applyAutoTrimIfEnabled()
                         vm.flushSaveSync()
+                        com.zaba.zcode.core.diagnostics.Breadcrumb.log("SAVE_OK")
                         showTerminalOverlay = true
                     },
                     // S6: FAB syntax-aware — MERAH saat ada error syntax tapi TETAP
@@ -627,6 +632,7 @@ fun WorkbenchScreen(
         BackHandler(enabled = showTerminalOverlay) {
             showTerminalOverlay = false
         }
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("TERMINAL_COMPOSE")
         val activeFileForTerminal = vm.activeFile ?: "main.py"
         val terminalFilesDir = com.zaba.zcode.core.files.Paths.filesDir(context)
         com.zaba.zcode.ui.terminal.TerminalScreen(

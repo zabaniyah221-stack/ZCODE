@@ -304,9 +304,18 @@ class TestBugFixes:
         assert "400" in txt
 
     def test_version_bump(self):
-        assert "1.0.0" in read(BUILD_GRADLE)
-        assert "1.0.0" in read(ROOT / "gradle.properties")
-        assert "1.0.0" in read(UI / "settings/AboutScreen.kt")
+        """AboutScreen wajib menampilkan versi dari PackageInfo, bukan literal.
+
+        Saat menguji perbaikan di perangkat, user harus bisa memastikan APK yang
+        terpasang benar-benar versi baru. Angka hardcode di layar About pernah
+        membuat versi lama terlihat seperti versi baru.
+        """
+        props = read(ROOT / "gradle.properties")
+        assert re.search(r"^zcode\.versionName=\d+\.\d+\.\d+$", props, re.MULTILINE)
+        about = read(UI / "settings/AboutScreen.kt")
+        assert "getPackageInfo" in about, (
+            "AboutScreen wajib membaca versi via packageManager.getPackageInfo"
+        )
 
     def test_beautify_prev_threading(self):
         txt = read(CORE / "plugins/PluginHost.kt")

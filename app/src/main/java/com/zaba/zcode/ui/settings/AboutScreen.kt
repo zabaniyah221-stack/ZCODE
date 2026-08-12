@@ -129,8 +129,19 @@ fun AboutScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.primary
             )
+            // Versi dibaca dari PackageInfo (single source: gradle.properties),
+            // BUKAN literal. Saat menguji perbaikan, user perlu memastikan APK yang
+            // terpasang benar-benar versi baru — angka hardcode pernah menyesatkan.
+            // Fallback "1.0.0" hanya dipakai bila PackageManager gagal.
+            val versionLabel = androidx.compose.runtime.remember {
+                try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
+                } catch (e: Throwable) {
+                    "1.0.0"
+                }
+            }
             Text(
-                "v1.0.0",
+                "v$versionLabel",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.Gray
             )
@@ -172,6 +183,11 @@ fun AboutScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // ---------- Diagnostik (2026-08-12) ----------
+            // User memakai ZCODE tanpa PC, jadi `adb logcat` tidak tersedia. Panel ini
+            // satu-satunya cara membaca jejak langkah & laporan crash dari dalam HP.
+            DiagnosticsCard(context)
+
             // Contribute — langsung ke GitHub Issues
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -211,6 +227,112 @@ fun AboutScreen(
                             fontSize = 12.sp
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * DiagnosticsCard — panel jejak & laporan crash (2026-08-12).
+ *
+ * Dibuat karena user menjalankan ZCODE di HP tanpa PC: tidak ada `adb logcat`,
+ * sehingga force close sebelumnya tidak meninggalkan bukti apa pun yang bisa dibaca.
+ *
+ * Isi:
+ * - Breadcrumb 40 baris terakhir — baris TERAKHIR adalah langkah terjauh yang
+ *   sempat tercapai sebelum aplikasi mati. Ini bekerja untuk crash Java MAUPUN
+ *   crash native / dimatikan sistem karena memori.
+ * - Laporan crash Java terakhir (bila ada).
+ * - Tombol Salin → clipboard, supaya user bisa menempelkannya saat melapor.
+ */
+@Composable
+private fun DiagnosticsCard(context: android.content.Context) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "Diagnostik",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "Jejak langkah terakhir aplikasi. Kalau ZCODE pernah menutup sendiri, " +
+                    "buka panel ini dan salin isinya saat melapor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.LightGray,
+                textAlign = TextAlign.Center
+            )
+            Button(
+                onClick = {
+                    expanded = !expanded
+                    if (expanded) {
+                        val crash = com.zaba.zcode.core.diagnostics.CrashReporter.lastReport(context)
+                        val crumbs = com.zaba.zcode.core.diagnostics.Breadcrumb.tail(40)
+                        text = buildString {
+                            append("=== BREADCRUMB (40 baris terakhir) ===\n")
+                            append(crumbs)
+                            append("\n\n=== CRASH TERAKHIR ===\n")
+                            append(crash ?: "(belum pernah crash Java — kalau ZCODE tetap menutup sendiri, penyebabnya di luar JVM: lihat baris terakhir breadcrumb di atas)")
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    if (expanded) "Tutup Diagnostik" else "Lihat Diagnostik",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontSize = 12.sp
+                )
+            }
+
+            if (expanded) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .background(Color(0xFF050806), RoundedCornerShape(10.dp))
+                        .verticalScroll(rememberScrollState())
+                        .padding(10.dp)
+                ) {
+                    Text(
+                        text,
+                        fontSize = 9.sp,
+                        lineHeight = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFF9AE6B4)
+                    )
+                }
+                Button(
+                    onClick = {
+                        try {
+                            val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("ZCODE diagnostik", text))
+                            android.widget.Toast.makeText(
+                                context, "Diagnostik disalin", android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        } catch (e: Throwable) {
+                            android.widget.Toast.makeText(
+                                context, "Gagal menyalin: ${e.message}", android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Salin", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
                 }
             }
         }

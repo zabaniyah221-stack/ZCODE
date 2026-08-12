@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.StatFs
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -56,6 +55,24 @@ object ExecutionEngine {
     /** Folder workspace (filesDir) — di-set oleh WorkspaceViewModel, jadi cwd script = workspace. */
     @Volatile
     var workspaceDirPath: String = ""
+
+    /**
+     * Jumlah session Chaquopy yang thread Python-nya MASIH HIDUP (fix 2026-08-12).
+     *
+     * Chaquopy berjalan in-process: `sendKill()` hanya menyalakan flag yang dibaca
+     * BridgeStdin saat `input()`. Script yang sedang menunggu jaringan atau berputar
+     * di loop TIDAK membaca flag itu, sehingga thread-nya tetap hidup walau user
+     * menekan Back. Setiap tap ▶ Run berikutnya menambah thread baru — di HP RAM
+     * kecil penumpukan ini berujung pada aplikasi dimatikan sistem.
+     *
+     * Counter ini membuat kondisi tersebut TERLIHAT (di breadcrumb & UI) alih-alih
+     * senyap. Penghentian paksa sesungguhnya memerlukan proses Python terpisah;
+     * itu pekerjaan terpisah yang belum dilakukan — jangan mengklaim sudah beres.
+     */
+    private val liveSessions = AtomicInteger(0)
+
+    /** Berapa session Python yang masih berjalan (0 = bersih). */
+    fun liveSessionCount(): Int = liveSessions.get()
 
     data class RunResult(
         val ok: Boolean,
@@ -290,23 +307,42 @@ object ExecutionEngine {
 
         init {
             val appContext = context.applicationContext
+            liveSessions.incrementAndGet()
             Thread {
                 try {
-                    if (!Python.isStarted()) {
-                        Python.start(AndroidPlatform(appContext))
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PY_THREAD_BEGIN", "${file.name} live=${liveSessions.get()}"
+                    )
+                    if (!PythonRuntime.ensureStarted(appContext)) {
+                        val why = PythonRuntime.failureMessage() ?: "runtime tidak tersedia"
+                        bridge.abort("\nGagal menyalakan Python: $why\n")
+                        return@Thread
                     }
-                    Python.getInstance()
-                        .getModule("zcode_runner")
-                        .callAttr("run_script", bridge, file.absolutePath)
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log("PY_MODULE_LOAD")
+                    val runner = Python.getInstance().getModule("zcode_runner")
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log("SCRIPT_BEGIN", file.name)
+                    runner.callAttr("run_script", bridge, file.absolutePath)
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log("SCRIPT_END", file.name)
                 } catch (e: PyException) {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log("PY_EXCEPTION", e.message ?: "")
                     bridge.abort("\nPython error: ${e.message}\n")
-                } catch (e: Exception) {
-                    bridge.abort("\nRuntime error: ${e.message}\n")
+                } catch (e: Throwable) {
+                    // Throwable (bukan Exception): OutOfMemoryError / StackOverflowError /
+                    // UnsatisfiedLinkError sebelumnya LOLOS dari catch dan mematikan thread
+                    // tanpa jejak — user hanya melihat aplikasi mati. Sekarang tercatat.
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PY_THROWABLE", "${e.javaClass.simpleName}: ${e.message}"
+                    )
+                    bridge.abort("\nRuntime error: ${e.javaClass.simpleName}: ${e.message}\n")
                 } finally {
                     exitValue.set(if (bridge.isExited) bridge.exitCode else -1)
                     stateValue = if (bridge.isExited) bridge.state else SessionState.FAILED
                     logger?.writeExit(stateValue, exitValue.get())
                     logger?.close()
+                    val remaining = liveSessions.decrementAndGet()
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PY_THREAD_END", "code=${exitValue.get()} live=$remaining"
+                    )
                     done.countDown()
                 }
             }.start()
@@ -373,8 +409,10 @@ object ExecutionEngine {
             val appContext = context.applicationContext
             Thread {
                 try {
-                    if (!Python.isStarted()) {
-                        Python.start(AndroidPlatform(appContext))
+                    if (!PythonRuntime.ensureStarted(appContext)) {
+                        onLog("\n❌ Python runtime tidak tersedia.\n")
+                        onDone(false, -1)
+                        return@Thread
                     }
                     val bridge = TerminalBridge(
                         onOutput = { _, text -> onLog(text) },

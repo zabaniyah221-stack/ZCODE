@@ -338,11 +338,27 @@ class TestNoAIOracleFase0:
 # ===================================================================
 
 class TestVersion:
-    def test_version_in_gradle(self):
-        txt = read(BUILD_GRADLE)
-        assert "1.0.0" in txt
+    """Versi = SATU sumber (gradle.properties). Test ini sengaja TIDAK mem-pin
+    angka literal: mem-pin angka membuat setiap bump versi menghasilkan test
+    merah palsu, lalu orang terbiasa mengabaikan test — itu lebih berbahaya
+    daripada tidak ada test. Yang dijaga: konsistensi & format."""
+
     def test_version_in_properties(self):
-        assert "1.0.0" in read(ROOT / "gradle.properties")
+        props = read(ROOT / "gradle.properties")
+        m = re.search(r"^zcode\.versionName=(.+)$", props, re.MULTILINE)
+        assert m, "gradle.properties wajib punya zcode.versionName"
+        assert re.match(r"^\d+\.\d+\.\d+$", m.group(1).strip()), (
+            f"format versi harus X.Y.Z, dapat: {m.group(1)!r}"
+        )
+        c = re.search(r"^zcode\.versionCode=(\d+)$", props, re.MULTILINE)
+        assert c, "gradle.properties wajib punya zcode.versionCode"
+
+    def test_gradle_membaca_property_bukan_hardcode(self):
+        txt = read(BUILD_GRADLE)
+        assert 'findProperty("zcode.versionName")' in txt, (
+            "app/build.gradle.kts wajib membaca versi dari gradle.properties (F-09 anti-drift)"
+        )
+        assert 'findProperty("zcode.versionCode")' in txt
 
 # ===================================================================
 # Check.sh exists and covers guards

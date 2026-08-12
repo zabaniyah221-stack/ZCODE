@@ -47,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -59,6 +60,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.execution.OutputBatcher
 import com.zaba.zcode.core.execution.RunId
@@ -136,11 +138,17 @@ fun TerminalScreen(
         // 1) line-oriented buffer (RAM terbatas) — hanya baris baru di-parse
         buffer.append(text)
         memChars += text.length
-        TelemetryStore.recordPeak("terminal_memory_peak_chars", memChars)
-        // 2) disk log lengkap (tidak terpotong)
-        logger?.append(stream, text)
+        // 2) disk log lengkap (tidak terpotong) + telemetri — DIPINDAH KE THREAD IO.
+        //    Sebelumnya keduanya berjalan di Main thread setiap batch (40ms):
+        //    RunLogger.flush() 1x + TelemetryStore.saveLocked() 2x = ±75 tulis-file
+        //    per detik di UI thread → ANR di eMMC lambat (fix 2026-08-12).
+        val lg = logger
+        scope.launch(Dispatchers.IO) {
+            lg?.append(stream, text)
+            TelemetryStore.recordPeak("terminal_memory_peak_chars", memChars)
+            TelemetryStore.recordPeak("terminal_log_bytes", lg?.bytesWritten ?: 0L)
+        }
         logBytes = logger?.bytesWritten ?: 0L
-        TelemetryStore.recordPeak("terminal_log_bytes", logBytes)
 
         // auto-scroll bila user masih di bawah (stickToBottom)
         if (stickToBottom) {
@@ -161,7 +169,14 @@ fun TerminalScreen(
             }
         )
     }
-    batcher.start()
+    // FIX 2026-08-12: `batcher.start()` DULU dipanggil telanjang di badan komposisi.
+    // Itu melanggar kontrak Compose (side-effect harus di dalam effect handler):
+    // badan composable bisa dijalankan berkali-kali / dibatalkan, sehingga thread
+    // batcher bisa lahir yatim. Sekarang siklus hidupnya terikat komposisi.
+    DisposableEffect(batcher) {
+        batcher.start()
+        onDispose { batcher.close() }
+    }
 
     // Deteksi posisi scroll: di bawah → ikut output; scroll naik → jangan ganggu
     LaunchedEffect(listState) {
@@ -194,21 +209,25 @@ fun TerminalScreen(
 
     // Jalankan proses saat terminal dibuka (callback datang dari thread background)
     LaunchedEffect(filename) {
-        TelemetryStore.increment("terminal_runs")
+        Breadcrumb.log("TERMINAL_EFFECT", filename)
+        withContext(Dispatchers.IO) { TelemetryStore.increment("terminal_runs") }
         val targetFile = File(filesDir, filename)
         if (!targetFile.exists()) {
+            Breadcrumb.log("FILE_MISSING", filename)
             appendToTerminal("err", "\nError: File $filename not found!\n")
             startingPython = false
             return@LaunchedEffect
         }
         // RunLogger: disk-backed full log (SPEC-001 §16)
         val rl = RunLogger(File(Paths.runLogsDir(context), "$runId.log"))
-        rl.start("ZCODE run $runId — $filename")
+        withContext(Dispatchers.IO) { rl.start("ZCODE run $runId — $filename") }
         logger = rl
         logFilePath = File(Paths.runLogsDir(context), "$runId.log")
+        Breadcrumb.log("LOGGER_OK", runId)
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
         if (showPythonIndicator) appendToTerminal("sys", "\u2699 Menyalakan Python\u2026\n")
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
+        Breadcrumb.log("SESSION_START_CALL")
         val activeSession = ExecutionEngine.startInteractiveSession(
             context = context,
             file = targetFile,
@@ -217,6 +236,7 @@ fun TerminalScreen(
             onOutput = { stream, chunk -> batcher.append(stream, chunk) },
             onExit = { code ->
                 startingPython = false
+                Breadcrumb.log("SESSION_EXIT", "code=$code state=${sessionState.name}")
                 scope.launch {
                     appendToTerminal(
                         "sys",
@@ -230,20 +250,27 @@ fun TerminalScreen(
         )
         session = activeSession
         startingPython = false
+        Breadcrumb.log("SESSION_READY", runId)
         // waitForExit TANPA hard timeout (SPEC-001 §17) — menunggu sampai selesai
         withContext(Dispatchers.IO) {
             activeSession.waitForExit()
         }
     }
 
-    // Fokus otomatis + bersihkan proses saat keluar
+    // Fokus otomatis. FIX 2026-08-12: requestFocus() DULU dipanggil langsung di
+    // LaunchedEffect — effect berjalan setelah komposisi tapi SEBELUM node ter-place,
+    // sehingga bisa melempar "FocusRequester is not initialized" (crash saat layar
+    // terminal baru dibuka). withFrameNanos menunda sampai satu frame terlewati,
+    // dan runCatching memastikan kegagalan fokus tidak pernah mematikan aplikasi.
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        withFrameNanos { }
+        runCatching { focusRequester.requestFocus() }
+            .onFailure { Breadcrumb.log("FOCUS_FAIL", it.message ?: "") }
     }
     DisposableEffect(Unit) {
         onDispose {
+            // batcher ditutup oleh DisposableEffect(batcher) di atas.
             session?.sendKill()
-            batcher.close()
             logger?.close()
         }
     }
@@ -396,7 +423,13 @@ fun TerminalScreen(
                     .fillMaxWidth()
             ) {
                 val relCount = buffer.lineCount
-                items(relCount, key = { it -> (buffer.startOffset + it) }) { rel ->
+                // FIX 2026-08-12: `key` DIHAPUS (dulu `key = { buffer.startOffset + it }`).
+                // `startOffset` bukan Compose state dan BERGESER saat buffer di-trim di
+                // 10.000 baris; Compose mengevaluasi key secara lazy, sehingga dua item
+                // bisa menghasilkan key sama → IllegalArgumentException "Key was used
+                // multiple times" = force close. Key bersifat opsional untuk daftar
+                // append-only seperti terminal; menghapusnya melenyapkan seluruh kelas bug ini.
+                items(relCount) { rel ->
                     val abs = buffer.startOffset + rel
                     val lineText = buffer.get(abs) ?: ""
                     if (lineText.isNotEmpty()) {
@@ -408,8 +441,12 @@ fun TerminalScreen(
                         )
                     }
                 }
-                // current line (output yang belum diakhiri newline) + input + cursor
-                item(key = { -1L }) {
+                // current line (output yang belum diakhiri newline) + input + cursor.
+                // FIX 2026-08-12: dulu ditulis `item(key = { -1L })` — yang terkirim
+                // BUKAN angka -1L melainkan sebuah objek lambda (Function0). Compose
+                // menyimpan key ke Bundle saat save-state; key bertipe lambda adalah
+                // bom waktu. Key dihapus, konsisten dengan items() di atas.
+                item {
                     Column {
                         val partial = buffer.currentLine()
                         if (partial.isNotEmpty()) {

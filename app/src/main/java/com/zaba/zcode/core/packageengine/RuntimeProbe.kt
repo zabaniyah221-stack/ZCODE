@@ -3,7 +3,6 @@ package com.zaba.zcode.core.packageengine
 import android.content.Context
 import com.zaba.zcode.core.files.Paths
 import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -61,8 +60,9 @@ object RuntimeProbe {
         val latch = CountDownLatch(1)
         Thread {
             try {
-                if (!Python.isStarted()) {
-                    Python.start(AndroidPlatform(appContext))
+                if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(appContext)) {
+                    result.set(null)
+                    return@Thread
                 }
                 val py = Python.getInstance().getModule("package_runtime.probe")
                 val json = py.callAttr("probe_runtime_json", androidApi ?: -1).toString()

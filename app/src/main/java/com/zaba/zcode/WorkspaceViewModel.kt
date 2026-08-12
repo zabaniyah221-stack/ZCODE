@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import com.zaba.zcode.core.editor.Checker
 import com.zaba.zcode.core.editor.Problem
 import com.zaba.zcode.core.editor.Severity
@@ -136,12 +135,14 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun preWarmPython() {
         try {
-            if (PluginRunner.isChaquopyAvailable() && !Python.isStarted()) {
-                Python.start(AndroidPlatform(getApplication()))
+            // Lewat PythonRuntime (kunci global) — dulu pre-warm ini balapan dengan
+            // thread Run bila user menekan ▶ sebelum pre-warm selesai (fix 2026-08-12).
+            if (com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(getApplication())) {
                 Python.getInstance().getModule("zcode_runner")
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log("PREWARM_OK")
             }
-        } catch (e: Exception) {
-            // fail-safe
+        } catch (e: Throwable) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("PREWARM_FAIL", e.message ?: "")
         }
     }
 
