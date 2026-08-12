@@ -185,7 +185,7 @@ class DependencyResolver(private val context: Context) {
                 ))
             }
         }
-        val notes = strList(obj, "notes")
+        val notes = strList(o, "notes")
         return ResolvePlan(true, packages, conflicts, unavailable, null, null, null, null, stdlib, notes)
     }
 

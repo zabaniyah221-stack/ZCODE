@@ -1756,7 +1756,7 @@ class TestInstrumenDiagnosaNative:
     def test_notes_sampai_ke_kotlin_dan_layar(self):
         kt = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
         assert "val notes: List<String>" in kt, "ResolvePlan tidak membawa notes"
-        assert 'strList(obj, "notes")' in kt, "notes tidak diurai dari JSON"
+        assert re.search(r'strList\(\w+, "notes"\)', kt), "notes tidak diurai dari JSON"
         eng = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
         # Ada DUA jalur yang harus menampilkan notes: install() dan analyze().
         # Mencabut salah satu tetap lolos bila hanya dicek keberadaannya
@@ -1792,4 +1792,48 @@ class TestInstrumenDiagnosaNative:
         assert re.search(r"outcome\.preloadLog\.take\(\d+\)\.forEach", eng), (
             "catatan preload tidak masuk pesan teknis — user tidak bisa "
             "membedakan 'tidak pernah diunduh' dari 'gagal dimuat'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# ERROR CI 2026-08-13 #3 — `strList(obj, ...)` padahal variabelnya bernama `o`
+#
+# Kelas yang sama dengan dua error CI sebelumnya: identifier yang tidak ada di
+# scope. Sandbox tidak punya JDK, jadi tidak ada tahap lokal yang melihatnya.
+#
+# Guard ini memeriksa satu pola sempit tapi berulang: pemanggilan helper privat
+# di dalam sebuah fungsi, dengan argumen pertama berupa nama variabel yang
+# tidak pernah dideklarasikan di fungsi itu.
+# ---------------------------------------------------------------------------
+class TestArgumenAdaDiScope:
+    def test_helper_dipanggil_dengan_variabel_yang_ada(self):
+        salah = []
+        for f in sorted(APP.rglob("*.kt")):
+            src = strip_kt_comments(read(f))
+            # helper privat berparameter (JSONObject, String) — pola strList/optX
+            helpers = set(re.findall(r"private fun (\w+)\(\s*\w+\s*:\s*JSONObject", src))
+            if not helpers:
+                continue
+            posisi = [m.start() for m in re.finditer(r"\n    (?:private )?fun \w+", src)]
+            posisi.append(len(src))
+            for a, b in zip(posisi, posisi[1:]):
+                blok = src[a:b]
+                nama_fn = re.match(r"\n    (?:private )?fun (\w+)", blok)
+                if not nama_fn or nama_fn.group(1) in helpers:
+                    continue
+                # nama yang dikenal di blok ini
+                dikenal = set(re.findall(r"\b(?:val|var)\s+(\w+)", blok))
+                dikenal |= set(re.findall(r"(\w+)\s*:\s*[A-Z]", blok))
+                dikenal |= set(re.findall(r"\{\s*(\w+)\s*->", blok))
+                dikenal |= {"it", "this"}
+                for h in helpers:
+                    for arg in re.findall(r"\b" + h + r"\(\s*([a-z]\w*)\s*,", blok):
+                        if arg not in dikenal:
+                            salah.append(
+                                "%s: %s(%s, ...) — '%s' tidak ada di scope"
+                                % (f.name, h, arg, arg)
+                            )
+        assert not salah, (
+            "argumen merujuk variabel yang tidak ada — unresolved reference di "
+            "CI (kejadian nyata 2026-08-13):\n  " + "\n  ".join(salah)
         )
