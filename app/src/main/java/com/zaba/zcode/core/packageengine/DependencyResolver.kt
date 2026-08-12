@@ -51,7 +51,13 @@ class DependencyResolver(private val context: Context) {
         val humanError: String?,
         val technicalError: String?,
         /** BUG C: modul stdlib — bukan error, tidak perlu dipasang. */
-        val stdlib: List<StdlibHit> = emptyList()
+        val stdlib: List<StdlibHit> = emptyList(),
+        /**
+         * Jejak keputusan resolver yang tidak terlihat dari daftar paket akhir
+         * (mis. pustaka pendukung yang gagal diambil). User mendiagnosis dari
+         * HP tanpa logcat, jadi ini harus sampai ke layar.
+         */
+        val notes: List<String> = emptyList()
     )
 
     data class Conflict(val name: String, val requiredBy: String?, val versionA: String, val versionB: String, val specifier: String)
@@ -179,7 +185,8 @@ class DependencyResolver(private val context: Context) {
                 ))
             }
         }
-        return ResolvePlan(true, packages, conflicts, unavailable, null, null, null, null, stdlib)
+        val notes = strList(obj, "notes")
+        return ResolvePlan(true, packages, conflicts, unavailable, null, null, null, null, stdlib, notes)
     }
 
     private fun strList(o: JSONObject, key: String): List<String> {

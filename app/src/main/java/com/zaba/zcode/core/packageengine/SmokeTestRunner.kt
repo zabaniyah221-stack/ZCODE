@@ -18,7 +18,9 @@ class SmokeTestRunner(private val context: Context) {
         val ok: Boolean,
         val results: List<JSONObject>,
         val nativeLibs: List<String>,
-        val nativeNote: String
+        val nativeNote: String,
+        /** Jejak NATIVE-LOADER: pustaka pendukung yang dimuat / gagal dimuat. */
+        val preloadLog: List<String> = emptyList()
     )
 
     /**
@@ -69,7 +71,12 @@ class SmokeTestRunner(private val context: Context) {
                 ok = o.optBoolean("ok", false),
                 results = results,
                 nativeLibs = libs,
-                nativeNote = o.optJSONObject("native_info")?.optString("note", "") ?: ""
+                nativeNote = o.optJSONObject("native_info")?.optString("note", "") ?: "",
+                preloadLog = mutableListOf<String>().also { pl ->
+                    o.optJSONObject("native_info")?.optJSONArray("preload_log")?.let { arr ->
+                        for (i in 0 until arr.length()) pl.add(arr.optString(i))
+                    }
+                }
             )
         } catch (e: Exception) {
             SmokeOutcome(false, listOf(

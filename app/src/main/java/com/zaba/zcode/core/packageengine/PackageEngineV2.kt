@@ -2,6 +2,7 @@ package com.zaba.zcode.core.packageengine
 
 import android.content.Context
 import com.zaba.zcode.core.execution.ExecutionEngine
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
 import org.json.JSONArray
 import org.json.JSONObject
@@ -138,6 +139,10 @@ class PackageEngineV2(private val context: Context) {
                 return fail("PACKAGE_NOT_AVAILABLE", "resolve", "Tidak tersedia: $msg", null)
             }
             onStep(Step.Finish("Resolve", true, "${plan.packages.size} package dalam plan"))
+            // Jejak resolver — memperlihatkan pustaka pendukung yang diambil
+            // ATAU yang gagal diambil. Tanpa ini kegagalan native tidak bisa
+            // dibedakan dari "peta tidak terbaca" (pelajaran v1.0.8).
+            plan.notes.forEach { onStep(Step.Log("  · $it")) }
             plan.packages.forEach {
                 onStep(Step.Log("  - ${it.canonicalName}==${it.version} [${it.source}] ${it.filename}"))
             }
@@ -253,6 +258,12 @@ class PackageEngineV2(private val context: Context) {
                     val teknis = buildString {
                         append("smoke gagal untuk ${p.canonicalName}==${p.version}\n")
                         append("native .so terdeteksi: ${outcome.nativeLibs.size}\n")
+                        // NATIVE-LOADER: tanpa baris ini tidak mungkin dibedakan
+                        // antara "pustaka pendukung tidak pernah diunduh" dan
+                        // "sudah ada tapi gagal dimuat" — dua sebab yang
+                        // perbaikannya sama sekali berbeda.
+                        append("preload: ${outcome.preloadLog.size} catatan\n")
+                        outcome.preloadLog.take(15).forEach { append("  ").append(it).append('\n') }
                         outcome.nativeLibs.take(20).forEach { append("  so: ").append(it).append('\n') }
                         append("hasil test:\n")
                         for (i in 0 until outcome.results.size) {
@@ -401,6 +412,10 @@ class PackageEngineV2(private val context: Context) {
         onLog(Step.Begin("Resolve"))
         val plan = resolver.resolve(requirementText)
         onLog(Step.Finish("Resolve", true, "${plan.packages.size} package dalam plan"))
+        plan.notes.forEach { onLog(Step.Log("  · $it")) }
+        if (plan.notes.isNotEmpty()) {
+            Breadcrumb.log("PKG_RESOLVE_NOTES", plan.notes.joinToString(" | "))
+        }
         return plan
     }
 

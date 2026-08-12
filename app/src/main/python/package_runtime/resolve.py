@@ -354,6 +354,9 @@ def resolve(
     plan: dict[str, dict] = {}
     conflicts: list[dict] = []
     unavailable: list[dict] = []
+    # Jejak keputusan resolver yang tidak terlihat dari daftar paket akhir.
+    # Dipakai untuk mendiagnosis dari perangkat (user tidak punya logcat).
+    notes: list[str] = []
     seen: set[str] = set()
     env = dict(marker_env) if marker_env else {}
     if "python_version" not in env:
@@ -399,8 +402,22 @@ def resolve(
         # Diantrikan LEBIH DULU daripada dependensi PyPI: tanpa file .so ini,
         # paket induknya terpasang tetapi gagal diimpor — kegagalan yang jauh
         # lebih membingungkan daripada gagal mengunduh.
+        host_deps = native_host_deps(cname)
+        if host_deps:
+            # Jejak eksplisit: v1.0.8 gagal TANPA menyebut chaquopy-openblas
+            # sama sekali, sehingga tidak mungkin dibedakan apakah peta ini
+            # tidak terbaca, indeks tidak terjangkau, atau wheel-nya ditolak.
+            # Catatan ini menjawabnya langsung dari perangkat.
+            notes.append("host_deps %s -> %s" % (cname, ",".join(host_deps)))
         for host_dep in native_host_deps(cname):
+            before = set(plan.keys())
             queue(host_dep, "", set(), cname, depth + 1)
+            if host_dep not in plan and canonicalize_name(host_dep) not in plan:
+                notes.append(
+                    "host_dep GAGAL diambil: %s (indeks/tag menolak)" % host_dep
+                )
+            elif set(plan.keys()) != before:
+                notes.append("host_dep OK: %s" % host_dep)
 
         # dependensi
         for dep_req in chosen.get("requires_dist", []) or []:
@@ -481,6 +498,7 @@ def resolve(
         "packages": list(plan.values()),
         "conflicts": conflicts,
         "unavailable": unavailable,
+        "notes": notes,
     }
 
 

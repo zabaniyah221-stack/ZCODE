@@ -226,8 +226,16 @@ def run_smoke(
         [staging_dir] + list(sibling_dirs or [])
     )
     native_info["preloaded"] = dimuat
+    native_info["preload_dirs"] = len([d for d in ([staging_dir] + list(sibling_dirs or [])) if d])
     if catatan_preload:
         native_info["preload_log"] = catatan_preload[:40]
+    else:
+        # TIDAK ADA satu pun lib*.so yang terlihat. Ini fakta penting: berarti
+        # pustaka pendukung memang tidak ada di direktori mana pun yang
+        # dikirimkan — bukan gagal dimuat, tapi tidak pernah sampai.
+        native_info["preload_log"] = [
+            "tidak ada lib*.so di %d direktori yang diberikan" % native_info["preload_dirs"]
+        ]
 
     try:
         test_list = tests or [{"name": "import", "type": "IMPORT", "target": import_name}]

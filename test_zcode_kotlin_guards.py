@@ -1726,3 +1726,70 @@ class TestPustakaPendukungNative:
             "daftar Terpasang menampilkan pustaka pendukung yang tidak pernah "
             "diminta user"
         )
+
+
+# ---------------------------------------------------------------------------
+# INSTRUMEN DIAGNOSA v1.0.9 — kenapa pustaka pendukung tidak muncul
+#
+# v1.0.8 gagal dengan pesan IDENTIK dengan v1.0.7: tidak ada satu pun baris
+# yang menyebut chaquopy-openblas, dan tidak ada catatan preload. Karena itu
+# TIDAK MUNGKIN dibedakan mana yang terjadi:
+#   (a) peta NATIVE_HOST_DEPS tidak terbaca
+#   (b) indeks Chaquopy tidak terjangkau dari perangkat
+#   (c) wheel pendukung ditolak filter tag
+#   (d) terunduh, tetapi .so gagal dimuat
+#
+# Semua lapisan sudah diverifikasi BEKERJA di sandbox, jadi sebabnya khusus
+# perangkat. Instrumen di bawah memaksa setiap kemungkinan meninggalkan jejak.
+# ---------------------------------------------------------------------------
+class TestInstrumenDiagnosaNative:
+    def test_resolver_mencatat_jejak_host_deps(self):
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        assert "notes: list[str] = []" in src, "resolver tanpa jejak keputusan"
+        assert '"notes": notes' in src, "jejak tidak dikembalikan ke pemanggil"
+        assert "host_dep GAGAL diambil" in src, (
+            "kegagalan mengambil pustaka pendukung tidak meninggalkan jejak — "
+            "tidak bisa dibedakan dari peta yang tidak terbaca"
+        )
+        assert "host_dep OK" in src, "keberhasilan juga harus berjejak"
+
+    def test_notes_sampai_ke_kotlin_dan_layar(self):
+        kt = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
+        assert "val notes: List<String>" in kt, "ResolvePlan tidak membawa notes"
+        assert 'strList(obj, "notes")' in kt, "notes tidak diurai dari JSON"
+        eng = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        # Ada DUA jalur yang harus menampilkan notes: install() dan analyze().
+        # Mencabut salah satu tetap lolos bila hanya dicek keberadaannya
+        # (bocor uji mutasi 2026-08-13).
+        assert eng.count("plan.notes.forEach") >= 2, (
+            "notes tidak ditampilkan di KEDUA jalur (install dan analyze)"
+        )
+        assert "PKG_RESOLVE_NOTES" in eng, (
+            "notes tidak masuk breadcrumb — user melapor lewat Diagnostics, "
+            "bukan konsol yang sudah tergulir hilang"
+        )
+
+    def test_preload_selalu_meninggalkan_catatan(self):
+        """Log kosong dan 'tidak ada lib*.so' adalah dua fakta berbeda."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import run_smoke
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        _os.makedirs(_os.path.join(d, "kosong"))
+        _ok, _res, info = run_smoke("tidakada", _os.path.join(d, "kosong"), None)
+        log = info.get("preload_log") or []
+        assert log, "preload_log kosong — diam tidak memberi informasi apa pun"
+        assert "tidak ada lib" in " ".join(log), (
+            "ketiadaan pustaka pendukung harus dinyatakan eksplisit"
+        )
+
+    def test_preload_log_sampai_ke_pesan_kegagalan(self):
+        runner = strip_kt_comments(read(PKGENG / "SmokeTestRunner.kt"))
+        assert "preloadLog" in runner, "SmokeTestRunner tidak membawa preloadLog"
+        assert '"preload_log"' in runner, "preload_log tidak diurai dari JSON Python"
+        eng = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        assert re.search(r"outcome\.preloadLog\.take\(\d+\)\.forEach", eng), (
+            "catatan preload tidak masuk pesan teknis — user tidak bisa "
+            "membedakan 'tidak pernah diunduh' dari 'gagal dimuat'"
+        )
