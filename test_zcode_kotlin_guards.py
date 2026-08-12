@@ -1837,3 +1837,149 @@ class TestArgumenAdaDiScope:
             "argumen merujuk variabel yang tidak ada — unresolved reference di "
             "CI (kejadian nyata 2026-08-13):\n  " + "\n  ".join(salah)
         )
+
+
+# ---------------------------------------------------------------------------
+# RANTAI PUSTAKA NATIVE (v1.0.10) — dependensi punya dependensi.
+#
+# v1.0.9 membuktikan preload berjalan dan openblas terunduh, tetapi:
+#     preload gagal: libopenblas.so
+#       (dlopen failed: library "libgfortran.so.3" not found)
+#
+# Dua pelajaran:
+#  1. Rantainya lebih dari satu tingkat. matplotlib -> numpy -> openblas ->
+#     libgfortran adalah 3 tingkat. Satu lintasan pemuatan tidak cukup karena
+#     urutan berkas di disk acak.
+#  2. meta.yaml chaquopy-openblas TIDAK menyebut libgfortran sama sekali, jadi
+#     daftar hafalan pasti ketinggalan. Kebutuhan sebenarnya hanya jujur
+#     tertulis di dalam berkas .so (DT_NEEDED).
+# ---------------------------------------------------------------------------
+class TestRantaiPustakaNative:
+    def _smoke(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        import package_runtime.smoke as m
+        return m
+
+    def test_pembaca_elf_ada(self):
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        assert "def elf_needed(" in src, (
+            "tidak ada pembaca DT_NEEDED — kebutuhan .so hanya bisa ditebak"
+        )
+        assert "import struct" in src
+
+    def test_elf_needed_membaca_kebutuhan_nyata(self):
+        """Uji terhadap ELF sungguhan yang dibangun saat pengujian."""
+        import subprocess, tempfile, os as _os, shutil
+        if not shutil.which("gcc"):
+            import pytest
+            pytest.skip("gcc tidak tersedia")
+        m = self._smoke()
+        d = tempfile.mkdtemp()
+        with open(_os.path.join(d, "dasar.c"), "w") as f:
+            f.write("int dasar(void){return 1;}\n")
+        with open(_os.path.join(d, "atas.c"), "w") as f:
+            f.write("extern int dasar(void); int atas(void){return dasar();}\n")
+        subprocess.run(["gcc", "-shared", "-fPIC", "-Wl,-soname,libdasar.so",
+                        "-o", _os.path.join(d, "libdasar.so"),
+                        _os.path.join(d, "dasar.c")], check=True)
+        subprocess.run(["gcc", "-shared", "-fPIC",
+                        "-o", _os.path.join(d, "libatas.so"),
+                        _os.path.join(d, "atas.c"), "-L", d, "-ldasar"], check=True)
+        assert "libdasar.so" in m.elf_needed(_os.path.join(d, "libatas.so"))
+
+    def test_elf_needed_tidak_pernah_melempar(self):
+        m = self._smoke()
+        assert m.elf_needed("/tidak/ada/sama/sekali.so") == []
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        rusak = _os.path.join(d, "librusak.so")
+        with open(rusak, "wb") as f:
+            f.write(b"bukan ELF")
+        assert m.elf_needed(rusak) == []
+        # ELF yang header-nya SAH tetapi isinya ngawur — memaksa struct.unpack
+        # melempar di tengah badan fungsi. Tanpa ini, mencabut `except
+        # Exception` tetap lolos karena tidak ada yang melempar (bocor uji
+        # mutasi 2026-08-13).
+        palsu = _os.path.join(d, "libpalsu.so")
+        with open(palsu, "wb") as f:
+            f.write(b"\x7fELF\x01\x01\x01" + b"\xff" * 120)
+        assert m.elf_needed(palsu) == []
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        i = src.find("def elf_needed(")
+        assert "except Exception" in src[i:i + 4000], (
+            "pembaca ELF tanpa pengaman umum — diagnostik bisa jadi sumber crash"
+        )
+
+    def test_preload_berulang_sampai_stabil(self):
+        """Kunci perbaikan: satu lintasan gagal bila urutan disk kebetulan
+        menaruh yang membutuhkan lebih dulu."""
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        i = src.find("def preload_native_libs(")
+        badan = src[i:i + 4000]
+        assert "for _ronde in range(" in badan, (
+            "pemuatan hanya satu lintasan — rantai bersarang akan gagal "
+            "tergantung urutan berkas di disk"
+        )
+        assert "if not maju" in badan, "tidak ada syarat berhenti (risiko berputar)"
+
+    def test_preload_menyelesaikan_rantai_urutan_terburuk(self):
+        """Uji PERILAKU: yang membutuhkan dicoba lebih dulu, harus tetap beres."""
+        import subprocess, tempfile, os as _os, shutil
+        if not shutil.which("gcc"):
+            import pytest
+            pytest.skip("gcc tidak tersedia")
+        m = self._smoke()
+        base = tempfile.mkdtemp()
+        src_dir = _os.path.join(base, "src"); _os.makedirs(src_dir)
+        # nama direktori 'a' < 'z' supaya yang MEMBUTUHKAN ditemui lebih dulu
+        da = _os.path.join(base, "a"); dz = _os.path.join(base, "z")
+        _os.makedirs(da); _os.makedirs(dz)
+        with open(_os.path.join(src_dir, "d.c"), "w") as f:
+            f.write("int zdasar(void){return 5;}\n")
+        with open(_os.path.join(src_dir, "a.c"), "w") as f:
+            f.write("extern int zdasar(void); int zatas(void){return zdasar();}\n")
+        subprocess.run(["gcc", "-shared", "-fPIC", "-Wl,-soname,libzdasar.so",
+                        "-o", _os.path.join(dz, "libzdasar.so"),
+                        _os.path.join(src_dir, "d.c")], check=True)
+        subprocess.run(["gcc", "-shared", "-fPIC",
+                        "-o", _os.path.join(da, "libaatas.so"),
+                        _os.path.join(src_dir, "a.c"), "-L", dz, "-lzdasar"], check=True)
+        n, log = m.preload_native_libs([base])
+        assert n == 2, "rantai tidak selesai: %s" % log
+
+    def test_kegagalan_menyebut_kebutuhan_yang_kurang(self):
+        """Inilah yang mengubah 'gagal entah kenapa' menjadi nama paket."""
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        i = src.find("preload gagal:")
+        assert i > 0
+        jendela = src[i:i + 400]
+        assert "elf_needed(" in jendela, (
+            "kegagalan tidak menyebut pustaka yang kurang — siklus uji "
+            "berikutnya akan buta lagi"
+        )
+
+    def test_peta_memuat_rantai_bersarang(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.resolve import native_host_deps
+        assert "chaquopy-libgfortran" in native_host_deps("chaquopy-openblas"), (
+            "libgfortran tidak ikut — bukti perangkat v1.0.9 diabaikan"
+        )
+        assert "chaquopy-libxml2" in native_host_deps("chaquopy-libxslt")
+
+    def test_sumber_entri_runtime_ditandai(self):
+        """Aturan jujur: entri yang TIDAK berasal dari meta.yaml harus
+        menyebutkan dasarnya, karena tidak bisa diverifikasi dari dokumen."""
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        i = src.find('"chaquopy-openblas": ["chaquopy-libgfortran"]')
+        assert i > 0, "entri libgfortran hilang"
+        # Penanda harus berada TEPAT di atas entrinya, bukan sekadar ada di
+        # suatu tempat dalam berkas (bocor uji mutasi 2026-08-13).
+        # Hanya baris komentar TEPAT sebelum entri yang dihitung — bukan
+        # paragraf penjelasan di atas peta (yang juga memuat frasa itu).
+        baris_sebelum = src[max(0, i - 300):i].rstrip().splitlines()[-1:]
+        assert baris_sebelum and "[dari perangkat]" in baris_sebelum[0], (
+            "entri dari bukti runtime tidak ditandai di tempatnya — pembaca "
+            "berikutnya akan mengira dasarnya meta.yaml"
+        )

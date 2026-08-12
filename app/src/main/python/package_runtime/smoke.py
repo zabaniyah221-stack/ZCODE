@@ -16,6 +16,7 @@ catat TIMEOUT sebagai kegagalan).
 import ctypes
 import importlib
 import os
+import struct
 import sys
 import threading
 import time
@@ -81,6 +82,97 @@ def diagnose_native(staging_dir: str, error_text: str) -> str:
     return "\n".join(baris)
 
 
+def elf_needed(path: str) -> list[str]:
+    """Baca daftar pustaka yang dibutuhkan sebuah file .so (DT_NEEDED di ELF).
+
+    KENAPA MEMBACA SENDIRI, bukan memakai daftar hafalan: `libopenblas.so`
+    ternyata membutuhkan `libgfortran.so.3`, dan kebutuhan itu TIDAK tercatat
+    di meta.yaml chaquopy-openblas (bagian requirements.host-nya kosong).
+    Satu-satunya sumber yang jujur adalah berkas .so itu sendiri.
+
+    Format ELF dibaca langsung memakai `struct` — tidak ada pustaka pihak
+    ketiga di runtime Chaquopy, dan menambah satu hanya untuk ini tidak
+    sepadan. Mendukung ELF 32-bit (ARMv7) maupun 64-bit (ARM64).
+
+    Selalu mengembalikan list; berkas rusak atau bukan ELF menghasilkan list
+    kosong, tidak pernah melempar.
+    """
+    try:
+        with open(path, "rb") as f:
+            d = f.read()
+    except OSError:
+        return []
+    if len(d) < 64 or d[:4] != b"\x7fELF":
+        return []
+    try:
+        kelas = d[1]                      # 1 = 32-bit, 2 = 64-bit
+        little = d[5] == 1
+        en = "<" if little else ">"
+        if kelas == 1:
+            phoff = struct.unpack_from(en + "I", d, 28)[0]
+            phentsize = struct.unpack_from(en + "H", d, 42)[0]
+            phnum = struct.unpack_from(en + "H", d, 44)[0]
+        else:
+            phoff = struct.unpack_from(en + "Q", d, 32)[0]
+            phentsize = struct.unpack_from(en + "H", d, 54)[0]
+            phnum = struct.unpack_from(en + "H", d, 56)[0]
+
+        segmen = []      # (tipe, offset_file, alamat_virtual, ukuran_file)
+        for i in range(phnum):
+            o = phoff + i * phentsize
+            if o + phentsize > len(d):
+                break
+            if kelas == 1:
+                tipe = struct.unpack_from(en + "I", d, o)[0]
+                off = struct.unpack_from(en + "I", d, o + 4)[0]
+                vaddr = struct.unpack_from(en + "I", d, o + 8)[0]
+                fsz = struct.unpack_from(en + "I", d, o + 16)[0]
+            else:
+                tipe = struct.unpack_from(en + "I", d, o)[0]
+                off = struct.unpack_from(en + "Q", d, o + 8)[0]
+                vaddr = struct.unpack_from(en + "Q", d, o + 16)[0]
+                fsz = struct.unpack_from(en + "Q", d, o + 32)[0]
+            segmen.append((tipe, off, vaddr, fsz))
+
+        dyn = next((s_ for s_ in segmen if s_[0] == 2), None)   # PT_DYNAMIC
+        if not dyn:
+            return []
+        _t, dyn_off, _v, dyn_sz = dyn
+        langkah = 8 if kelas == 1 else 16
+        entri = []
+        strtab_vaddr = None
+        for pos in range(dyn_off, min(dyn_off + dyn_sz, len(d)), langkah):
+            if kelas == 1:
+                tag, val = struct.unpack_from(en + "iI", d, pos)
+            else:
+                tag, val = struct.unpack_from(en + "qQ", d, pos)
+            if tag == 0:                    # DT_NULL — akhir tabel
+                break
+            if tag == 5:                    # DT_STRTAB
+                strtab_vaddr = val
+            elif tag == 1:                  # DT_NEEDED
+                entri.append(val)
+        if strtab_vaddr is None or not entri:
+            return []
+
+        # Alamat virtual -> offset berkas, lewat segmen PT_LOAD yang memuatnya.
+        strtab_off = strtab_vaddr
+        for tipe, off, vaddr, fsz in segmen:
+            if tipe == 1 and vaddr <= strtab_vaddr < vaddr + fsz:
+                strtab_off = strtab_vaddr - vaddr + off
+                break
+
+        hasil = []
+        for offset_nama in entri:
+            mulai = strtab_off + offset_nama
+            akhir = d.find(b"\x00", mulai)
+            if 0 < mulai < len(d) and akhir > mulai:
+                hasil.append(d[mulai:akhir].decode("utf-8", "replace"))
+        return hasil
+    except Exception:  # noqa: BLE001 — pembaca diagnostik tidak boleh crash
+        return []
+
+
 def preload_native_libs(dirs: list[str] | None) -> tuple[int, list[str]]:
     """Muat lebih dulu setiap pustaka pendukung (lib*.so) ke dalam proses.
 
@@ -96,6 +188,14 @@ def preload_native_libs(dirs: list[str] | None) -> tuple[int, list[str]]:
     pendukung lebih dulu: begitu ia berada di memori proses, linker
     menemukannya lewat SONAME tanpa perlu mencari di disk.
 
+    BERLAPIS (perbaikan v1.0.10). Perangkat membuktikan rantainya lebih dari
+    satu tingkat: numpy -> libopenblas.so -> libgfortran.so.3. Satu lintasan
+    tidak cukup karena urutan berkas di disk acak — kalau libopenblas dicoba
+    sebelum libgfortran termuat, ia gagal dan tidak pernah dicoba lagi.
+    Karena itu pemuatan diulang sampai tidak ada kemajuan lagi (fixpoint):
+    setiap ronde memuat apa yang bisa dimuat, dan ronde berikutnya mencoba
+    lagi sisanya. Rantai sedalam apa pun selesai tanpa perlu tahu isinya.
+
     Hanya berkas berawalan `lib` yang dimuat. File .so milik modul Python
     (mis. `_multiarray_umath.so`) TIDAK boleh dimuat dengan cara ini — ia
     butuh diinisialisasi oleh mesin impor Python, bukan ctypes.
@@ -103,10 +203,12 @@ def preload_native_libs(dirs: list[str] | None) -> tuple[int, list[str]]:
     Mengembalikan (jumlah_berhasil, catatan) dan TIDAK PERNAH melempar:
     kegagalan preload harus menjadi diagnosa, bukan crash baru.
     """
-    dimuat = 0
     catatan: list[str] = []
     if not dirs:
         return 0, catatan
+
+    # Kumpulkan kandidat lebih dulu, supaya bisa dicoba berulang kali.
+    kandidat: list[tuple[str, str]] = []      # (nama, path)
     terlihat: set[str] = set()
     for d in dirs:
         if not d or not os.path.isdir(d):
@@ -118,15 +220,41 @@ def preload_native_libs(dirs: list[str] | None) -> tuple[int, list[str]]:
                 if fn in terlihat:
                     continue
                 terlihat.add(fn)
-                path = os.path.join(root, fn)
-                try:
-                    ctypes.CDLL(path)
-                    dimuat += 1
-                    catatan.append("preload OK: %s" % fn)
-                except Exception as e:  # noqa: BLE001
-                    # Wajar: sebagian .so butuh pustaka lain lebih dulu.
-                    # Dicatat apa adanya, tidak dianggap kegagalan fatal.
-                    catatan.append("preload gagal: %s (%s)" % (fn, e))
+                kandidat.append((fn, os.path.join(root, fn)))
+
+    if not kandidat:
+        return 0, catatan
+
+    dimuat = 0
+    sisa = list(kandidat)
+    galat_terakhir: dict[str, str] = {}
+    # Batas ronde = jumlah kandidat: setiap ronde minimal satu berhasil, kalau
+    # tidak perulangan berhenti sendiri. Jadi ini tidak akan berputar selamanya.
+    for _ronde in range(len(kandidat) + 1):
+        maju = []
+        for nama, path in list(sisa):
+            try:
+                ctypes.CDLL(path)
+                dimuat += 1
+                maju.append(nama)
+                sisa.remove((nama, path))
+                galat_terakhir.pop(nama, None)
+            except Exception as e:  # noqa: BLE001
+                galat_terakhir[nama] = str(e)
+        if maju:
+            catatan.append("preload OK: %s" % ", ".join(maju))
+        if not maju or not sisa:
+            break
+
+    for nama, _path in sisa:
+        pesan = galat_terakhir.get(nama, "sebab tidak diketahui")
+        catatan.append("preload gagal: %s (%s)" % (nama, pesan))
+        # Sebutkan kebutuhan yang belum terpenuhi — inilah yang mengubah
+        # "gagal entah kenapa" menjadi nama paket yang harus ditambahkan.
+        butuh = elf_needed(_path)
+        if butuh:
+            catatan.append("  %s butuh: %s" % (nama, ", ".join(butuh)))
+
     return dimuat, catatan
 
 

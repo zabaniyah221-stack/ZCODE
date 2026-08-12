@@ -101,8 +101,20 @@ def fetch_pypi_metadata(name: str) -> dict:
 # Versi sengaja TIDAK dipatok. Indeks Chaquopy hanya menyimpan satu versi per
 # pustaka pendukung, dan mematoknya di sini berarti peta ini basi setiap kali
 # hulu memperbarui.
+#
+# TAMBAHAN DARI PERANGKAT (2026-08-13). Sebagian kebutuhan TIDAK tercatat di
+# meta.yaml mana pun dan hanya terlihat saat berjalan. Log user v1.0.9:
+#     preload gagal: libopenblas.so
+#       (dlopen failed: library "libgfortran.so.3" not found)
+# meta.yaml chaquopy-openblas TIDAK punya requirements.host sama sekali, jadi
+# hubungan ini mustahil diketahui dari dokumen. Sumbernya = bukti runtime.
+# Entri semacam itu ditandai "[dari perangkat]" supaya jelas dasarnya berbeda.
 NATIVE_HOST_DEPS: dict[str, list[str]] = {
     "numpy": ["chaquopy-openblas"],
+    # [dari perangkat] libopenblas.so menautkan libgfortran.so.3
+    "chaquopy-openblas": ["chaquopy-libgfortran"],
+    # [dari meta.yaml] libxslt menautkan libxml2
+    "chaquopy-libxslt": ["chaquopy-libxml2"],
     "pandas": ["numpy"],
     "matplotlib": ["chaquopy-freetype", "chaquopy-libpng", "numpy"],
     "pillow": ["chaquopy-libjpeg", "chaquopy-freetype"],
