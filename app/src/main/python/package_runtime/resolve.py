@@ -111,16 +111,63 @@ def _contains(spec_str: str, version: str) -> bool:
         return False
 
 
-def _requires_python_ok(requires_python: str | None, version: str) -> bool:
+def is_stdlib_module(name: str) -> bool:
+    """
+    True bila `name` adalah modul bawaan Python (BUG C).
+
+    Memakai sys.stdlib_module_names (CPython 3.10+) supaya jawabannya mengikuti
+    runtime yang benar-benar berjalan, bukan daftar statis yang bisa basi.
+    Nama dinormalkan: 'Math' dan 'math' sama; tanda '-' diubah ke '_' karena
+    pengguna terbiasa mengetik gaya nama paket.
+    """
+    if not name:
+        return False
+    import sys
+    candidate = name.strip().lower().replace("-", "_")
+    names = getattr(sys, "stdlib_module_names", None)
+    if names:
+        return candidate in names
+    # Fallback untuk Python < 3.10 (tidak terjadi di Chaquopy 3.11).
+    return candidate in set(sys.builtin_module_names)
+
+
+def runtime_python_version() -> str:
+    """Versi Python runtime ('3.11' di Chaquopy) — pembanding untuk Requires-Python."""
+    import sys
+    return "%d.%d" % sys.version_info[:2]
+
+
+def _requires_python_ok(requires_python: str | None, python_version: str | None = None) -> bool:
+    """
+    Apakah RUNTIME PYTHON memenuhi `Requires-Python` sebuah rilis?
+
+    BUG A — FIX 2026-08-13. Versi lama menerima `version` = versi PAKET lalu
+    membandingkannya dengan spesifikasi versi PYTHON:
+
+        SpecifierSet(">=3.7").contains(Version("0.4.6"))  -> False
+
+    Pertanyaan yang diajukan menjadi "apakah colorama 0.4.6 memenuhi >=3.7?",
+    padahal yang benar "apakah Python 3.11 memenuhi >=3.7?". Akibatnya SEMUA
+    rilis modern dibuang dan hanya rilis kuno (era sebelum Requires-Python ada,
+    sehingga field-nya kosong dan lolos otomatis) yang tersisa:
+
+        colorama 13 kandidat -> 7      urllib3 82 -> 23
+        pygments 50 -> 16              mdurl     3 -> 0   (PACKAGE_NOT_AVAILABLE)
+
+    Itulah sebab ZCODE memilih colorama 0.3.5 (2015) dan melaporkan mdurl
+    "tidak ada wheel kompatibel". Diukur dari metadata PyPI nyata, 2026-08-13.
+    """
     if not requires_python:
         return True
+    probe = python_version or runtime_python_version()
     try:
-        return SpecifierSet(requires_python).contains(Version(version), prereleases=True)
+        return SpecifierSet(requires_python).contains(Version(probe), prereleases=True)
     except (InvalidSpecifier, InvalidVersion):
-        return False
+        # Spesifikasi rusak di metadata upstream: jangan buang kandidat karenanya.
+        return True
 
 
-def _pypi_candidates(data: dict, spec: dict) -> list[dict]:
+def _pypi_candidates(data: dict, spec: dict, python_version: str | None = None) -> list[dict]:
     """Kandidat wheel dari data PyPI JSON, sudah difilter constraint + Requires-Python."""
     out = []
     releases = data.get("releases", {})
@@ -136,7 +183,8 @@ def _pypi_candidates(data: dict, spec: dict) -> list[dict]:
             if f.get("yanked"):
                 continue
             rp = f.get("requires_python") or None
-            if not _requires_python_ok(rp, version):
+            # BUG A: pembandingnya versi PYTHON runtime, bukan versi paket.
+            if not _requires_python_ok(rp, python_version):
                 continue
             digest = (f.get("digests") or {}).get("sha256")
             out.append({
@@ -215,6 +263,30 @@ def resolve(
     """
     spec = parse_requirement(requirement_text)  # RequirementError → propagasi
     root_name = spec["canonical_name"]
+
+    # BUG C — FIX 2026-08-13. Modul stdlib TIDAK ADA di PyPI, jadi mencarinya
+    # ke sana selalu berakhir "Tidak ada wheel kompatibel untuk runtime ZCODE
+    # ini." — pesan yang MENYESATKAN, karena `math` justru sudah tersedia dan
+    # memang tidak perlu dipasang. ZCODE bahkan sudah punya daftar 305 nama di
+    # assets/package_catalog/stdlib.json, tetapi resolver tak pernah membacanya
+    # (kata "stdlib" muncul 0 kali di berkas ini sebelum perbaikan).
+    # Sumber kebenaran dipakai sys.stdlib_module_names (CPython 3.10+) karena
+    # ia mencerminkan runtime yang BENAR-BENAR berjalan, bukan daftar statis.
+    if is_stdlib_module(root_name):
+        return {
+            "packages": [],
+            "conflicts": [],
+            "unavailable": [],
+            "stdlib": [{
+                "name": spec["name"],
+                "canonical_name": root_name,
+                "reason": (
+                    "'%s' adalah modul bawaan Python — sudah tersedia di ZCODE "
+                    "dan tidak perlu dipasang. Langsung 'import %s' di script."
+                ) % (spec["name"], spec["name"]),
+            }],
+        }
+
     plan: dict[str, dict] = {}
     conflicts: list[dict] = []
     unavailable: list[dict] = []

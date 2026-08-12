@@ -43,11 +43,32 @@ class DependencyResolver(private val context: Context) {
         val errorCode: String?,
         val errorStage: String?,
         val humanError: String?,
-        val technicalError: String?
+        val technicalError: String?,
+        /** BUG C: modul stdlib — bukan error, tidak perlu dipasang. */
+        val stdlib: List<StdlibHit> = emptyList()
     )
 
     data class Conflict(val name: String, val requiredBy: String?, val versionA: String, val versionB: String, val specifier: String)
     data class Unavailable(val name: String, val parent: String?, val reason: String)
+    data class StdlibHit(val name: String, val reason: String)
+
+    /**
+     * BUG B — FIX 2026-08-13. `org.json.JSONObject.optString()` TIDAK PERNAH
+     * mengembalikan null: field yang tidak ada menghasilkan string kosong "".
+     *
+     * Akibatnya `localPath = p.optString("local_path")` bernilai "" untuk SETIAP
+     * paket PyPI, lalu `if (p.localPath != null)` di PackageEngineV2 selalu
+     * bernilai true, sehingga `File("").copyTo(...)` dijalankan dan melempar
+     * "The source file doesn't exist." — download tidak pernah berjalan sama
+     * sekali. Itulah pesan yang dilihat user saat memasang colorama.
+     *
+     * Helper ini mengembalikan null untuk field yang hilang, JSON null, maupun
+     * string kosong/spasi — ketiganya sama-sama berarti "tidak ada nilai".
+     */
+    private fun JSONObject.optStringOrNull(key: String): String? {
+        if (!has(key) || isNull(key)) return null
+        return optString(key).takeIf { it.isNotBlank() }
+    }
 
     fun resolve(requirementText: String): ResolvePlan {
         val wheelsDir = Paths.pythonWheels(context).absolutePath
@@ -95,15 +116,16 @@ class DependencyResolver(private val context: Context) {
                         version = p.optString("version", ""),
                         source = p.optString("source", "pypi"),
                         filename = p.optString("filename", ""),
-                        url = p.optString("url"),
-                        localPath = p.optString("local_path"),
-                        sha256 = if (p.isNull("sha256")) null else p.optString("sha256"),
+                        // BUG B: optString() -> "" bukan null; pakai helper.
+                        url = p.optStringOrNull("url"),
+                        localPath = p.optStringOrNull("local_path"),
+                        sha256 = p.optStringOrNull("sha256"),
                         size = if (p.has("size") && !p.isNull("size")) p.optLong("size") else null,
                         priority = p.optInt("priority", 0),
                         compatReason = p.optString("compat_reason", ""),
                         requiresDist = strList(p, "requires_dist"),
                         summary = p.optString("summary", ""),
-                        requiresPython = if (p.isNull("requires_python")) null else p.optString("requires_python")
+                        requiresPython = p.optStringOrNull("requires_python")
                     )
                 )
             }
@@ -132,7 +154,18 @@ class DependencyResolver(private val context: Context) {
                 ))
             }
         }
-        return ResolvePlan(true, packages, conflicts, unavailable, null, null, null, null)
+        // BUG C: modul stdlib dilaporkan terpisah — bukan kegagalan.
+        val stdlib = mutableListOf<StdlibHit>()
+        o.optJSONArray("stdlib")?.let { arr ->
+            for (i in 0 until arr.length()) {
+                val s = arr.getJSONObject(i)
+                stdlib.add(StdlibHit(
+                    name = s.optString("name"),
+                    reason = s.optString("reason")
+                ))
+            }
+        }
+        return ResolvePlan(true, packages, conflicts, unavailable, null, null, null, null, stdlib)
     }
 
     private fun strList(o: JSONObject, key: String): List<String> {

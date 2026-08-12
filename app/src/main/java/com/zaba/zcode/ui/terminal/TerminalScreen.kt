@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -354,6 +355,32 @@ fun TerminalScreen(
                             color = Color.Gray,
                             fontSize = 10.sp
                         )
+                        // BUG I: salin SELURUH isi terminal (dari buffer, bukan
+                        // hanya baris yang sedang tersusun di layar).
+                        Button(
+                            onClick = {
+                                val sb = StringBuilder()
+                                val first = buffer.startOffset
+                                for (rel in 0 until buffer.lineCount) {
+                                    buffer.get(first + rel)?.let { sb.append(it).append('\n') }
+                                }
+                                buffer.currentLine().takeIf { it.isNotEmpty() }?.let { sb.append(it) }
+                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as? android.content.ClipboardManager
+                                cm?.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("ZCODE terminal", sb.toString())
+                                )
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Output disalin (${buffer.lineCount} baris)",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                        ) {
+                            Text("Salin", fontSize = 11.sp, color = Color.White)
+                        }
                         Button(
                             onClick = { exportLauncher.launch("zcode_${runId}.log") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
@@ -415,12 +442,26 @@ fun TerminalScreen(
                 }
             }
 
-            // Virtualized renderer: LazyColumn hanya menyusun baris yang terlihat
-            LazyColumn(
-                state = listState,
+            // Virtualized renderer: LazyColumn hanya menyusun baris yang terlihat.
+            //
+            // BUG I — FIX 2026-08-13. Seluruh UI ZCODE tidak punya SATU PUN
+            // SelectionContainer, sehingga tidak ada teks yang bisa disalin —
+            // termasuk traceback error. User adalah QA tester tunggal TANPA PC
+            // dan tanpa akses logcat; melapor berarti mengetik ulang error dari
+            // layar. Diagnostik yang tidak bisa disalin hanya berguna separuh.
+            //
+            // SelectionContainer membungkus LazyColumn: long-press memulai
+            // seleksi, dan hanya baris yang sedang tersusun (visible) yang ikut.
+            // Untuk mengambil SELURUH isi terminal tersedia tombol "Salin" di
+            // bawah, yang membaca buffer, bukan komposisi.
+            SelectionContainer(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+            ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
             ) {
                 val relCount = buffer.lineCount
                 // FIX 2026-08-12: `key` DIHAPUS (dulu `key = { buffer.startOffset + it }`).
@@ -477,6 +518,7 @@ fun TerminalScreen(
                     }
                 }
             }
+            } // SelectionContainer (BUG I)
 
             // TextField transparan 1dp: pengikat keyboard virtual (ketik langsung di terminal)
             TextField(

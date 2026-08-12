@@ -8,6 +8,7 @@ Menggunakan packaging (ter-bundle bersama pip di Chaquopy):
 """
 from packaging.tags import Tag, sys_tags
 from packaging.utils import parse_wheel_filename
+from packaging.version import Version
 
 from .probe import CHAQUOPY_INDEX_URL
 
@@ -35,12 +36,46 @@ def parse_wheel(filename: str) -> dict:
     }
 
 
+# BUG F — FIX 2026-08-13. Platform tag yang HARUS selalu ditolak di Android.
+#
+# Wheel `manylinux*` / `musllinux*` / `linux_*` dibangun untuk Linux desktop
+# yang memakai **glibc** (atau musl). Android memakai **bionic**. Simbol libc-nya
+# berbeda, jadi memuat .so semacam itu bukan menghasilkan ImportError yang sopan
+# melainkan **SIGSEGV native** — crash yang TIDAK bisa ditangkap try/except dan
+# tidak meninggalkan traceback Python sama sekali.
+#
+# Penjagaan ini disengaja bersifat "sabuk dan bretel": normalnya tag tersebut
+# memang tidak akan cocok dengan tag runtime, tetapi bila suatu saat daftar tag
+# dibangun sendiri (perbaikan tag Android, build #3) satu salah ketik saja bisa
+# meloloskannya. Biaya kekeliruan di sini adalah crash yang paling sulit
+# didiagnosis di perangkat tanpa logcat, jadi penolakannya dibuat eksplisit.
+#
+# Sumber: PEP 738 (Android hanya arm64_v8a & x86_64 sebagai tier 3) dan daftar
+# arch cibuildwheel yang TIDAK memuat armeabi_v7a sama sekali —
+# https://cibuildwheel.pypa.io/en/stable/options/
+_FOREIGN_PLATFORM_PREFIXES = ("manylinux", "musllinux", "linux_")
+
+
+def is_foreign_platform_tag(platform_tag: str) -> bool:
+    """True bila platform tag milik Linux desktop (glibc/musl), bukan Android."""
+    p = (platform_tag or "").strip().lower()
+    return any(p.startswith(prefix) for prefix in _FOREIGN_PLATFORM_PREFIXES)
+
+
 def wheel_compatible(filename: str, supported_tags=None) -> bool:
     """
     True bila setidaknya satu tag wheel ada di tag runtime.
     supported_tags: iterable Tag / str. Default sys_tags() (benar di device Chaquopy).
+
+    Wheel Linux desktop (glibc/musl) SELALU ditolak lebih dulu — lihat
+    _FOREIGN_PLATFORM_PREFIXES.
     """
     info = parse_wheel(filename)
+    # BUG F: tolak sebelum pencocokan apa pun.
+    for raw in info["tags"]:
+        parts = raw.split("-", 2)
+        if len(parts) == 3 and is_foreign_platform_tag(parts[2]):
+            return False
     wheel_tags = set()
     for raw in info["tags"]:
         try:
@@ -97,6 +132,34 @@ def is_universal_pure(filename: str) -> bool:
     return "py3-none-any" in info["tags"] or "py2.py3-none-any" in info["tags"]
 
 
+def _version_key(filename: str) -> Version:
+    """Versi wheel sebagai objek Version (BUG D). Tak terbaca -> paling tua."""
+    try:
+        return Version(parse_wheel(filename)["version"])
+    except Exception:
+        return Version("0")
+
+
+class _NegVersion:
+    """Pembungkus untuk mengurutkan Version MENURUN di dalam sort menaik.
+
+    `Version` tidak mendukung negasi, dan `reverse=True` akan ikut membalik
+    kunci prioritas. Membalik hanya perbandingan versi menjaga prioritas tetap
+    menaik (1 = terbaik) sementara versi menjadi menurun (terbaru menang).
+    """
+
+    __slots__ = ("v",)
+
+    def __init__(self, v: Version):
+        self.v = v
+
+    def __lt__(self, other: "_NegVersion") -> bool:
+        return other.v < self.v
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _NegVersion) and self.v == other.v
+
+
 def best_wheel(candidates: list[dict], tested_versions=None, supported_tags=None) -> dict | None:
     """
     Pilih wheel terbaik dari daftar kandidat dict {filename, url, sha256?, size?}.
@@ -104,20 +167,29 @@ def best_wheel(candidates: list[dict], tested_versions=None, supported_tags=None
     """
     ranked = []
     for c in candidates:
+        fn = c.get("filename", "")
         try:
             prio, reason = rank_wheel(
-                c.get("filename", ""),
+                fn,
                 tested_versions=tested_versions,
                 supported_tags=supported_tags,
             )
         except WheelInfoError:
             continue
         if prio > 0:
-            ranked.append((prio, c, reason))
+            ranked.append((prio, _version_key(fn), c, reason))
     if not ranked:
         return None
-    ranked.sort(key=lambda r: (r[0], r[1].get("filename", "")))
-    prio, chosen, reason = ranked[0]
+    # BUG D — FIX 2026-08-13. Versi lama mengurutkan dengan
+    # `key=(prio, filename)` lalu mengambil ranked[0]: itu urutan ALFABETIS
+    # atas nama file, bukan urutan versi. Akibatnya:
+    #   "0.3.5" < "0.4.6"        -> colorama 2015 selalu menang
+    #   "urllib3-1.10" < "1.9"   -> '1' < '9', jadi 1.10 dikira LEBIH TUA
+    # Simulasi pipeline penuh memproduksi ulang colorama-0.3.5, requests-2.0.0
+    # (2013) dan Click-7.0 — sama persis dengan log perangkat user.
+    # Sekarang: prioritas menaik (1 terbaik), lalu VERSI MENURUN (terbaru menang).
+    ranked.sort(key=lambda r: (r[0], _NegVersion(r[1])))
+    prio, _vkey, chosen, reason = ranked[0]
     chosen = dict(chosen)
     chosen["priority"] = prio
     chosen["compat_reason"] = reason

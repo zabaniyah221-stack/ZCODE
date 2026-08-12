@@ -28,6 +28,12 @@ class OutputBatcher(
 
     fun start() {
         if (thread != null) return
+        // FIX 2026-08-12: `running` DULU hanya di-set true sekali saat objek dibuat.
+        // Setelah close() (running=false), start() berikutnya membuat thread baru yang
+        // loop-nya `while (running)` LANGSUNG berhenti — batcher hidup tapi tuli, dan
+        // SEMUA output script dibuang diam-diam tanpa error. Reset di sini membuat
+        // start() benar-benar berarti "mulai lagi".
+        running = true
         thread = Thread {
             try {
                 while (running) {

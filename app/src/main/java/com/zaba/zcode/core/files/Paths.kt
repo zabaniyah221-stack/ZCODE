@@ -38,8 +38,43 @@ object Paths {
         File(pythonEnvDir(context), "site-packages").apply { mkdirs() }
     fun pythonTransactions(context: Context): File =
         File(pythonEnvDir(context), "transactions").apply { mkdirs() }
+    /**
+     * Cache wheel, DIPISAH PER-ABI (BUG G — fix 2026-08-13).
+     *
+     * Sebelumnya semua wheel ditumpuk di satu folder `wheels/`. Nama file wheel
+     * Chaquopy memang memuat ABI-nya, tetapi cache itu ikut terbawa saat user
+     * mem-backup lalu me-restore ZCODE ke perangkat dengan ABI berbeda
+     * (ARMv7 → ARM64 atau sebaliknya). Wheel ABI asing yang tersisa di cache
+     * bisa terpilih sebagai "sumber lokal", dan memuat .so ABI salah berakhir
+     * **SIGSEGV native** — crash tanpa traceback yang mustahil didiagnosis di
+     * perangkat tanpa logcat.
+     *
+     * Pola ini ditiru dari espressif/idf-python-wheels yang memisahkan indeks
+     * ARMv7 vs lainnya dan menambahkan `check_wheel_collisions`:
+     * https://github.com/espressif/idf-python-wheels
+     */
     fun pythonWheels(context: Context): File =
+        File(pythonWheelsRoot(context), currentAbi()).apply { mkdirs() }
+
+    /** Akar cache wheel (berisi satu subfolder per-ABI). */
+    fun pythonWheelsRoot(context: Context): File =
         File(pythonEnvDir(context), "wheels").apply { mkdirs() }
+
+    /**
+     * ABI utama perangkat, dinormalkan untuk dipakai sebagai nama folder.
+     * Contoh: `armeabi-v7a` → `armeabi_v7a`. Fallback `unknown_abi`.
+     */
+    fun currentAbi(): String {
+        val raw = try {
+            android.os.Build.SUPPORTED_ABIS.firstOrNull()
+        } catch (e: Throwable) {
+            null
+        }
+        val name = (raw ?: "").trim().lowercase().replace('-', '_')
+        // Hanya izinkan karakter aman untuk nama folder.
+        val safe = name.filter { it.isLetterOrDigit() || it == '_' }
+        return if (safe.isEmpty()) "unknown_abi" else safe
+    }
     fun pythonMetadata(context: Context): File =
         File(pythonEnvDir(context), "metadata").apply { mkdirs() }
     fun pythonLogs(context: Context): File =

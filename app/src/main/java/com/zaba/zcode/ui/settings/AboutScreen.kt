@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -286,9 +288,9 @@ private fun DiagnosticsCard(context: android.content.Context) {
                     expanded = !expanded
                     if (expanded) {
                         val crash = com.zaba.zcode.core.diagnostics.CrashReporter.lastReport(context)
-                        val crumbs = com.zaba.zcode.core.diagnostics.Breadcrumb.tail(40)
+                        val crumbs = com.zaba.zcode.core.diagnostics.Breadcrumb.tail(200)
                         text = buildString {
-                            append("=== BREADCRUMB (40 baris terakhir) ===\n")
+                            append("=== BREADCRUMB (200 baris terakhir) ===\n")
                             append(crumbs)
                             append("\n\n=== CRASH TERAKHIR ===\n")
                             append(crash ?: "(belum pernah crash Java — kalau ZCODE tetap menutup sendiri, penyebabnya di luar JVM: lihat baris terakhir breadcrumb di atas)")
@@ -306,21 +308,30 @@ private fun DiagnosticsCard(context: android.content.Context) {
             }
 
             if (expanded) {
+                // FIX 2026-08-13: tinggi DULU dipaku 220.dp + font 9sp + hanya
+                // 40 baris terakhir — praktis hanya muat beberapa baris, tidak
+                // terbaca, dan memotong jejak justru saat paling dibutuhkan.
+                // Sekarang proporsional terhadap layar (0.6f) dengan 200 baris.
+                // Layar DIAGNOSTICS penuh di sidebar menyusul di build #3.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(220.dp)
+                        .fillMaxHeight(0.6f)
                         .background(Color(0xFF050806), RoundedCornerShape(10.dp))
                         .verticalScroll(rememberScrollState())
                         .padding(10.dp)
                 ) {
+                    // BUG I: teks diagnostik harus bisa diseleksi manual, bukan
+                    // hanya lewat tombol Salin.
+                    SelectionContainer {
                     Text(
                         text,
-                        fontSize = 9.sp,
-                        lineHeight = 13.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
                         fontFamily = FontFamily.Monospace,
                         color = Color(0xFF9AE6B4)
                     )
+                    } // SelectionContainer (BUG I)
                 }
                 Button(
                     onClick = {

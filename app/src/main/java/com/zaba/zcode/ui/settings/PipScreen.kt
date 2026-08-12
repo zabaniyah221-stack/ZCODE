@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -148,6 +149,10 @@ fun PipScreen(
         }
         isInstalling = true
         consoleLines = emptyList()
+        // BUG J: jejak Install Modules sebelumnya TIDAK tercatat sama sekali —
+        // breadcrumb hanya meliputi jalur Run (7 dari 49 berkas). Padahal justru
+        // installer yang sedang bermasalah, dan user tidak punya logcat.
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_BEGIN", trimmed)
         appendLog("\n> install $trimmed\n")
         scope.launch(Dispatchers.Default) {
             val result = try {
@@ -164,9 +169,15 @@ fun PipScreen(
             withContext(Dispatchers.Main) {
                 isInstalling = false
                 if (result.ok) {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
+                    )
                     appendLog("\n✅ Install selesai: ${result.installed.joinToString(", ")}\n")
                     refreshInstalled()
                 } else {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_INSTALL_FAIL", "$trimmed [${result.code}/${result.stage}] ${result.humanMessage}"
+                    )
                     appendLog(
                         "\n❌ [${result.code}] ${result.humanMessage}" +
                             (if (result.rollbackPerformed) "\n   (rollback dilakukan — environment lama utuh)" else "") +
@@ -186,6 +197,7 @@ fun PipScreen(
         }
         isInstalling = true
         consoleLines = emptyList()
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_BEGIN", trimmed)
         appendLog("\n> analyze $trimmed\n")
         scope.launch(Dispatchers.Default) {
             val plan = try {
@@ -203,7 +215,17 @@ fun PipScreen(
             withContext(Dispatchers.Main) {
                 if (!plan.ok) {
                     isInstalling = false
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_ANALYZE_FAIL", "$trimmed [${plan.errorCode}] ${plan.humanError}"
+                    )
                     appendLog("\n❌ [${plan.errorCode}] ${plan.humanError}\n")
+                    return@withContext
+                }
+                // BUG C: modul stdlib bukan kegagalan.
+                if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
+                    isInstalling = false
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_STDLIB", trimmed)
+                    appendLog("\nℹ️ ${plan.stdlib.joinToString(" ") { it.reason }}\n")
                     return@withContext
                 }
                 if (plan.conflicts.isNotEmpty()) {
@@ -788,6 +810,8 @@ private fun ManualTab(
                 .padding(12.dp)
                 .verticalScroll(consoleScroll)
         ) {
+            // BUG I: console harus bisa diseleksi & disalin (user melapor tanpa logcat).
+            SelectionContainer {
             Column {
                 if (consoleLines.isEmpty()) {
                     Text(
@@ -813,6 +837,7 @@ private fun ManualTab(
                     )
                 }
             }
+            } // SelectionContainer (BUG I)
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -829,6 +854,7 @@ private fun ManualTab(
                 .padding(12.dp)
                 .verticalScroll(logScroll)
         ) {
+            SelectionContainer {
             Text(
                 text = logText,
                 color = Color(0xFF39FF14),
@@ -836,6 +862,7 @@ private fun ManualTab(
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
+            } // SelectionContainer (BUG I)
         }
     }
 }

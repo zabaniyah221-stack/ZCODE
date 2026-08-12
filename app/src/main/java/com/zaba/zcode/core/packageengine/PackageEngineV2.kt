@@ -117,6 +117,21 @@ class PackageEngineV2(private val context: Context) {
                 }
                 return fail("DEPENDENCY_CONFLICT", "resolve", "Konflik dependensi: $msg", null)
             }
+            // BUG C: modul stdlib bukan kegagalan — beri tahu apa adanya.
+            if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
+                val msg = plan.stdlib.joinToString(" ") { it.reason }
+                onStep(Step.Finish("Resolve", true, "modul bawaan Python"))
+                onStep(Step.Log("  ℹ️ $msg"))
+                return InstallResult(
+                    ok = true,
+                    code = null,
+                    stage = null,
+                    humanMessage = msg,
+                    technicalMessage = null,
+                    rollbackPerformed = false,
+                    installed = emptyList()
+                )
+            }
             if (plan.unavailable.isNotEmpty()) {
                 TelemetryStore.increment("package_not_available")
                 val msg = plan.unavailable.joinToString("; ") { "${it.name}: ${it.reason}" }

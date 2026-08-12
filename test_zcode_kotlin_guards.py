@@ -410,3 +410,238 @@ class TestComposeDelegasiImport:
         assert not offenders, (
             "File memakai `val ... by remember` tanpa import getValue: " + "; ".join(offenders)
         )
+<<<<<<< HEAD
+=======
+
+
+# ---------------------------------------------------------------------------
+# 8. ANTI-REGRESI PAKET PERBAIKAN 2026-08-13 (build #2 — installer)
+#
+# Setiap guard di bawah WAJIB bisa gagal: dibuktikan lewat uji mutasi
+# (kembalikan bug -> merah, pulihkan -> hijau). Guard yang tak pernah bisa
+# gagal adalah guard palsu.
+# ---------------------------------------------------------------------------
+
+PYSRC = ROOT / "app/src/main/python"
+PYRT = PYSRC / "package_runtime"
+
+
+class TestBugARequiresPython:
+    """resolve.py: Requires-Python dibandingkan dengan versi PYTHON, bukan paket."""
+
+    def test_pembanding_bukan_versi_paket(self):
+        txt = read(PYRT / "resolve.py")
+        assert "def _requires_python_ok(requires_python: str | None, python_version" in txt, \
+            "BUG A: parameter kedua harus python_version, bukan versi paket"
+        assert "_requires_python_ok(rp, version)" not in txt, \
+            "BUG A KEMBALI: memakai versi paket sebagai pembanding Requires-Python"
+
+    def test_runtime_python_version_ada(self):
+        txt = read(PYRT / "resolve.py")
+        assert "def runtime_python_version()" in txt
+        assert "sys.version_info[:2]" in txt
+
+    def test_perilaku_nyata(self):
+        import sys as _s
+        _s.path.insert(0, str(PYSRC))
+        from package_runtime.resolve import _requires_python_ok
+        assert _requires_python_ok(">=3.7") is True, "Python 3.11 harus memenuhi >=3.7"
+        assert _requires_python_ok(">=3.99") is False
+        assert _requires_python_ok(None) is True
+
+
+class TestBugCStdlib:
+    """resolve.py: modul stdlib dikenali, bukan dicari ke PyPI."""
+
+    def test_is_stdlib_module_ada(self):
+        txt = read(PYRT / "resolve.py")
+        assert "def is_stdlib_module(" in txt, "BUG C: helper stdlib hilang"
+        assert "stdlib_module_names" in txt
+        assert "if is_stdlib_module(root_name):" in txt, \
+            "BUG C: resolve() tidak memeriksa stdlib lebih dulu"
+
+    def test_perilaku_nyata(self):
+        import sys as _s
+        _s.path.insert(0, str(PYSRC))
+        from package_runtime.resolve import is_stdlib_module
+        for name in ("math", "json", "os", "Math"):
+            assert is_stdlib_module(name), f"{name} harus dikenali stdlib"
+        for name in ("colorama", "requests", ""):
+            assert not is_stdlib_module(name)
+
+    def test_kotlin_membaca_field_stdlib(self):
+        txt = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
+        assert "val stdlib:" in txt and "StdlibHit" in txt, \
+            "BUG C: ResolvePlan Kotlin tidak punya field stdlib"
+
+
+class TestBugDUrutanVersi:
+    """wheelinfo.py: pemilihan wheel diurutkan berdasarkan VERSI, bukan alfabet."""
+
+    def test_tidak_sort_alfabetis(self):
+        txt = read(PYRT / "wheelinfo.py")
+        assert 'ranked.sort(key=lambda r: (r[0], r[1].get("filename", "")))' not in txt, \
+            "BUG D KEMBALI: sort alfabetis atas nama file"
+        assert "_NegVersion" in txt and "def _version_key(" in txt
+
+    def test_perilaku_nyata(self):
+        import sys as _s
+        _s.path.insert(0, str(PYSRC))
+        from package_runtime.wheelinfo import best_wheel
+        from packaging.tags import Tag
+        tags = [Tag("py3", "none", "any"), Tag("py2.py3", "none", "any")]
+        cands = [{"filename": f} for f in (
+            "colorama-0.3.5-py2.py3-none-any.whl",
+            "colorama-0.4.6-py2.py3-none-any.whl",
+            "colorama-0.3.9-py2.py3-none-any.whl",
+        )]
+        assert best_wheel(cands, supported_tags=tags)["filename"] == \
+            "colorama-0.4.6-py2.py3-none-any.whl", "harus memilih versi TERBARU"
+        # 1.10 > 1.9 secara versi, walau '1' < '9' secara teks
+        c2 = [{"filename": f} for f in (
+            "urllib3-1.9-py2.py3-none-any.whl",
+            "urllib3-1.10-py2.py3-none-any.whl",
+        )]
+        assert best_wheel(c2, supported_tags=tags)["filename"] == \
+            "urllib3-1.10-py2.py3-none-any.whl"
+
+
+class TestBugBOptString:
+    """DependencyResolver.kt: optString() tidak pernah null — wajib pakai helper."""
+
+    def test_helper_ada(self):
+        txt = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
+        assert "fun JSONObject.optStringOrNull(" in txt, "BUG B: helper hilang"
+
+    def test_field_opsional_tidak_pakai_optstring_telanjang(self):
+        txt = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
+        for field in ("url", "local_path", "sha256", "requires_python"):
+            bad = f'optString("{field}")'
+            for line in txt.splitlines():
+                if bad in line and "optStringOrNull" not in line:
+                    raise AssertionError(
+                        f"BUG B KEMBALI: {field} memakai optString() telanjang -> "
+                        f'"" bukan null. Baris: {line.strip()}'
+                    )
+
+
+class TestBugEBatcherRestart:
+    """OutputBatcher: running harus di-reset di start(), kalau tidak batcher tuli."""
+
+    def test_running_direset(self):
+        txt = strip_kt_comments(read(EXEC / "OutputBatcher.kt"))
+        i = txt.find("fun start()")
+        assert i > 0
+        j = txt.find("thread = Thread", i)
+        assert j > i, "struktur start() berubah"
+        assert "running = true" in txt[i:j], \
+            "BUG E KEMBALI: running tidak di-reset -> output dibuang diam-diam"
+
+
+class TestBugFTolakWheelLinux:
+    """wheelinfo.py: wheel glibc/musl selalu ditolak (mencegah SIGSEGV)."""
+
+    def test_penjagaan_ada(self):
+        txt = read(PYRT / "wheelinfo.py")
+        assert "def is_foreign_platform_tag(" in txt, "BUG F: penjagaan hilang"
+        for prefix in ("manylinux", "musllinux", "linux_"):
+            assert prefix in txt
+
+    def test_perilaku_nyata(self):
+        import sys as _s
+        _s.path.insert(0, str(PYSRC))
+        from package_runtime.wheelinfo import wheel_compatible, is_foreign_platform_tag
+        from packaging.tags import Tag
+        assert is_foreign_platform_tag("manylinux_2_17_armv7l")
+        assert is_foreign_platform_tag("linux_armv7l")
+        assert not is_foreign_platform_tag("android_21_armeabi_v7a")
+        # Bahkan bila tag runtime "cocok", wheel Linux tetap ditolak.
+        assert not wheel_compatible(
+            "numpy-1.26.2-cp311-cp311-manylinux_2_17_armv7l.whl",
+            supported_tags=[Tag("cp311", "cp311", "manylinux_2_17_armv7l")],
+        ), "BUG F KEMBALI: wheel glibc lolos -> SIGSEGV di Android"
+        assert wheel_compatible(
+            "numpy-1.26.2-0-cp311-cp311-android_21_armeabi_v7a.whl",
+            supported_tags=[Tag("cp311", "cp311", "android_21_armeabi_v7a")],
+        ), "wheel Android sah tidak boleh ikut ditolak"
+
+
+class TestBugGCacheWheelPerAbi:
+    """Paths.kt: cache wheel dipisah per-ABI."""
+
+    def test_pemisahan_ada(self):
+        txt = strip_kt_comments(read(APP / "core/files/Paths.kt"))
+        assert "fun currentAbi()" in txt, "BUG G: currentAbi() hilang"
+        assert "SUPPORTED_ABIS" in txt
+        assert "File(pythonWheelsRoot(context), currentAbi())" in txt, \
+            "BUG G KEMBALI: cache wheel tidak dipisah per-ABI"
+
+
+class TestBugHWebViewColdStart:
+    """EditorScreen.kt: jangan evaluateJavascript sebelum WebView navigasi."""
+
+    def test_guard_about_blank(self):
+        txt = read(UI / "editor/EditorScreen.kt")
+        assert "about:blank" in txt, "BUG H: guard cold-start WebView hilang"
+        clean = strip_kt_comments(txt)
+        assert "runCatching" in clean
+
+
+class TestBugISelectionContainer:
+    """Semua layar keluaran harus bisa diseleksi/disalin."""
+
+    LAYAR = (
+        UI / "terminal/TerminalScreen.kt",
+        UI / "settings/PipScreen.kt",
+        UI / "settings/AboutScreen.kt",
+    )
+
+    def test_selection_container_terpasang(self):
+        for f in self.LAYAR:
+            txt = read(f)
+            assert "SelectionContainer" in strip_kt_comments(txt), \
+                f"BUG I: {f.name} tidak bisa diseleksi — user tak bisa melapor"
+            assert "import androidx.compose.foundation.text.selection.SelectionContainer" in txt, \
+                f"BUG I: import SelectionContainer hilang di {f.name}"
+
+    def test_terminal_punya_tombol_salin(self):
+        txt = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "ClipboardManager" in txt and "Salin" in txt, \
+            "BUG I: terminal tidak punya tombol Salin"
+
+
+class TestBugJBreadcrumbInstaller:
+    """Jalur Install Modules wajib meninggalkan jejak (user tanpa logcat)."""
+
+    def test_breadcrumb_terpasang(self):
+        txt = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        for step in ("PKG_INSTALL_BEGIN", "PKG_INSTALL_OK", "PKG_INSTALL_FAIL",
+                     "PKG_ANALYZE_BEGIN", "PKG_ANALYZE_FAIL"):
+            assert step in txt, f"BUG J: breadcrumb {step} hilang"
+
+
+class TestManifestSinkronChaquopy:
+    """tested-manifest.json hanya boleh memuat versi yang ADA di indeks Chaquopy.
+
+    Disurvei 2026-08-13 dari https://chaquo.com/pypi-13.1/ — lihat
+    docs/ARMV7_COMPAT_2026_08_13.md. numpy 1.26.4 dan pillow 10.3.0 TIDAK ADA.
+    """
+
+    HANTU = {"numpy": "1.26.4", "pillow": "10.3.0"}
+    NYATA = {"numpy": "1.26.2", "pillow": "9.2.0", "matplotlib": "3.6.0"}
+
+    def test_tidak_ada_versi_hantu(self):
+        import json
+        data = json.loads(read(ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
+        for pkg, ghost in self.HANTU.items():
+            assert ghost not in data.get(pkg, []), (
+                f"{pkg}=={ghost} tidak ada di indeks Chaquopy cp311 — "
+                f"install akan gagal walau pencocokan tag sudah benar"
+            )
+
+    def test_versi_nyata_terpasang(self):
+        import json
+        data = json.loads(read(ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
+        for pkg, real in self.NYATA.items():
+            assert real in data.get(pkg, []), f"{pkg} harus memuat {real}"
+>>>>>>> 074459e (fix(installer): 10 bug — resolver, terminal kosong, crash native, copas)
