@@ -1,8 +1,6 @@
 package com.zaba.zcode.ui.terminal
 
 import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -61,6 +59,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zaba.zcode.core.diagnostics.Breadcrumb
+import com.zaba.zcode.core.diagnostics.RunLogStore
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.execution.OutputBatcher
 import com.zaba.zcode.core.execution.RunId
@@ -133,7 +132,6 @@ fun TerminalScreen(
     var bufferVersion by remember { mutableIntStateOf(0) }
     var runId by remember { mutableStateOf(RunId.newId("run")) }
     var logger by remember { mutableStateOf<RunLogger?>(null) }
-    var logFilePath by remember { mutableStateOf<File?>(null) }
     val listState: LazyListState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
@@ -264,26 +262,9 @@ fun TerminalScreen(
             }
     }
 
-    // Export full log (SAF) — dari DISK, bukan buffer (SPEC-001 §16)
-    val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/plain")
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val src = logFilePath
-                if (src != null && src.exists()) {
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        src.inputStream().use { it.copyTo(out) }
-                    }
-                    scope.launch { appendToTerminal("sys", "\n✅ Log diekspor (${src.name}).\n") }
-                } else {
-                    scope.launch { appendToTerminal("sys", "\n⚠️ Belum ada log (proses belum jalan).\n") }
-                }
-            } catch (e: Exception) {
-                scope.launch { appendToTerminal("sys", "\n❌ Export gagal: ${e.message}\n") }
-            }
-        }
-    }
+    // Export log DIPINDAH ke Diagnostics (build #3, permintaan user): di sana
+    // seluruh riwayat run terlihat sekaligus, bukan hanya run yang kebetulan
+    // sedang dibuka. exportLauncher lama ikut dicabut agar tidak jadi kode mati.
 
     // Jalankan proses saat terminal dibuka (callback datang dari thread background)
     LaunchedEffect(filename) {
@@ -297,10 +278,13 @@ fun TerminalScreen(
             return@LaunchedEffect
         }
         // RunLogger: disk-backed full log (SPEC-001 §16)
+        // Rotasi SEBELUM run baru menulis: pada titik ini file lama pasti
+        // tidak sedang dipakai. Tanpa ini log run menumpuk selamanya — tidak
+        // pernah terlihat sampai storage HP penuh.
+        withContext(Dispatchers.IO) { RunLogStore.rotate(context) }
         val rl = RunLogger(File(Paths.runLogsDir(context), "$runId.log"))
         withContext(Dispatchers.IO) { rl.start("ZCODE run $runId — $filename") }
         logger = rl
-        logFilePath = File(Paths.runLogsDir(context), "$runId.log")
         Breadcrumb.log("LOGGER_OK", runId)
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
         if (showPythonIndicator) appendToTerminal("sys", "\u2699 Menyalakan Python\u2026\n")
@@ -315,12 +299,22 @@ fun TerminalScreen(
             onExit = { code ->
                 startingPython = false
                 Breadcrumb.log("SESSION_EXIT", "code=$code state=${sessionState.name}")
-                scope.launch {
-                    appendToTerminal(
-                        "sys",
-                        "\n\nProcess finished with exit code $code (state: ${sessionState.name})\n"
-                    )
-                }
+                // BUG URUTAN (dilaporkan user, v1.0.5): pesan ini DULU ditulis
+                // lewat `scope.launch { appendToTerminal(...) }` — menembak
+                // langsung ke buffer sambil melewati OutputBatcher. Karena
+                // output print() menunggu jendela flush 40ms, script yang
+                // selesai cepat membuat "Process finished..." menyalip dan
+                // muncul DI ATAS "Hello, ZCODE!".
+                //
+                // Sekarang pesan penutup memakai jalur yang sama dengan output
+                // biasa, dan antrean dikosongkan lebih dulu. onExit dipanggil
+                // dari thread Python (bukan Main), jadi drain() yang memblokir
+                // di sini aman dan tidak membekukan UI.
+                batcher.drain()
+                batcher.append(
+                    "sys",
+                    "\n\nProcess finished with exit code $code (state: ${sessionState.name})\n"
+                )
                 rl.writeExit(sessionState, code)
                 rl.close()
             },
@@ -445,7 +439,10 @@ fun TerminalScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris · $runId",
+                            // Pemisah terakhir DULU menggantung tanpa apa-apa
+                            // sesudahnya ("… 4 baris ·") karena runId dipotong
+                            // maxLines saat layar sempit. Rangkai eksplisit.
+                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris",
                             color = Color.Gray,
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
@@ -472,14 +469,7 @@ fun TerminalScreen(
                                 .clickable { shareAll() }
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
-                        Text(
-                            "Export",
-                            color = Color(0xFF8A9BB0),
-                            fontSize = 10.sp,
-                            modifier = Modifier
-                                .clickable { exportLauncher.launch("zcode_${runId}.log") }
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+
                     }
                 }
             }

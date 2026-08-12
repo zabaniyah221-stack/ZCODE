@@ -29,6 +29,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -789,9 +792,44 @@ private fun ManualTab(
                 color = Color.Gray
             )
         }
-        Row(modifier = Modifier.padding(top = 4.dp)) {
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             TextButton(onClick = onRequirementsTxt, contentPadding = PaddingValues(0.dp)) {
                 Text("requirements.txt?", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            // PASTE (build #3, permintaan user). Long-press pada OutlinedTextField
+            // Compose memang menawarkan Paste, tetapi hanya setelah field kosong
+            // ditekan lama dengan tepat — di layar sempit itu sering meleset.
+            // Nama paket biasanya disalin dari chat atau web, jadi satu tap
+            // eksplisit jauh lebih pasti daripada menebak gestur.
+            val clipboard = LocalClipboardManager.current
+            val ctx = LocalContext.current
+            TextButton(
+                onClick = {
+                    val teks = clipboard.getText()?.text.orEmpty().trim()
+                    if (teks.isEmpty()) {
+                        Toast.makeText(ctx, "Clipboard kosong", Toast.LENGTH_SHORT).show()
+                    } else {
+                        // Ambil baris pertama saja: menempelkan seluruh isi
+                        // requirements.txt ke field satu-baris hanya membuat
+                        // parser gagal dengan pesan yang membingungkan.
+                        val baris = teks.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
+                        onPackageNameChange(baris)
+                        if (teks.lines().count { it.isNotBlank() } > 1) {
+                            Toast.makeText(
+                                context,
+                                "Beberapa baris terdeteksi — hanya baris pertama dipakai",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp)
+            ) {
+                Text("Paste", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
             }
         }
 

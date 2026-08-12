@@ -34,12 +34,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableIntStateOf
+import com.zaba.zcode.core.diagnostics.RunLogStore
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.diagnostics.CrashReporter
-import com.zaba.zcode.core.files.Paths
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * DIAGNOSTICS — layar penuh, dibuka dari sidebar (build #3).
@@ -73,27 +75,46 @@ fun DiagnosticsScreen(
     var tab by remember { mutableStateOf(DiagTab.SEMUA) }
     var crumbs by remember { mutableStateOf<List<String>>(emptyList()) }
     var crash by remember { mutableStateOf<String?>(null) }
-    var runLogs by remember { mutableStateOf<List<File>>(emptyList()) }
+    var runLogs by remember { mutableStateOf<List<RunLogStore.Entry>>(emptyList()) }
+    // Entri yang dipilih untuk diekspor — SAF meminta nama file lebih dulu,
+    // jadi pilihan harus diingat sampai launcher kembali.
+    var entriDiekspor by remember { mutableStateOf<RunLogStore.Entry?>(null) }
+    var muatUlang by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(muatUlang) {
         // Baca dari disk di IO — file bisa 128KB dan ini layar diagnostik,
         // paling tidak pantas kalau justru ia yang membuat UI tersendat.
         val loaded = withContext(Dispatchers.IO) {
             Triple(
                 Breadcrumb.tail(2000).lines().filter { it.isNotBlank() },
                 CrashReporter.lastReport(context),
-                runCatching {
-                    Paths.runLogsDir(context).listFiles()
-                        ?.sortedByDescending { it.lastModified() }
-                        ?.take(50) ?: emptyList()
-                }.getOrDefault(emptyList())
+                RunLogStore.list(context)
             )
         }
         crumbs = loaded.first
         crash = loaded.second
         runLogs = loaded.third
         loading = false
+    }
+
+    // Export satu log run ke penyimpanan pilihan user (SAF). Disalin dari
+    // DISK, bukan dari layar: isi layar sudah difilter tab, sedangkan yang
+    // dibutuhkan saat melapor bug adalah log run UTUH.
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        val entri = entriDiekspor
+        entriDiekspor = null
+        if (uri != null && entri != null) {
+            val pesan = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    entri.file.inputStream().use { it.copyTo(out) }
+                }
+                "Log diekspor: ${entri.name}"
+            }.getOrElse { "Export gagal: ${it.message}" }
+            android.widget.Toast.makeText(context, pesan, android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     val filtered = remember(tab, crumbs) {
@@ -273,19 +294,65 @@ fun DiagnosticsScreen(
                         )
                         if (runLogs.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(14.dp))
-                            Text(
-                                "=== LOG RUN TERSIMPAN (${runLogs.size}) ===",
-                                color = Color(0xFF39FF14),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            runLogs.forEach { f ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    "  ${f.name}  ${f.length() / 1024}KB",
-                                    color = Color(0xFF8A9BB0),
-                                    fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace
+                                    "=== LOG RUN (${runLogs.size}/${RunLogStore.MAX_RUN_LOGS}) ===",
+                                    color = Color(0xFF39FF14),
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace,
+                                    modifier = Modifier.weight(1f)
                                 )
+                                Text(
+                                    "Hapus semua",
+                                    color = Color(0xFFB3261E),
+                                    fontSize = 10.sp,
+                                    modifier = Modifier
+                                        .clickable {
+                                            val n = RunLogStore.clearAll(context)
+                                            muatUlang++
+                                            android.widget.Toast.makeText(
+                                                context, "$n log dihapus",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                        .padding(horizontal = 6.dp, vertical = 4.dp)
+                                )
+                            }
+                            Text(
+                                "Otomatis menyimpan ${RunLogStore.MAX_RUN_LOGS} run terbaru; " +
+                                    "yang lebih lama dihapus sendiri.",
+                                color = Color(0xFF6B7280),
+                                fontSize = 9.sp
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            runLogs.forEach { e ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        "${e.name}  ${e.sizeLabel}",
+                                        color = Color(0xFF8A9BB0),
+                                        fontSize = 10.sp,
+                                        fontFamily = FontFamily.Monospace,
+                                        maxLines = 1,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        "Export",
+                                        color = Color(0xFF7DD3FC),
+                                        fontSize = 10.sp,
+                                        modifier = Modifier
+                                            .clickable {
+                                                entriDiekspor = e
+                                                exportLauncher.launch(e.name)
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
                         Spacer(modifier = Modifier.height(14.dp))

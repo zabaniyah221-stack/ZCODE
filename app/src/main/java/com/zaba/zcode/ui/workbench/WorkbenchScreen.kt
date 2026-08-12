@@ -1378,7 +1378,13 @@ private fun DrawerItem(label: String, onClick: () -> Unit) {
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            // Satu titik catat untuk SELURUH navigasi sidebar. Menaruhnya di
+            // sini, bukan di tiap pemanggil, membuat item baru otomatis
+            // terekam — jejak tidak bisa lupa diperbarui.
+            .clickable {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log("NAV", label)
+                onClick()
+            }
             .padding(horizontal = 16.dp, vertical = 12.dp)
     )
 }

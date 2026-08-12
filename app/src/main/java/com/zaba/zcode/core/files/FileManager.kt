@@ -1,5 +1,6 @@
 package com.zaba.zcode.core.files
 
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import java.io.File
 
 /**
@@ -38,12 +39,23 @@ object FileManager {
     }
 
     fun saveFile(filesDir: File, filename: String, content: String): Result<String> {
-        val secured = secureFilename(filename) ?: return Result.failure(IllegalArgumentException("Invalid filename"))
-        if (content.toByteArray(Charsets.UTF_8).size > MAX_FILE_BYTES) return Result.failure(IllegalArgumentException("Too large"))
+        val secured = secureFilename(filename) ?: run {
+            Breadcrumb.log("FILE_SAVE_REJECT", "nama tidak aman: $filename")
+            return Result.failure(IllegalArgumentException("Invalid filename"))
+        }
+        if (content.toByteArray(Charsets.UTF_8).size > MAX_FILE_BYTES) {
+            Breadcrumb.log("FILE_SAVE_REJECT", "$secured terlalu besar")
+            return Result.failure(IllegalArgumentException("Too large"))
+        }
         return try {
             File(filesDir, secured).writeText(content, Charsets.UTF_8)
             Result.success(secured)
         } catch (e: Exception) {
+            // Hanya KEGAGALAN yang dicatat. Autosave berjalan terus-menerus;
+            // mencatat setiap simpan sukses akan memenuhi breadcrumb 128KB
+            // dalam hitungan menit dan justru MENGHAPUS jejak crash yang
+            // sedang dicari.
+            Breadcrumb.log("FILE_SAVE_FAIL", "$secured: ${e.message}")
             Result.failure(e)
         }
     }
@@ -53,8 +65,13 @@ object FileManager {
         val secured = secureFilename(filename) ?: return false
         return try {
             val file = File(filesDir, secured)
-            file.exists() && file.delete()
+            val ada = file.exists()
+            val ok = ada && file.delete()
+            // Penghapusan itu destruktif dan jarang — selalu dicatat.
+            Breadcrumb.log("FILE_DELETE", "$secured ada=$ada ok=$ok")
+            ok
         } catch (e: Exception) {
+            Breadcrumb.log("FILE_DELETE_FAIL", "$secured: ${e.message}")
             false
         }
     }

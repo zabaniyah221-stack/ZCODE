@@ -1083,3 +1083,248 @@ class TestBagikanOutput:
         assert i > 0, "shareAll tidak ditemukan"
         badan = src[i:i + 1200]
         assert "runCatching" in badan, "startActivity tanpa pengaman"
+
+
+# ---------------------------------------------------------------------------
+# BUG URUTAN OUTPUT (dilaporkan user dari perangkat, v1.0.5)
+#
+# Layar menampilkan:
+#     Process finished with exit code 0 (state: EXITED)
+#     Hello, ZCODE!
+# padahal print() jelas berjalan SEBELUM script selesai.
+#
+# DUA sebab, keduanya nyata dan saling menutupi:
+#  1. Pesan exit ditulis lewat `scope.launch { appendToTerminal(...) }` —
+#     menembak langsung ke buffer sambil MELEWATI OutputBatcher, sementara
+#     output print() masih menunggu jendela flush 40ms.
+#  2. OutputBatcher menyimpan satu StringBuilder PER STREAM dan mem-flush
+#     dengan `buffers.forEach`. Urutan hanya terjaga di dalam satu stream;
+#     antar-stream ("out" vs "sys") yang menang adalah yang map-nya lebih
+#     dulu dibuat, bukan yang teksnya lebih dulu datang.
+#
+# Memperbaiki hanya (1) menyisakan bom waktu: begitu ada output "err" dan
+# "out" berdekatan, urutan kacau lagi tanpa ada yang mengubah TerminalScreen.
+# ---------------------------------------------------------------------------
+EXEC_DIR = APP / "core/execution"
+
+
+class TestUrutanOutputTerminal:
+    def test_pesan_exit_tidak_memotong_antrean(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = src.find("onExit = { code ->")
+        assert i > 0, "handler onExit tidak ditemukan"
+        badan = src[i:i + 1200]
+        assert "Process finished" in badan
+        assert "batcher.append(" in badan, (
+            "pesan exit tidak lewat OutputBatcher — akan menyalip output print() "
+            "yang masih menunggu flush 40ms"
+        )
+        assert "appendToTerminal(" not in badan, (
+            "pesan exit menembak langsung ke buffer, melewati antrean"
+        )
+
+    def test_antrean_dikosongkan_sebelum_pesan_exit(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = src.find("onExit = { code ->")
+        badan = src[i:i + 1200]
+        i_drain = badan.find("batcher.drain()")
+        i_append = badan.find("batcher.append(")
+        assert i_drain > 0, "antrean tidak dikosongkan sebelum menulis pesan exit"
+        assert i_drain < i_append, "drain() dipanggil SETELAH pesan exit — tidak ada gunanya"
+
+    def test_batcher_punya_drain(self):
+        src = read(EXEC_DIR / "OutputBatcher.kt")
+        assert "fun drain(" in src, "OutputBatcher tanpa drain()"
+        # Periksa TANDA TANGAN-nya, bukan sekadar kemunculan kata: "timeoutMs"
+        # tetap ada di badan fungsi walau parameternya dicabut (bocor uji
+        # mutasi 2026-08-13).
+        assert re.search(r"fun drain\(\s*timeoutMs", src), (
+            "drain() tanpa batas waktu bisa menggantung selamanya bila produser macet"
+        )
+
+    def test_batcher_menjaga_urutan_lintas_stream(self):
+        """Akar sebenarnya: satu buffer per stream = urutan antar-stream hilang."""
+        src = strip_kt_comments(read(EXEC_DIR / "OutputBatcher.kt"))
+        assert "mutableMapOf<String, StringBuilder>" not in src, (
+            "buffer per-stream kembali — urutan antar-stream tidak lagi terjaga"
+        )
+        assert "buffers.forEach" not in src, (
+            "flush mengiterasi map: urutan ditentukan pembuatan map, bukan waktu datang"
+        )
+        assert "pending" in src, "tidak ada antrean tunggal berurutan"
+
+    def test_simulasi_urutan_kronologis(self):
+        """Uji PERILAKU, bukan bentuk teks: tiru algoritma flush yang baru dan
+        pastikan tiga potongan dari dua stream keluar sesuai waktu datang."""
+        pending = [
+            ("sys", "menyalakan\n"),
+            ("out", "Hello, ZCODE!\n"),
+            ("sys", "Process finished\n"),
+        ]
+        keluar = []
+        stream = pending[0][0]
+        sb = []
+        while pending:
+            s, t = pending[0]
+            if s != stream:
+                keluar.append((stream, "".join(sb)))
+                sb = []
+                stream = s
+            sb.append(t)
+            pending.pop(0)
+        if sb:
+            keluar.append((stream, "".join(sb)))
+
+        teks = [t for _, t in keluar]
+        i_hello = next(i for i, t in enumerate(teks) if "Hello" in t)
+        i_exit = next(i for i, t in enumerate(teks) if "Process finished" in t)
+        assert i_hello < i_exit, f"urutan terbalik: {teks}"
+
+    def test_footer_tanpa_pemisah_menggantung(self):
+        """User melihat 'mem 0KB · 4 baris ·' — pemisah tanpa apa pun sesudahnya."""
+        src = read(UI / "terminal/TerminalScreen.kt")
+        assert 'baris · $runId"' not in src, "pemisah menggantung di footer"
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — Rotasi & Export log run
+#
+# Paths.runLogsDir() sudah menampung satu .log per run sejak awal, tetapi TIDAK
+# ADA yang pernah menghapusnya: setiap tap Run menambah file permanen. Di HP
+# 32-bit dengan storage terbatas itu kebocoran yang tumbuh diam-diam dan tidak
+# bisa dibersihkan user dari dalam aplikasi.
+# ---------------------------------------------------------------------------
+DIAG_DIR = APP / "core/diagnostics"
+
+
+class TestRotasiLogRun:
+    def test_store_ada_dengan_batas_50(self):
+        src = read(DIAG_DIR / "RunLogStore.kt")
+        assert src, "RunLogStore.kt hilang"
+        m = re.search(r"MAX_RUN_LOGS\s*=\s*(\d+)", src)
+        assert m, "batas jumlah log tidak didefinisikan"
+        assert int(m.group(1)) == 50, f"batas {m.group(1)} — kesepakatan build #3 adalah 50"
+
+    def test_rotasi_dipanggil_saat_run_baru(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "RunLogStore.rotate(" in src, "log run tidak pernah dirotasi — bocor selamanya"
+        i_rot = src.find("RunLogStore.rotate(")
+        i_new = src.find("RunLogger(File(Paths.runLogsDir")
+        assert i_new > 0
+        assert i_rot < i_new, "rotasi dijalankan setelah log baru dibuat"
+
+    def test_rotasi_tidak_boleh_membuat_crash(self):
+        """Pembersihan log tidak boleh jadi sumber crash baru."""
+        src = read(DIAG_DIR / "RunLogStore.kt")
+        for fn in ("fun list(", "fun rotate(", "fun clearAll("):
+            i = src.find(fn)
+            assert i > 0, f"{fn} hilang"
+            assert "runCatching" in src[i:i + 700], f"{fn} tanpa pengaman I/O"
+
+    def test_rotasi_menyisakan_yang_terbaru(self):
+        """Uji PERILAKU algoritmanya: yang dibuang harus yang TERLAMA."""
+        berkas = [(f"run_{i}.log", i) for i in range(60)]  # mtime = i, makin besar makin baru
+        keep = 50
+        urut = sorted(berkas, key=lambda x: -x[1])
+        disimpan = urut[:keep]
+        dibuang = urut[keep:]
+        assert len(disimpan) == 50 and len(dibuang) == 10
+        assert min(m for _, m in disimpan) > max(m for _, m in dibuang), \
+            "file yang lebih baru ikut terbuang"
+
+    def test_export_per_entri_di_diagnostics(self):
+        src = strip_kt_comments(read(UI / "settings/DiagnosticsScreen.kt"))
+        assert "CreateDocument" in src, "tidak ada export SAF di Diagnostics"
+        assert "exportLauncher.launch(" in src
+        # Periksa PENUGASAN, bukan sekadar nama variabel: deklarasi state dan
+        # reset di dalam launcher tetap ada walau tombol Export lupa mencatat
+        # entri mana yang ditekan (bocor uji mutasi 2026-08-13).
+        i_btn = src.find('"Export"')
+        assert i_btn > 0, "tombol Export per-entri tidak ada"
+        jendela = src[max(0, i_btn - 300):i_btn + 500]
+        assert re.search(r"entriDiekspor\s*=\s*e\b", jendela), (
+            "tombol Export tidak menyimpan entri yang dipilih — SAF asinkron, "
+            "tanpa ini file yang diekspor bisa bukan yang ditekan user"
+        )
+
+    def test_export_dicabut_dari_footer_terminal(self):
+        """Permintaan user: Export pindah ke Diagnostics, bukan ada di dua tempat."""
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "exportLauncher" not in src, "launcher export yatim tertinggal di terminal"
+        assert "CreateDocument" not in src, "Export masih ada di footer terminal"
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — Paste di kolom Requirement
+# ---------------------------------------------------------------------------
+class TestPasteRequirement:
+    def test_tombol_paste_ada(self):
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "LocalClipboardManager" in src, "tidak ada akses clipboard"
+        assert '"Paste"' in src, "tombol Paste tidak ada di Install Modules"
+
+    def test_paste_menangani_clipboard_kosong(self):
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        i = src.find('"Paste"')
+        # tombol didefinisikan SEBELUM labelnya; periksa jendela di sekitarnya
+        jendela = src[max(0, i - 1800):i + 200]
+        assert "Clipboard kosong" in jendela, (
+            "paste dari clipboard kosong menimpa isi field tanpa penjelasan"
+        )
+
+    def test_paste_hanya_ambil_baris_pertama(self):
+        """Menempelkan seluruh requirements.txt ke field satu-baris membuat
+        parser gagal dengan pesan yang membingungkan."""
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        i = src.find('"Paste"')
+        jendela = src[max(0, i - 1800):i + 200]
+        assert re.search(r"lineSequence\(\)\s*\.\s*firstOrNull", jendela), (
+            "isi clipboard dipakai mentah-mentah; kata 'lines()' saja tidak "
+            "cukup karena masih muncul di cabang peringatan multi-baris "
+            "(bocor uji mutasi 2026-08-13)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — Cakupan breadcrumb
+#
+# Aturan user: "Diagnostics harus mencatat semua perilaku user." Yang dijaga
+# adalah TITIK INTERAKSI, bukan jumlah file: mencatat di TerminalBuffer (jalan
+# per karakter) justru memenuhi breadcrumb 128KB dalam hitungan detik dan
+# MENGHAPUS jejak crash yang sedang dicari.
+# ---------------------------------------------------------------------------
+class TestCakupanBreadcrumb:
+    def test_navigasi_sidebar_tercatat_terpusat(self):
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        i = src.find("private fun DrawerItem(")
+        assert i > 0
+        badan = src[i:i + 700]
+        assert 'Breadcrumb.log("NAV"' in badan, (
+            "navigasi sidebar tidak tercatat di DrawerItem — menaruhnya di tiap "
+            "pemanggil membuat item baru mudah terlewat"
+        )
+
+    def test_penghapusan_file_tercatat(self):
+        src = strip_kt_comments(read(APP / "core/files/FileManager.kt"))
+        assert 'Breadcrumb.log("FILE_DELETE"' in src, "penghapusan file tidak berjejak"
+        assert "FILE_SAVE_FAIL" in src, "kegagalan simpan tidak berjejak"
+
+    def test_simpan_sukses_TIDAK_dicatat(self):
+        """Autosave berjalan terus; mencatat tiap simpan sukses akan
+        menenggelamkan jejak crash di dalam derau."""
+        src = strip_kt_comments(read(APP / "core/files/FileManager.kt"))
+        assert "FILE_SAVE_OK" not in src, (
+            "simpan sukses ikut dicatat — breadcrumb 128KB akan penuh oleh "
+            "autosave dan justru menghapus jejak crash"
+        )
+
+    def test_hot_path_tidak_dicemari(self):
+        """TerminalBuffer.append() jalan per potongan output; satu panggilan
+        Breadcrumb di sini = ribuan tulis-disk per detik."""
+        for nama in ("core/execution/TerminalBuffer.kt", "ui/terminal/AnsiLineCache.kt"):
+            src = strip_kt_comments(read(APP / nama))
+            assert "Breadcrumb.log" not in src, f"{nama} adalah hot path — jangan dicatat"
+
+    def test_pilih_sample_tercatat(self):
+        src = strip_kt_comments(read(UI / "samples/SamplesScreen.kt"))
+        assert "SAMPLES_PILIH" in src, "tap sample tidak berjejak"
