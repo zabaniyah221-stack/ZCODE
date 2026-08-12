@@ -21,16 +21,26 @@ class SmokeTestRunner(private val context: Context) {
         val nativeNote: String
     )
 
+    /**
+     * @param siblingDirs direktori staging paket LAIN dalam transaksi yang sama.
+     *
+     * FIX 2026-08-13: tanpa ini smoke test hanya melihat satu paket, sehingga
+     * setiap paket berdependensi (52% dari sampel katalog — flask, pandas,
+     * requests, httpx, rich, …) pasti gagal dengan ModuleNotFoundError dan
+     * memicu rollback seluruh transaksi.
+     */
     fun run(
         importName: String,
         stagingDir: String,
-        tests: List<JSONObject>?
+        tests: List<JSONObject>?,
+        siblingDirs: List<String> = emptyList()
     ): SmokeOutcome {
         val testsJson = tests?.let { arr ->
             val out = JSONArray()
             arr.forEach { out.put(it) }
             out.toString()
         } ?: "[]"
+        val siblingsJson = JSONArray().apply { siblingDirs.forEach { put(it) } }.toString()
         val json = PyCall.callJson(
             context,
             "package_runtime.smoke",
@@ -38,7 +48,8 @@ class SmokeTestRunner(private val context: Context) {
             importName,
             stagingDir,
             testsJson,
-            30
+            30,
+            siblingsJson
         ) ?: return SmokeOutcome(false, listOf(
             JSONObject().put("test", "setup").put("type", "SETUP").put("ok", false)
                 .put("error", "Smoke test runner tidak tersedia (butuh Chaquopy).")

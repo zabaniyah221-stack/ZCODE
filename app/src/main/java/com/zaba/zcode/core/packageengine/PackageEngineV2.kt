@@ -206,14 +206,23 @@ class PackageEngineV2(private val context: Context) {
             onStep(Step.Finish("Extract", true))
 
             // 7. Smoke test terhadap staging
+            //
+            // FIX 2026-08-13: seluruh direktori staging transaksi ini dikirim
+            // sebagai "saudara". Sebelumnya tiap paket diuji SENDIRIAN, sehingga
+            // `import requests` tidak menemukan urllib3 yang ada di folder
+            // sebelah — ModuleNotFoundError lalu rollback. Bukan kasus khusus
+            // requests: 52% paket populer punya dependensi runtime wajib.
             onStep(Step.Begin("Smoke Test"))
+            val allStagingDirs = planPackages.map {
+                File(tx.stagingSitePackages, "${it.canonicalName}/${it.version}").absolutePath
+            } + activeSitePackagePaths()
             for (p in planPackages) {
                 val details = repository.findByCanonicalName(p.canonicalName)
                 val importName = details?.importName ?: p.canonicalName
                 val manifestTests = repository.loadSmokeTests()[p.canonicalName]
                 val tests = buildSmokeTests(p.canonicalName, importName, details?.type, manifestTests)
                 val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}").absolutePath
-                val outcome = smokeRunner.run(importName, staging, tests)
+                val outcome = smokeRunner.run(importName, staging, tests, allStagingDirs)
                 if (!outcome.ok) {
                     TelemetryStore.increment("smoke_test_failure")
                     if (outcome.nativeLibs.isNotEmpty()) TelemetryStore.increment("native_load_failure")
@@ -247,6 +256,33 @@ class PackageEngineV2(private val context: Context) {
         } catch (e: Exception) {
             return fail("RUNTIME", "engine", "Kegagalan internal engine: ${e.message}", e.toString())
         }
+    }
+
+    /**
+     * Direktori paket yang SUDAH aktif (python-env/state/installed.json).
+     *
+     * FIX 2026-08-13: tanpa ini instalasi bertahap tetap gagal. Contoh: user
+     * sudah memasang `urllib3`, lalu memasang `requests`. Plan hanya berisi
+     * requests (urllib3 dianggap ada), tetapi smoke test tidak melihat urllib3
+     * yang sudah aktif dan kembali melempar ModuleNotFoundError.
+     *
+     * Sengaja "best-effort": kegagalan membaca state tidak boleh menggagalkan
+     * instalasi — paling buruk smoke test kembali seketat sebelumnya.
+     */
+    private fun activeSitePackagePaths(): List<String> = try {
+        val stateFile = File(Paths.pythonState(context), "installed.json")
+        if (!stateFile.exists()) {
+            emptyList()
+        } else {
+            val root = Paths.pythonEnvDir(context)
+            val obj = org.json.JSONObject(stateFile.readText())
+            obj.keys().asSequence().mapNotNull { key ->
+                val rel = obj.optJSONObject(key)?.optString("path")?.takeIf { it.isNotBlank() }
+                rel?.let { File(root, it) }?.takeIf { it.isDirectory }?.absolutePath
+            }.toList()
+        }
+    } catch (e: Exception) {
+        emptyList()
     }
 
     private fun buildSmokeTests(

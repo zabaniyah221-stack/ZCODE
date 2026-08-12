@@ -77,9 +77,25 @@ def run_smoke(
     staging_dir: str,
     tests: list[dict] | None,
     timeout_s: float = _IMPORT_TIMEOUT_S,
+    sibling_dirs: list[str] | None = None,
 ) -> tuple[bool, list[dict], dict]:
     """
     Jalankan smoke test terhadap staging_dir.
+
+    sibling_dirs: direktori staging paket LAIN dalam transaksi yang sama.
+
+    FIX 2026-08-13 — BUG KELAS "dependensi tak terlihat saat smoke test".
+    Versi lama hanya menyuntikkan `staging_dir` (SATU paket) ke sys.path.
+    Untuk paket tanpa dependensi hal itu kebetulan berhasil, tetapi setiap
+    paket yang punya dependensi runtime pasti gagal: `import requests` mencari
+    urllib3 yang ada di folder saudaranya dan tidak terlihat, sehingga muncul
+    ModuleNotFoundError lalu SELURUH transaksi di-rollback.
+
+    Ini bukan kasus khusus requests. Dari 23 paket populer yang diperiksa,
+    12 (52%) punya dependensi runtime wajib — flask 7, pandas 5, requests 4,
+    httpx 4, rich 2, beautifulsoup4 2, dst. Semuanya mustahil dipasang selama
+    smoke test tidak melihat saudaranya.
+
     Return (ok, results, native_info).
     """
     results: list[dict] = []
@@ -98,6 +114,11 @@ def run_smoke(
 
     old_path = list(sys.path)
     old_modules = set(sys.modules)
+    # Paket yang diuji harus menang atas versi lama yang mungkin sudah aktif,
+    # jadi ia disisipkan PALING DEPAN; saudara-saudaranya menyusul di belakang.
+    for d in reversed(sibling_dirs or []):
+        if d and os.path.isdir(d) and d != staging_dir and d not in sys.path:
+            sys.path.insert(0, d)
     sys.path.insert(0, staging_dir)
     importlib.invalidate_caches()
     try:
@@ -144,12 +165,25 @@ def run_smoke(
         _ = time  # (diimpor untuk dokumentasi; tetap digunakan di atas)
 
 
-def run_smoke_json(import_name: str, staging_dir: str, tests_json: str, timeout_s: float = _IMPORT_TIMEOUT_S) -> str:
-    """Wrapper JSON-string untuk Kotlin (hasil dict → json.dumps)."""
+def run_smoke_json(
+    import_name: str,
+    staging_dir: str,
+    tests_json: str,
+    timeout_s: float = _IMPORT_TIMEOUT_S,
+    sibling_dirs_json: str | None = None,
+) -> str:
+    """Wrapper JSON-string untuk Kotlin (hasil dict → json.dumps).
+
+    sibling_dirs_json: JSON array berisi direktori staging paket lain dalam
+    transaksi yang sama. Opsional demi kompatibilitas pemanggil lama.
+    """
     import json
     try:
         tests = json.loads(tests_json) if tests_json else None
-        ok, results, native = run_smoke(import_name, staging_dir, tests, timeout_s)
+        siblings = json.loads(sibling_dirs_json) if sibling_dirs_json else None
+        if siblings is not None and not isinstance(siblings, list):
+            siblings = None
+        ok, results, native = run_smoke(import_name, staging_dir, tests, timeout_s, siblings)
         return json.dumps({
             "ok": ok,
             "results": results,

@@ -722,3 +722,94 @@ class TestBottomBarTerminalTidakRaksasa:
         assert blok.count("Modifier.height(30.dp)") >= 3, (
             "setiap tombol bottom bar harus dibatasi 30dp (Ctrl+C, Salin, Export)"
         )
+
+
+class TestSmokeTestLihatSaudara:
+    """Smoke test wajib melihat SELURUH paket dalam transaksi + yang sudah aktif.
+
+    2026-08-13: versi lama hanya menyuntikkan satu direktori staging ke
+    sys.path, sehingga `import requests` tidak menemukan urllib3 di folder
+    sebelah -> ModuleNotFoundError -> rollback seluruh transaksi.
+
+    Ini BUKAN kasus khusus requests. Dari 23 paket populer yang diperiksa,
+    12 (52%) punya dependensi runtime wajib: flask 7, pandas 5, requests 4,
+    httpx 4, rich 2, beautifulsoup4 2, openpyxl/click/tqdm/jinja2/werkzeug/
+    python-dateutil masing-masing 1. Semuanya mustahil dipasang sebelum ini.
+    """
+
+    def test_python_menerima_sibling_dirs(self):
+        txt = read(PYRT / "smoke.py")
+        assert "sibling_dirs" in txt, "run_smoke tidak menerima sibling_dirs"
+        assert "sibling_dirs_json" in txt, "run_smoke_json tidak meneruskan sibling_dirs"
+
+    def test_kotlin_mengirim_seluruh_staging(self):
+        eng = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        assert "allStagingDirs" in eng, "PackageEngineV2 tidak mengumpulkan direktori staging"
+        # Harus DIPAKAI, bukan sekadar didefinisikan. Uji mutasi 2026-08-13
+        # menunjukkan pemeriksaan "activeSitePackagePaths()" saja lolos walau
+        # pemanggilannya dihapus, karena cocok dengan definisi fungsinya.
+        assert "+ activeSitePackagePaths()" in eng, (
+            "paket yang SUDAH aktif tidak disertakan ke daftar saudara — "
+            "instalasi bertahap (urllib3 dulu, lalu requests) akan gagal"
+        )
+        assert eng.count("activeSitePackagePaths") >= 2, (
+            "activeSitePackagePaths didefinisikan tapi tidak dipanggil"
+        )
+        runner = strip_kt_comments(read(PKGENG / "SmokeTestRunner.kt"))
+        assert "siblingDirs" in runner, "SmokeTestRunner tidak menerima siblingDirs"
+        # siblingsJson harus dibangun DAN diteruskan sebagai argumen PyCall.
+        # Sekadar mencari namanya lolos walau baris argumennya dihapus.
+        assert "val siblingsJson" in runner, "siblingsJson tidak dibangun"
+        i = runner.find("run_smoke_json")
+        assert i > 0, "pemanggilan run_smoke_json hilang"
+        argumen = runner[i:i + 400]
+        assert "siblingsJson" in argumen, (
+            "siblingsJson dibangun tapi TIDAK diteruskan ke run_smoke_json — "
+            "smoke test kembali buta terhadap dependensi"
+        )
+
+    def test_perilaku_nyata_paket_berdependensi(self, tmp_path):
+        """Reproduksi kegagalan asli lalu buktikan sembuh."""
+        import sys as _s
+        _s.path.insert(0, str(PYSRC))
+        from package_runtime.smoke import run_smoke
+
+        # Nama sengaja dibuat unik: memakai nama nyata (requests/urllib3)
+        # membuat test bocor — modul asli bisa sudah ada di sys.modules karena
+        # test lain, sehingga import "berhasil" dan bug tidak terdeteksi.
+        base = tmp_path / "staging"
+        layout = {
+            "zzmain/1.0/zzmain": "import zzdep_a, zzdep_b\n__version__='1.0'\n",
+            "zzdep_a/2.0/zzdep_a": "ok = True\n",
+            "zzdep_b/3.0/zzdep_b": "ok = True\n",
+        }
+        for rel, body in layout.items():
+            d = base / rel
+            d.mkdir(parents=True)
+            (d / "__init__.py").write_text(body, encoding="utf-8")
+
+        main = str(base / "zzmain/1.0")
+        siblings = [str(base / "zzdep_a/2.0"), str(base / "zzdep_b/3.0")]
+
+        ok_tanpa, res_tanpa, _ = run_smoke("zzmain", main, None)
+        assert not ok_tanpa, "seharusnya gagal tanpa saudara (bug asli)"
+        assert "zzdep_a" in str(res_tanpa[0].get("error"))
+
+        ok_dengan, res_dengan, _ = run_smoke("zzmain", main, None, sibling_dirs=siblings)
+        assert ok_dengan, f"harus lulus dengan saudara: {res_dengan}"
+
+    def test_sys_path_dipulihkan(self, tmp_path):
+        """Kebersihan: sys.path tidak boleh bocor setelah smoke test."""
+        import sys as _s
+        _s.path.insert(0, str(PYSRC))
+        from package_runtime.smoke import run_smoke
+
+        d = tmp_path / "pkgx/1.0/pkgx"
+        d.mkdir(parents=True)
+        (d / "__init__.py").write_text("ok = True\n", encoding="utf-8")
+        sib = tmp_path / "lain/1.0"
+        sib.mkdir(parents=True)
+
+        sebelum = list(_s.path)
+        run_smoke("pkgx", str(tmp_path / "pkgx/1.0"), None, sibling_dirs=[str(sib)])
+        assert _s.path == sebelum, "sys.path bocor setelah smoke test"
