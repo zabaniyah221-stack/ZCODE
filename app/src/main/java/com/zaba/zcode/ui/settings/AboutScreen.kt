@@ -29,6 +29,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+// WAJIB untuk sintaks delegasi `var x by remember { mutableStateOf(...) }`.
+// getValue/setValue adalah operator extension yang HARUS di-import; menuliskannya
+// dengan nama berkualifikasi penuh TIDAK bisa menggantikan import ini
+// (penyebab CI merah 2026-08-12 di step "Build Debug APK").
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,7 +141,7 @@ fun AboutScreen(
             // BUKAN literal. Saat menguji perbaikan, user perlu memastikan APK yang
             // terpasang benar-benar versi baru — angka hardcode pernah menyesatkan.
             // Fallback "1.0.0" hanya dipakai bila PackageManager gagal.
-            val versionLabel = androidx.compose.runtime.remember {
+            val versionLabel = remember {
                 try {
                     context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0.0"
                 } catch (e: Throwable) {
@@ -248,8 +256,8 @@ fun AboutScreen(
  */
 @Composable
 private fun DiagnosticsCard(context: android.content.Context) {
-    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var text by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf("") }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),

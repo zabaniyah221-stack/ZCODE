@@ -370,3 +370,43 @@ class TestSocketTimeoutDefault:
         assert "getdefaulttimeout() is None" in txt, (
             "Default timeout hanya boleh dipasang bila user belum menetapkannya sendiri."
         )
+
+
+class TestComposeDelegasiImport:
+    """CI merah 2026-08-12, step 'Build Debug APK' (AboutScreen.kt).
+
+    Sintaks delegasi `var x by remember { mutableStateOf(...) }` memerlukan
+    operator extension getValue/setValue yang WAJIB di-import secara eksplisit.
+    Menuliskan nama berkualifikasi penuh (androidx.compose.runtime.remember)
+    TIDAK menggantikan import tersebut — delegasi `by` tetap gagal resolve.
+
+    Guard ini memindai SELURUH file Compose, bukan hanya file yang pernah rusak,
+    supaya kelas kesalahan yang sama tidak terulang di file lain.
+    """
+
+    def test_semua_file_by_remember_punya_import_getvalue(self):
+        offenders = []
+        for f in APP.rglob("*.kt"):
+            txt = strip_kt_comments(read(f))
+            if not re.search(r"\bvar\s+\w+\s+by\s+", txt):
+                continue
+            if "import androidx.compose.runtime.getValue" not in txt:
+                offenders.append(f"{f.relative_to(ROOT)} (butuh getValue)")
+            if "import androidx.compose.runtime.setValue" not in txt:
+                offenders.append(f"{f.relative_to(ROOT)} (butuh setValue)")
+        assert not offenders, (
+            "File memakai `var ... by ...` tanpa import operator delegasi Compose: "
+            + "; ".join(offenders)
+        )
+
+    def test_val_by_remember_punya_import_getvalue(self):
+        offenders = []
+        for f in APP.rglob("*.kt"):
+            txt = strip_kt_comments(read(f))
+            if not re.search(r"\bval\s+\w+\s+by\s+(remember|rememberSaveable)", txt):
+                continue
+            if "import androidx.compose.runtime.getValue" not in txt:
+                offenders.append(str(f.relative_to(ROOT)))
+        assert not offenders, (
+            "File memakai `val ... by remember` tanpa import getValue: " + "; ".join(offenders)
+        )
