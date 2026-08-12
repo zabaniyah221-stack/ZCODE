@@ -1395,3 +1395,66 @@ class TestBreadcrumbArgumenString:
             "SampleCategory dioper ke parameter String"
         )
         assert 'category.id' in src
+
+
+# ---------------------------------------------------------------------------
+# ERROR CI 2026-08-13 #2 (run 31640681578) — `context` dipakai di composable
+# yang tidak punya parameter itu.
+#
+# `Toast.makeText(context, ...)` di dalam ManualTab: fungsi itu TIDAK menerima
+# `context` dan tidak memanggil LocalContext.current, jadi unresolved reference.
+# Lolos cek lokal karena sandbox tidak punya JDK — tidak ada tahap yang
+# memeriksa scope.
+#
+# Penyebab langsungnya patut dicatat: `sed s/Toast.makeText(context,/.../`
+# hanya mengenai pemanggilan satu baris; yang argumennya turun baris lolos
+# diam-diam. Ini kegagalan senyap sed yang sudah tercatat sebelumnya, terulang.
+# ---------------------------------------------------------------------------
+class TestScopeContextCompose:
+    def test_context_hanya_dipakai_bila_tersedia(self):
+        """Untuk tiap fungsi @Composable privat: bila badannya memakai
+        `context`, fungsi itu wajib menerimanya sebagai parameter ATAU
+        mengambilnya dari LocalContext.current."""
+        salah = []
+        for f in sorted((UI).rglob("*.kt")):
+            src = strip_kt_comments(read(f))
+            # potong per deklarasi fungsi
+            posisi = [m.start() for m in re.finditer(r"\nprivate fun |\nfun ", src)]
+            posisi.append(len(src))
+            for a, b in zip(posisi, posisi[1:]):
+                blok = src[a:b]
+                m = re.match(r"\n(?:private )?fun\s+(?:[\w.]+\.)?(\w+)\s*\(", blok)
+                if not m:
+                    continue
+                nama = m.group(1)
+                tutup = blok.find(") {")
+                if tutup < 0:
+                    continue
+                tanda_tangan, badan = blok[:tutup], blok[tutup:]
+                if not re.search(r"(?<![\w.])context(?![\w])", badan):
+                    continue
+                punya = (
+                    re.search(r"context\s*:", tanda_tangan)
+                    or "LocalContext.current" in badan
+                    or re.search(r"val\s+context\s*=", badan)
+                    # variabel lambda: `factory = { context -> ... }` (AndroidView)
+                    # menyediakan context-nya sendiri — bukan pelanggaran.
+                    or re.search(r"\{\s*context\s*->", badan)
+                )
+                if not punya:
+                    salah.append("%s: fun %s" % (f.name, nama))
+        assert not salah, (
+            "`context` dipakai tanpa tersedia di scope — unresolved reference "
+            "di CI (kejadian nyata 2026-08-13):\n  " + "\n  ".join(salah)
+        )
+
+    def test_manualtab_pakai_ctx_bukan_context(self):
+        """Kasus persis yang membuat CI merah dua kali berturut-turut."""
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        i = src.find("private fun ManualTab(")
+        j = src.find("\n@Composable", i + 10)
+        blok = src[i:j if j > i else len(src)]
+        assert not re.search(r"(?<![\w.])context(?![\w])", blok), (
+            "ManualTab tidak menerima parameter `context`; pakai `ctx` dari "
+            "LocalContext.current"
+        )

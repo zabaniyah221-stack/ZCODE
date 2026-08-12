@@ -820,7 +820,7 @@ private fun ManualTab(
                         onPackageNameChange(baris)
                         if (teks.lines().count { it.isNotBlank() } > 1) {
                             Toast.makeText(
-                                context,
+                                ctx,
                                 "Beberapa baris terdeteksi — hanya baris pertama dipakai",
                                 Toast.LENGTH_SHORT
                             ).show()
