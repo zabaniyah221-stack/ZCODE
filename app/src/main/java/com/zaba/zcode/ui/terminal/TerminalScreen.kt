@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -42,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -126,6 +128,9 @@ fun TerminalScreen(
     var sessionState by remember { mutableStateOf(SessionState.START) }
     var logBytes by remember { mutableStateOf(0L) }
     var memChars by remember { mutableLongStateOf(0L) }
+    // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
+    // jadi tanpa ini renderer tidak punya alasan untuk disusun ulang.
+    var bufferVersion by remember { mutableIntStateOf(0) }
     var runId by remember { mutableStateOf(RunId.newId("run")) }
     var logger by remember { mutableStateOf<RunLogger?>(null) }
     var logFilePath by remember { mutableStateOf<File?>(null) }
@@ -138,6 +143,19 @@ fun TerminalScreen(
     fun appendToTerminal(stream: String, text: String) {
         // 1) line-oriented buffer (RAM terbatas) — hanya baris baru di-parse
         buffer.append(text)
+        // FIX 2026-08-13 (terminal kosong, lanjutan bug E):
+        // TerminalBuffer adalah objek biasa yang di-remember, BUKAN Compose
+        // state — menambah baris ke dalamnya tidak memicu rekomposisi apa pun.
+        // Selama ini renderer ikut tersegarkan hanya sebagai EFEK SAMPING:
+        // `memChars`/`logBytes` (keduanya state) berubah di fungsi ini, dan
+        // LazyColumn kebetulan berada di scope rekomposisi yang sama.
+        // Membungkus LazyColumn dengan SelectionContainer memutus kebetulan itu:
+        // isinya menjadi sub-komposisi tersendiri yang tidak membaca satu pun
+        // state, sehingga tidak pernah disusun ulang. Hasilnya persis yang
+        // dilaporkan user — metrik menunjukkan "5 baris" sementara layar kosong.
+        // bufferVersion membuat ketergantungan itu EKSPLISIT dan tidak lagi
+        // bergantung pada tata letak.
+        bufferVersion++
         memChars += text.length
         // 2) disk log lengkap (tidak terpotong) + telemetri — DIPINDAH KE THREAD IO.
         //    Sebelumnya keduanya berjalan di Main thread setiap batch (40ms):
@@ -332,11 +350,20 @@ fun TerminalScreen(
         bottomBar = {
             Surface(color = Color(0xFF1E1F29)) {
                 Column {
+                    // FIX 2026-08-13 (bar raksasa): Row ini DULU tanpa
+                    // `.height()`, sehingga Button Material3 memakai tinggi
+                    // minimum bawaannya (56dp) dan bar menelan sepertiga layar.
+                    // Selama hanya ada dua tombol hal itu tidak terlihat; begitu
+                    // tombol "Salin" ditambahkan, SpaceBetween meregangkan
+                    // segalanya dan bar menjadi raksasa. Tinggi dikunci 40dp dan
+                    // tiap tombol dibatasi 30dp — nanti seluruh baris ini diganti
+                    // EDITOR HANDLE di build #3.
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                            .height(40.dp)
+                            .padding(horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
@@ -346,14 +373,18 @@ fun TerminalScreen(
                                 appendToTerminal("sys", "^C\nProcess Interrupted\n")
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier.height(30.dp)
                         ) {
                             Text("Ctrl+C", fontSize = 11.sp, color = Color.White)
                         }
                         Text(
-                            "Tap terminal untuk mengetik langsung",
+                            "Tap terminal untuk mengetik",
                             color = Color.Gray,
-                            fontSize = 10.sp
+                            fontSize = 9.sp,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
                         )
                         // BUG I: salin SELURUH isi terminal (dari buffer, bukan
                         // hanya baris yang sedang tersusun di layar).
@@ -377,16 +408,20 @@ fun TerminalScreen(
                                 ).show()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier.height(30.dp)
                         ) {
                             Text("Salin", fontSize = 11.sp, color = Color.White)
                         }
                         Button(
                             onClick = { exportLauncher.launch("zcode_${runId}.log") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                            modifier = Modifier.height(30.dp)
                         ) {
-                            Text("Export Log", fontSize = 11.sp, color = Color.White)
+                            Text("Export", fontSize = 11.sp, color = Color.White)
                         }
                     }
                     // Metrik (SPEC-001 Phase 0 #8): memori tampilan, log disk, storage
@@ -459,11 +494,27 @@ fun TerminalScreen(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
+            // WAJIB di scope composable ini (bukan di dalam LazyListScope, yang
+            // hanya berjalan saat item disusun): inilah yang mengikat isi terminal
+            // ke rekomposisi. Tanpa ini SelectionContainer menjadi sub-komposisi
+            // tanpa ketergantungan state dan layar tetap kosong walau buffer terisi.
+            // Snapshot diambil DI SINI, di scope composable, dan
+            // di-key pada bufferVersion. Dua manfaat sekaligus: pembacaan state
+            // menjadi nyata (bukan trik yang bisa dibuang compiler), dan
+            // LazyColumn membaca List biasa yang identitasnya berubah tiap
+            // buffer bertambah.
+            val lines = remember(bufferVersion) {
+                val first = buffer.startOffset
+                List(buffer.lineCount) { rel -> buffer.get(first + rel) ?: "" }
+            }
+            val partialLine = remember(bufferVersion) { buffer.currentLine() }
+            val firstAbs = remember(bufferVersion) { buffer.startOffset }
+            val totalAbs = remember(bufferVersion) { buffer.totalLines }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize()
             ) {
-                val relCount = buffer.lineCount
+                val relCount = lines.size
                 // FIX 2026-08-12: `key` DIHAPUS (dulu `key = { buffer.startOffset + it }`).
                 // `startOffset` bukan Compose state dan BERGESER saat buffer di-trim di
                 // 10.000 baris; Compose mengevaluasi key secara lazy, sehingga dua item
@@ -471,8 +522,8 @@ fun TerminalScreen(
                 // multiple times" = force close. Key bersifat opsional untuk daftar
                 // append-only seperti terminal; menghapusnya melenyapkan seluruh kelas bug ini.
                 items(relCount) { rel ->
-                    val abs = buffer.startOffset + rel
-                    val lineText = buffer.get(abs) ?: ""
+                    val abs = firstAbs + rel
+                    val lineText = lines[rel]
                     if (lineText.isNotEmpty()) {
                         Text(
                             text = ansiCache.render(abs, lineText),
@@ -489,10 +540,10 @@ fun TerminalScreen(
                 // bom waktu. Key dihapus, konsisten dengan items() di atas.
                 item {
                     Column {
-                        val partial = buffer.currentLine()
+                        val partial = partialLine
                         if (partial.isNotEmpty()) {
                             Text(
-                                text = ansiCache.render(buffer.totalLines, partial),
+                                text = ansiCache.render(totalAbs, partial),
                                 fontFamily = resolvedFontFamily,
                                 fontSize = fontSizeSp,
                                 lineHeight = lineHeightSp

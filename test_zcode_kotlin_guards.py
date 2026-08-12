@@ -326,8 +326,12 @@ class TestTerminalRegresiPR14:
     def test_telemetri_tidak_di_main_thread(self):
         # 2x tulis telemetry.json + 1x flush RunLogger per batch 40ms = ±75 tulis
         # file/detik di UI thread → ANR di eMMC lambat.
-        txt = read(UI / "terminal/TerminalScreen.kt")
+        # 2026-08-13: jendela 1400 karakter atas teks MENTAH terlalu rapuh —
+        # menambah komentar penjelas saja sudah mendorong kode keluar jendela
+        # dan memicu false positive. Komentar kini dibuang lebih dulu.
+        txt = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
         i = txt.find("fun appendToTerminal(")
+        assert i > 0, "fun appendToTerminal tidak ditemukan"
         body = txt[i:i + 1400]
         assert "Dispatchers.IO" in body, (
             "appendToTerminal wajib memindahkan tulis-disk (RunLogger/TelemetryStore) "
@@ -669,3 +673,52 @@ class TestTidakAdaPenandaKonflik:
                     if baris.startswith("<<<<<<< ") or baris.startswith(">>>>>>> "):
                         langgar.append(f"{f.relative_to(ROOT)}:{n}")
         assert not langgar, "Penanda konflik merge ter-commit: " + ", ".join(langgar[:10])
+
+
+class TestTerminalRenderTerikatState:
+    """Isi terminal harus terikat Compose state, bukan kebetulan tata letak.
+
+    2026-08-13: TerminalBuffer bukan Compose state. Selama ini renderer ikut
+    tersegarkan hanya sebagai EFEK SAMPING karena `memChars`/`logBytes` berubah
+    di scope rekomposisi yang sama. Membungkus LazyColumn dengan
+    SelectionContainer memutus kebetulan itu — isinya jadi sub-komposisi tanpa
+    ketergantungan state, sehingga TIDAK PERNAH disusun ulang: metrik
+    menunjukkan "5 baris" sementara layar kosong.
+    """
+
+    def test_ada_penanda_versi_buffer(self):
+        txt = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "bufferVersion" in txt, (
+            "TerminalScreen tidak punya penanda perubahan buffer — isi terminal "
+            "bergantung pada kebetulan rekomposisi"
+        )
+        assert "bufferVersion++" in txt, "bufferVersion tidak pernah dinaikkan saat output masuk"
+
+    def test_snapshot_dibaca_di_scope_composable(self):
+        txt = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "remember(bufferVersion)" in txt, (
+            "snapshot isi buffer harus di-key pada bufferVersion di scope composable"
+        )
+        # Renderer tidak boleh lagi membaca buffer langsung di dalam items().
+        assert "val lineText = lines[rel]" in txt, (
+            "items() harus membaca snapshot (lines), bukan buffer.get() langsung"
+        )
+
+
+class TestBottomBarTerminalTidakRaksasa:
+    """Tombol bottom bar terminal wajib dibatasi tingginya.
+
+    2026-08-13: Row bottom bar tanpa .height() membuat Button Material3 memakai
+    tinggi minimum bawaannya (56dp). Dengan dua tombol hal itu tidak terlihat;
+    begitu tombol "Salin" ditambahkan, bar menelan sepertiga layar.
+    """
+
+    def test_row_dan_tombol_dibatasi(self):
+        txt = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = txt.find("bottomBar")
+        assert i > 0
+        blok = txt[i:i + 4000]
+        assert ".height(40.dp)" in blok, "Row bottom bar tidak dikunci tingginya"
+        assert blok.count("Modifier.height(30.dp)") >= 3, (
+            "setiap tombol bottom bar harus dibatasi 30dp (Ctrl+C, Salin, Export)"
+        )
