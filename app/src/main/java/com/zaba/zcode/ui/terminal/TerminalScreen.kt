@@ -13,7 +13,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,8 +29,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -81,6 +78,9 @@ import java.io.File
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.zaba.zcode.ui.common.EditorHandle
+import com.zaba.zcode.ui.common.HandleKey
+import com.zaba.zcode.ui.common.terminalKeys
 import com.zaba.zcode.ui.theme.ZcodeThemeType
 import com.zaba.zcode.ui.theme.getTerminalPalette
 
@@ -177,6 +177,65 @@ fun TerminalScreen(
                 delay(16)
                 listState.scrollToItem(target)
             }
+        }
+    }
+
+
+    /** Seluruh isi terminal sebagai teks (dari buffer, bukan komposisi). */
+    fun terminalText(): String {
+        val sb = StringBuilder()
+        val first = buffer.startOffset
+        for (rel in 0 until buffer.lineCount) {
+            buffer.get(first + rel)?.let { sb.append(it).append('\n') }
+        }
+        buffer.currentLine().takeIf { it.isNotEmpty() }?.let { sb.append(it) }
+        return sb.toString()
+    }
+
+    fun copyAllToClipboard() {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
+            as? android.content.ClipboardManager
+        cm?.setPrimaryClip(
+            android.content.ClipData.newPlainText("ZCODE terminal", terminalText())
+        )
+        android.widget.Toast.makeText(
+            context, "Output disalin (${buffer.lineCount} baris)",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Bagikan output ke aplikasi lain (WhatsApp, Gmail, Notes).
+     *
+     * Long-press pada Text Compose hanya menawarkan "Copy" — SELECT ALL /
+     * PASTE / SHARE yang biasa muncul di TextView Android tidak disediakan
+     * SelectionContainer. Karena user melapor bug tanpa PC dan tanpa logcat,
+     * "Bagikan" dibuat eksplisit: satu tap mengirim log utuh ke chat.
+     */
+    fun shareAll() {
+        val text = terminalText()
+        if (text.isBlank()) {
+            android.widget.Toast.makeText(
+                context, "Belum ada output untuk dibagikan",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        runCatching {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "ZCODE — $filename")
+                putExtra(android.content.Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(
+                android.content.Intent.createChooser(send, "Bagikan output")
+            )
+        }.onFailure {
+            Breadcrumb.log("SHARE_FAIL", it.message ?: "")
+            android.widget.Toast.makeText(
+                context, "Gagal membagikan: ${it.message}",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -350,104 +409,81 @@ fun TerminalScreen(
         bottomBar = {
             Surface(color = Color(0xFF1E1F29)) {
                 Column {
-                    // FIX 2026-08-13 (bar raksasa): Row ini DULU tanpa
-                    // `.height()`, sehingga Button Material3 memakai tinggi
-                    // minimum bawaannya (56dp) dan bar menelan sepertiga layar.
-                    // Selama hanya ada dua tombol hal itu tidak terlihat; begitu
-                    // tombol "Salin" ditambahkan, SpaceBetween meregangkan
-                    // segalanya dan bar menjadi raksasa. Tinggi dikunci 40dp dan
-                    // tiap tombol dibatasi 30dp — nanti seluruh baris ini diganti
-                    // EDITOR HANDLE di build #3.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                            .padding(horizontal = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
+                    // EDITOR HANDLE (build #3) — menggantikan baris tombol lama.
+                    // Ctrl+C menjadi "terowongan": ukuran & bentuk sama dengan
+                    // tombol lain, warna merah, dan TIDAK ikut bergeser supaya
+                    // tombol darurat selalu terjangkau. Sisanya "kereta".
+                    //
+                    // Ini juga menutup sumber "bar raksasa" v1.0.2: seluruh
+                    // tinggi kini dikunci di EditorHandle, bukan bergantung pada
+                    // tinggi minimum bawaan komponen Material3.
+                    EditorHandle(
+                        keys = terminalKeys(),
+                        tunnelKey = HandleKey(
+                            label = "^C",
+                            danger = true,
                             onClick = {
                                 TelemetryStore.increment("terminal_interrupts")
                                 session?.sendCtrlC()
                                 appendToTerminal("sys", "^C\nProcess Interrupted\n")
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            modifier = Modifier.height(30.dp)
-                        ) {
-                            Text("Ctrl+C", fontSize = 11.sp, color = Color.White)
+                            }
+                        ),
+                        onInsert = { text ->
+                            inputVal = TextFieldValue(
+                                text = inputVal.text + text,
+                                selection = androidx.compose.ui.text.TextRange(inputVal.text.length + text.length)
+                            )
+                            runCatching { focusRequester.requestFocus() }
                         }
-                        Text(
-                            "Tap terminal untuk mengetik",
-                            color = Color.Gray,
-                            fontSize = 9.sp,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f)
-                        )
-                        // BUG I: salin SELURUH isi terminal (dari buffer, bukan
-                        // hanya baris yang sedang tersusun di layar).
-                        Button(
-                            onClick = {
-                                val sb = StringBuilder()
-                                val first = buffer.startOffset
-                                for (rel in 0 until buffer.lineCount) {
-                                    buffer.get(first + rel)?.let { sb.append(it).append('\n') }
-                                }
-                                buffer.currentLine().takeIf { it.isNotEmpty() }?.let { sb.append(it) }
-                                val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                                    as? android.content.ClipboardManager
-                                cm?.setPrimaryClip(
-                                    android.content.ClipData.newPlainText("ZCODE terminal", sb.toString())
-                                )
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Output disalin (${buffer.lineCount} baris)",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF37474F)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            modifier = Modifier.height(30.dp)
-                        ) {
-                            Text("Salin", fontSize = 11.sp, color = Color.White)
-                        }
-                        Button(
-                            onClick = { exportLauncher.launch("zcode_${runId}.log") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            modifier = Modifier.height(30.dp)
-                        ) {
-                            Text("Export", fontSize = 11.sp, color = Color.White)
-                        }
-                    }
+                    )
                     // Metrik (SPEC-001 Phase 0 #8): memori tampilan, log disk, storage
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris · log ${logBytes / 1024}KB · $runId",
+                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris · $runId",
                             color = Color.Gray,
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
-                            maxLines = 1
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // Salin & Bagikan: user melapor tanpa PC dan tanpa logcat.
+                        // Long-press Compose hanya menawarkan "Copy" (batas
+                        // SelectionContainer), jadi Salin-semua dan Bagikan
+                        // disediakan eksplisit di sini.
+                        Text(
+                            "Salin",
+                            color = Color(0xFF8A9BB0),
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { copyAllToClipboard() }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                         Text(
-                            if (freeStorageMb < 0) "storage ?" else "storage ${freeStorageMb}MB",
-                            color = if (freeStorageMb in 1 until 100) Color(0xFFFFB000) else Color.Gray,
-                            fontSize = 9.sp,
-                            fontFamily = FontFamily.Monospace
+                            "Bagikan",
+                            color = Color(0xFF8A9BB0),
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { shareAll() }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                        Text(
+                            "Export",
+                            color = Color(0xFF8A9BB0),
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { exportLauncher.launch("zcode_${runId}.log") }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
             }
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier

@@ -14,6 +14,9 @@ from .probe import CHAQUOPY_INDEX_URL
 
 _WHEEL_EXT = ".whl"
 
+# API Android terendah yang pernah dipakai wheel Chaquopy (android_16_*).
+_MIN_ANDROID_API = 16
+
 
 class WheelInfoError(ValueError):
     pass
@@ -60,6 +63,59 @@ def is_foreign_platform_tag(platform_tag: str) -> bool:
     """True bila platform tag milik Linux desktop (glibc/musl), bukan Android."""
     p = (platform_tag or "").strip().lower()
     return any(p.startswith(prefix) for prefix in _FOREIGN_PLATFORM_PREFIXES)
+
+
+def android_supported_tags(
+    abi: str,
+    device_api: int,
+    python_tag: str = "cp311",
+) -> list[Tag]:
+    """
+    Bangun daftar tag Android yang sah untuk perangkat ini — TANPA sys_tags().
+
+    FIX 2026-08-13 (build #3). Inilah sebab numpy/pandas/pillow/matplotlib
+    selalu ditolak. packaging.tags.sys_tags() di Chaquopy menghasilkan tag gaya
+    Linux (`linux_armv7l`), sementara wheel di indeks Chaquopy bertag
+    `android_21_armeabi_v7a`. Irisannya kosong, jadi SETIAP wheel native
+    dinyatakan "tidak kompatibel" walaupun sebenarnya cocok sempurna.
+
+    Aturan yang dipakai (sesuai PEP 738 dan implementasi cibuildwheel):
+      * platform tag = ``android_<api>_<abi>``, abi memakai garis bawah
+        (`armeabi_v7a`, `arm64_v8a`, `x86_64`)
+      * sebuah wheel cocok bila **API wheel <= API perangkat** — wheel
+        android_21 jalan di perangkat API 31, tidak sebaliknya
+      * ABI wajib sama persis; tidak ada substitusi lintas-arsitektur
+
+    Sumber:
+      - https://peps.python.org/pep-0738/
+      - https://cibuildwheel.pypa.io/en/stable/options/
+        (``ANDROID_API_LEVEL``, default 24, menjadi bagian tag)
+      - survei indeks nyata: docs/ARMV7_COMPAT_2026_08_13.md
+
+    Catatan jujur: ARMv7 sama sekali tidak ada di daftar arsitektur
+    cibuildwheel, jadi indeks Chaquopy adalah satu-satunya sumber wheel native
+    ARMv7 Android. Karena itu daftar tag ini dibangun sendiri alih-alih
+    menunggu dukungan hulu.
+    """
+    norm_abi = (abi or "").strip().lower().replace("-", "_")
+    tags: list[Tag] = []
+    if norm_abi:
+        api = max(int(device_api or 0), _MIN_ANDROID_API)
+        # API menurun: wheel dengan API tertinggi yang masih <= perangkat menang.
+        for wheel_api in range(api, _MIN_ANDROID_API - 1, -1):
+            platform = "android_%d_%s" % (wheel_api, norm_abi)
+            for abi_tag in (python_tag, "abi3", "none"):
+                tags.append(Tag(python_tag, abi_tag, platform))
+    # Pure-Python selalu sah, di ABI mana pun.
+    tags.append(Tag("py3", "none", "any"))
+    tags.append(Tag("py2.py3", "none", "any"))
+    return tags
+
+
+def android_supported_tags_json(abi: str, device_api: int, python_tag: str = "cp311") -> str:
+    """Wrapper JSON untuk Kotlin/diagnostik."""
+    import json
+    return json.dumps([str(t) for t in android_supported_tags(abi, device_api, python_tag)])
 
 
 def wheel_compatible(filename: str, supported_tags=None) -> bool:

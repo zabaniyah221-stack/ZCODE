@@ -409,11 +409,55 @@ def resolve(
     }
 
 
+def device_supported_tags(abi: str | None = None, device_api: int | None = None):
+    """
+    Tag runtime untuk pencocokan wheel — Android-aware (build #3).
+
+    sys_tags() TIDAK dipakai di Android karena menghasilkan tag gaya Linux
+    (`linux_armv7l`) yang tidak pernah beririsan dengan tag wheel Chaquopy
+    (`android_21_armeabi_v7a`). Lihat wheelinfo.android_supported_tags().
+
+    Bila ABI/API tidak diketahui (mis. dijalankan di desktop untuk
+    pengembangan), kembalikan None agar pemanggil jatuh ke sys_tags() —
+    perilaku lama yang benar di luar Android.
+    """
+    from .wheelinfo import android_supported_tags
+
+    resolved_abi = abi
+    if not resolved_abi:
+        try:
+            from .probe import probe_runtime
+            abis = probe_runtime().get("abis") or []
+            resolved_abi = abis[0] if abis else None
+        except Exception:
+            resolved_abi = None
+
+    resolved_api = device_api
+    if not resolved_api:
+        try:
+            import sysconfig
+            plat = sysconfig.get_platform()  # 'android-21-arm64-v8a'
+            if plat.startswith("android"):
+                resolved_api = int(plat.split("-")[1])
+        except Exception:
+            resolved_api = None
+
+    import sys
+    is_android = "android" in sys.platform or (resolved_api is not None)
+    if not resolved_abi or not is_android:
+        return None  # desktop/dev → sys_tags() tetap benar
+
+    py_tag = "cp%d%d" % sys.version_info[:2]
+    return android_supported_tags(resolved_abi, resolved_api or 21, py_tag)
+
+
 def resolve_json(
     requirement_text: str,
     wheels_dir: str | None = None,
     marker_env_json: str | None = None,
     tested_versions_json: str | None = None,
+    abi: str | None = None,
+    device_api: int | None = None,
 ) -> str:
     """Wrapper JSON-string untuk Kotlin. Error → dict {ok:false, code, stage, ...}."""
     import json
@@ -422,7 +466,8 @@ def resolve_json(
         tested = json.loads(tested_versions_json) if tested_versions_json else None
         plan = resolve(
             requirement_text,
-            supported_tags=None,  # sys_tags() runtime di device
+            # BUILD #3: tag Android dibangun sendiri; None hanya di desktop/dev.
+            supported_tags=device_supported_tags(abi, device_api),
             wheels_dir=wheels_dir,
             marker_env=marker_env,
             tested_versions=tested,

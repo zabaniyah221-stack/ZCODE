@@ -80,7 +80,14 @@ class DependencyResolver(private val context: Context) {
             requirementText,
             wheelsDir,
             null,
-            tested
+            tested,
+            // BUILD #3: ABI + API perangkat dikirim eksplisit supaya Python
+            // membangun tag `android_<api>_<abi>` sendiri. Tanpa ini
+            // packaging.tags.sys_tags() menghasilkan `linux_armv7l` yang tidak
+            // pernah cocok dengan wheel Chaquopy — sebab numpy/pandas/pillow/
+            // matplotlib selalu ditolak walau wheel-nya ADA.
+            Paths.currentAbi().replace('_', '-'),
+            android.os.Build.VERSION.SDK_INT
         ) ?: return ResolvePlan(false, emptyList(), emptyList(), emptyList(),
             "ENGINE_UNAVAILABLE", "engine", "Package engine tidak tersedia (butuh Chaquopy runtime).", null)
 

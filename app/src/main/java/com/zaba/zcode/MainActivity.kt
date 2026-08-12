@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.ui.samples.SamplesScreen
 import com.zaba.zcode.ui.settings.AboutScreen
+import com.zaba.zcode.ui.settings.DiagnosticsScreen
 import com.zaba.zcode.ui.settings.PipScreen
 import com.zaba.zcode.ui.settings.SettingsScreen
 import com.zaba.zcode.ui.terminal.TerminalScreen
@@ -62,6 +63,7 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 onNavigateToPip = { nav.navigate("pip") },
                 onNavigateToAbout = { nav.navigate("about") },
                 onNavigateToSamples = { nav.navigate("samples") },
+                onNavigateToDiagnostics = { nav.navigate("diagnostics") },
                 onNavigateToSettings = { nav.navigate("settings") }
             )
         }
@@ -93,6 +95,14 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
         }
         composable("pip") {
             PipScreen(
+                context = appContext,
+                onBack = { nav.navigateUp() }
+            )
+        }
+        // DIAGNOSTICS (build #3): layar penuh sendiri, bukan kotak kecil di About.
+        // User memakai HP tanpa PC — ini satu-satunya jendela ke dalam aplikasi.
+        composable("diagnostics") {
+            DiagnosticsScreen(
                 context = appContext,
                 onBack = { nav.navigateUp() }
             )

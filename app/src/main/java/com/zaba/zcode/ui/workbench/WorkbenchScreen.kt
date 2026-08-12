@@ -131,6 +131,7 @@ fun WorkbenchScreen(
     onNavigateToPip: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToSamples: () -> Unit,
+    onNavigateToDiagnostics: () -> Unit,
     onNavigateToSettings: () -> Unit = {}
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -385,6 +386,12 @@ fun WorkbenchScreen(
                 DrawerItem("SAMPLES") {
                     closeDrawerThen { onNavigateToSamples() }
                 }
+                // DIAGNOSTICS sejajar dengan tujuan utama lain, bukan terkubur di
+                // dalam About: saat ada yang salah, user harus bisa mencapainya
+                // dalam satu tap, bukan tiga.
+                DrawerItem("DIAGNOSTICS") {
+                    closeDrawerThen { onNavigateToDiagnostics() }
+                }
 
                 Divider(color = Color.White.copy(alpha = 0.06f), modifier = Modifier.padding(vertical = 6.dp))
 
@@ -621,7 +628,17 @@ fun WorkbenchScreen(
 
                 // QuickTools / symbol bar — bisa dimatikan user lewat drawer (EDITOR → Symbol bar)
                 if (vm.symbolBarEnabled) {
-                    QuickToolsBar(webViewRef)
+                    // EDITOR HANDLE (build #3) — komponen yang sama dipakai di
+                    // terminal. Di editor terowongannya kosong: tidak ada yang
+                    // perlu dihentikan, jadi hanya "kereta"-nya yang tampak.
+                    com.zaba.zcode.ui.common.EditorHandle(
+                        keys = com.zaba.zcode.ui.common.pythonEditorKeys(),
+                        onInsert = { text ->
+                            webViewRef.value?.evaluateJavascript(
+                                "insertText(${escapeJavaScriptString(text)});", null
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -1036,38 +1053,6 @@ private fun WorkbenchTopBar(
 // =====================================================================
 // QuickTools — chips bulat, scroll horizontal, semua ter-wire
 // =====================================================================
-
-@Composable
-private fun QuickToolsBar(webViewRef: androidx.compose.runtime.MutableState<WebView?>) {
-    val tools = listOf("Tab", ":", ";", "'", "#", "(", ")", "[", "]", "def", "return", "import")
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            tools.forEach { symbol ->
-                val insertion = if (symbol == "Tab") "    " else symbol
-                AssistChip(
-                    onClick = {
-                        webViewRef.value?.evaluateJavascript("insertText('$insertion');", null)
-                    },
-                    label = { Text(symbol, fontSize = 12.sp, fontFamily = FontFamily.Monospace) },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        labelColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    shape = RoundedCornerShape(50)
-                )
-            }
-        }
-    }
-}
 
 // =====================================================================
 // Command Palette & Quick Open

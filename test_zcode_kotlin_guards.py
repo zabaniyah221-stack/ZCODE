@@ -48,10 +48,46 @@ def strip_kt_comments(text: str) -> str:
     menjelaskan bug lama (mis. \"dulu ditulis item(key = { -1L })\") ikut terdeteksi
     dan membuat test gagal padahal kodenya sudah benar — guard yang berbohong
     lebih berbahaya daripada tidak ada guard.
+
+    BUG YANG PERNAH TERJADI (2026-08-13): versi lama membuang `/* */` LEBIH
+    DULU dengan regex, lalu `//`. Akibatnya komentar baris yang memuat teks
+    `text/*` (mime filter SAF di WorkbenchScreen.kt) dibaca sebagai PEMBUKA
+    komentar blok dan melahap 19.949 karakter KODE ASLI sampai `*/` berikutnya.
+    Guard mana pun yang memeriksa area itu diam-diam lolos — persis jenis
+    "guard yang berbohong" yang paling berbahaya.
+
+    Karena itu pemindaian sekarang dilakukan SEKALI, kiri ke kanan, dengan
+    mesin keadaan yang juga menghormati literal string: `//` di dalam string
+    (mis. "https://...") bukan komentar.
     """
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    text = re.sub(r"//[^\n]*", "", text)
-    return text
+    keluar = []
+    i, n = 0, len(text)
+    while i < n:
+        c = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+        if c == '"':
+            # literal string (termasuk triple-quote) — salin apa adanya
+            if text.startswith('"""', i):
+                j = text.find('"""', i + 3)
+                j = n if j < 0 else j + 3
+            else:
+                j = i + 1
+                while j < n and text[j] != '"':
+                    j += 2 if text[j] == "\\" else 1
+                j = min(j + 1, n)
+            keluar.append(text[i:j])
+            i = j
+        elif c == "/" and nxt == "/":
+            j = text.find("\n", i)
+            i = n if j < 0 else j
+        elif c == "/" and nxt == "*":
+            j = text.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+            keluar.append(" ")
+        else:
+            keluar.append(c)
+            i += 1
+    return "".join(keluar)
 
 
 
@@ -714,14 +750,22 @@ class TestBottomBarTerminalTidakRaksasa:
     """
 
     def test_row_dan_tombol_dibatasi(self):
+        """Build #3: baris tombol pindah ke EditorHandle, jadi kunci tingginya
+        ikut pindah ke sana. Yang dijaga tetap MAKSUD yang sama — bar terminal
+        tidak boleh tumbuh sendiri — bukan bentuk lamanya."""
         txt = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
         i = txt.find("bottomBar")
         assert i > 0
         blok = txt[i:i + 4000]
-        assert ".height(40.dp)" in blok, "Row bottom bar tidak dikunci tingginya"
-        assert blok.count("Modifier.height(30.dp)") >= 3, (
-            "setiap tombol bottom bar harus dibatasi 30dp (Ctrl+C, Salin, Export)"
-        )
+        assert "EditorHandle(" in blok, "bottom bar tidak lagi memakai EditorHandle"
+        for terlarang in ("Button(", "AssistChip(", "FilterChip("):
+            assert terlarang not in blok, (
+                f"{terlarang} di bottom bar memaksa tinggi minimum Material3 "
+                "(48-56dp) — inilah sebab bar raksasa v1.0.2"
+            )
+        handle = read(COMMON / "EditorHandle.kt")
+        bar = int(re.search(r"BAR_HEIGHT\s*=\s*(\d+)\.dp", handle).group(1))
+        assert bar <= 48, f"BAR_HEIGHT {bar}dp — bar terminal membengkak lagi"
 
 
 class TestSmokeTestLihatSaudara:
@@ -813,3 +857,229 @@ class TestSmokeTestLihatSaudara:
         sebelum = list(_s.path)
         run_smoke("pkgx", str(tmp_path / "pkgx/1.0"), None, sibling_dirs=[str(sib)])
         assert _s.path == sebelum, "sys.path bocor setelah smoke test"
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — Tag Android untuk wheel Chaquopy
+#
+# AKAR MASALAH (v1.0.4 dan sebelumnya): `packaging.tags.sys_tags()` di dalam
+# Chaquopy menghasilkan tag bergaya Linux (`linux_armv7l`), sedangkan wheel di
+# indeks Chaquopy bertag `android_21_armeabi_v7a`. Irisan kedua himpunan itu
+# KOSONG, jadi SETIAP wheel native dinyatakan tidak kompatibel padahal cocok
+# sempurna. Itu sebabnya numpy/pandas/pillow/matplotlib selalu gagal.
+#
+# Guard di bawah mengunci resep tag yang menggantikannya. Kalau seseorang
+# kelak "menyederhanakan" kode ini kembali ke sys_tags(), test ini merah.
+# ---------------------------------------------------------------------------
+PYSRC_PKG = ROOT / "app/src/main/python/package_runtime"
+
+
+class TestTagAndroidWheel:
+    def _tags(self, abi="armeabi-v7a", api=31):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.wheelinfo import android_supported_tags
+        return android_supported_tags(abi, api)
+
+    def test_menghasilkan_tag_android_bukan_linux(self):
+        tags = self._tags()
+        plats = {t.platform for t in tags}
+        assert any(p.startswith("android_") for p in plats), "tidak ada tag android_*"
+        assert not any("linux" in p for p in plats), \
+            f"tag Linux bocor ke daftar Android: {[p for p in plats if 'linux' in p]}"
+
+    def test_api_perangkat_menerima_wheel_api_lebih_lama(self):
+        """android_21 HARUS jalan di perangkat API 31 — dan TIDAK sebaliknya."""
+        tags = {t.platform for t in self._tags(api=31)}
+        assert "android_21_armeabi_v7a" in tags
+        assert "android_24_armeabi_v7a" in tags
+        assert "android_32_armeabi_v7a" not in tags, "wheel dari masa depan diterima"
+
+    def test_abi_tidak_pernah_disubstitusi(self):
+        """Wheel arm64 di perangkat armv7 = SIGSEGV. Tidak boleh ada toleransi."""
+        tags = {t.platform for t in self._tags(abi="armeabi-v7a", api=31)}
+        assert not any("arm64" in p for p in tags)
+        assert not any("x86" in p for p in tags)
+
+    def test_underscore_bukan_dash(self):
+        """Nama file wheel memakai `armeabi_v7a`; input Kotlin bisa berupa
+        `armeabi-v7a`. Konversi wajib terjadi, kalau tidak semua tag meleset."""
+        tags = {t.platform for t in self._tags(abi="armeabi-v7a")}
+        assert all("-" not in p for p in tags), "tanda hubung bocor ke tag platform"
+
+    def test_ada_penutup_pure_python(self):
+        tags = {(t.interpreter, t.abi, t.platform) for t in self._tags()}
+        assert ("py3", "none", "any") in tags, "wheel pure-Python jadi tak terpasang"
+
+    def test_wheel_nyata_chaquopy_diterima(self):
+        """Uji melawan nama file SUNGGUHAN dari indeks chaquo.com/pypi-13.1."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.wheelinfo import wheel_compatible, android_supported_tags
+        tags = android_supported_tags("armeabi-v7a", 31)
+        terima = [
+            "numpy-1.26.2-0-cp311-cp311-android_21_armeabi_v7a.whl",
+            "Pillow-9.2.0-0-cp311-cp311-android_21_armeabi_v7a.whl",
+            "cryptography-42.0.8-0-cp311-cp311-android_24_armeabi_v7a.whl",
+        ]
+        tolak = [
+            "numpy-1.26.2-0-cp311-cp311-android_21_arm64_v8a.whl",
+            "numpy-1.26.2-cp311-cp311-manylinux_2_17_armv7l.whl",
+            "scipy-1.11.0-0-cp310-cp310-android_21_armeabi_v7a.whl",
+        ]
+        for w in terima:
+            assert wheel_compatible(w, supported_tags=tags), f"harusnya cocok: {w}"
+        for w in tolak:
+            assert not wheel_compatible(w, supported_tags=tags), f"harusnya ditolak: {w}"
+
+    def test_resolver_memakai_tag_perangkat_bukan_sys_tags(self):
+        """resolve_json() wajib meneruskan abi+api ke pembangun tag."""
+        src = read(PYSRC_PKG / "resolve.py")
+        assert "def device_supported_tags(" in src
+        assert "supported_tags=device_supported_tags(abi, device_api)" in src, \
+            "resolve() kembali memakai supported_tags=None — bug tag Android hidup lagi"
+
+    def test_kotlin_mengirim_abi_dan_sdk_int(self):
+        src = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
+        assert "currentAbi()" in src, "ABI perangkat tidak dikirim ke Python"
+        assert "SDK_INT" in src, "API level perangkat tidak dikirim ke Python"
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — EDITOR HANDLE
+#
+# Dua regresi v1.0.2 lahir di area ini:
+#   (a) bottom bar raksasa, karena Button/AssistChip Material3 punya tinggi
+#       minimum 48-56dp yang diam-diam mendorong bar setinggi separuh layar;
+#   (b) tombol darurat ikut tergulir sehingga tak terjangkau saat dibutuhkan.
+# Guard berikut mengunci keduanya.
+# ---------------------------------------------------------------------------
+COMMON = UI / "common"
+
+
+class TestEditorHandle:
+    def test_tinggi_dikunci_eksplisit(self):
+        src = read(COMMON / "EditorHandle.kt")
+        assert src, "EditorHandle.kt hilang"
+        assert re.search(r"BAR_HEIGHT\s*=\s*\d+\.dp", src), "tinggi bar tidak dikunci"
+        assert re.search(r"KEY_HEIGHT\s*=\s*\d+\.dp", src), "tinggi tombol tidak dikunci"
+        bar = int(re.search(r"BAR_HEIGHT\s*=\s*(\d+)\.dp", src).group(1))
+        assert bar <= 48, f"BAR_HEIGHT {bar}dp — regresi bar raksasa v1.0.2"
+
+    def test_tidak_memakai_komponen_bertinggi_minimum(self):
+        """Button/AssistChip/FilterChip memaksa tinggi minimumnya sendiri."""
+        src = strip_kt_comments(read(COMMON / "EditorHandle.kt"))
+        for terlarang in ("AssistChip", "FilterChip", "TextButton", "OutlinedButton"):
+            assert terlarang not in src, \
+                f"{terlarang} punya tinggi minimum Material3 — sumber bar raksasa"
+
+    def test_terowongan_di_luar_scroll(self):
+        """^C harus dipaku: kalau ia ikut horizontalScroll, tombol berhenti
+        paksa bisa tergeser keluar layar persis saat paling dibutuhkan."""
+        src = strip_kt_comments(read(COMMON / "EditorHandle.kt"))
+        # Buang blok import: `import ...horizontalScroll` bukan PEMAKAIAN, dan
+        # mencocokkannya membuat guard ini selalu menunjuk baris 5 (pelajaran
+        # 2026-08-13 — guard yang salah sasaran sama saja dengan tidak ada).
+        src = re.sub(r"^import .*\n", "", src, flags=re.M)
+        i_scroll = src.find("horizontalScroll(")
+        assert i_scroll > 0, "kereta tidak dapat digulir"
+        assert "tunnelKey" in src, "terowongan hilang"
+        # Terowongan wajib dirender SEBELUM Row yang menggulir, dan namanya
+        # tidak boleh muncul lagi setelah titik itu.
+        i_render = src.find("tunnelKey?.let")
+        assert i_render > 0, "terowongan tidak pernah dirender"
+        assert i_render < i_scroll, \
+            "terowongan dirender setelah/di dalam area scroll"
+        assert "tunnelKey" not in src[i_scroll:], \
+            "terowongan berada DI DALAM area scroll"
+
+    def test_terpasang_di_terminal_dengan_ctrl_c_merah(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "EditorHandle(" in src, "EditorHandle belum dipakai di terminal"
+        i = src.find("EditorHandle(")
+        jendela = src[i:i + 900]
+        assert "tunnelKey" in jendela, "terminal tanpa terowongan ^C"
+        assert "^C" in jendela
+        assert "danger = true" in jendela, "^C tidak ditandai bahaya (merah)"
+
+    def test_terpasang_di_editor_tanpa_terowongan(self):
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert "EditorHandle(" in src, "EditorHandle belum dipakai di editor"
+        assert "QuickToolsBar" not in src, "bar lama masih tersisa (kode mati)"
+        i = src.find("EditorHandle(")
+        assert "tunnelKey" not in src[i:i + 600], \
+            "editor tidak boleh punya terowongan — tak ada yang perlu dihentikan"
+
+    def test_setiap_tombol_punya_aksi(self):
+        """Tombol yang tidak melakukan apa-apa lebih buruk daripada tidak ada."""
+        src = read(COMMON / "EditorHandle.kt")
+        for fn in ("pythonEditorKeys", "terminalKeys"):
+            assert f"fun {fn}(" in src, f"{fn} hilang"
+        assert "insert" in src
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — DIAGNOSTICS layar penuh
+# ---------------------------------------------------------------------------
+class TestDiagnosticsLayarPenuh:
+    def test_file_ada_dan_punya_rute(self):
+        assert (UI / "settings/DiagnosticsScreen.kt").exists()
+        main = strip_kt_comments(read(APP / "MainActivity.kt"))
+        assert 'composable("diagnostics")' in main, "rute diagnostics tidak terdaftar"
+        assert "DiagnosticsScreen(" in main
+
+    def test_dapat_dicapai_dari_sidebar(self):
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert 'DrawerItem("DIAGNOSTICS")' in src, "DIAGNOSTICS tidak ada di sidebar"
+        assert "onNavigateToDiagnostics" in src
+
+    def test_mengisi_layar_dan_dapat_digulir(self):
+        src = strip_kt_comments(read(UI / "settings/DiagnosticsScreen.kt"))
+        assert "fillMaxSize()" in src, "bukan layar penuh"
+        assert "verticalScroll" in src, "tidak bisa digulir"
+        assert not re.search(r"\.height\(\s*\d{3}\.dp\s*\)", src), \
+            "ada tinggi tetap ratusan dp — ini kotak kecil, bukan layar penuh"
+
+    def test_isinya_dapat_diseleksi_dan_disalin(self):
+        """Aturan tetap user: semua output ZCODE harus bisa di-copas."""
+        src = strip_kt_comments(read(UI / "settings/DiagnosticsScreen.kt"))
+        # Periksa PEMAKAIAN, bukan baris import: `import ...SelectionContainer`
+        # tetap ada walau pembungkusnya dicabut dari UI (bocor uji mutasi
+        # 2026-08-13).
+        badan = re.sub(r"^import .*\n", "", src, flags=re.M)
+        assert "SelectionContainer {" in badan, "output tidak dapat diseleksi"
+        assert "ClipboardManager" in badan, "tidak ada Salin"
+        assert "ACTION_SEND" in badan, "tidak ada Bagikan"
+
+    def test_baca_disk_di_luar_main_thread(self):
+        """Breadcrumb bisa 128KB; membacanya di UI thread = ANR."""
+        src = strip_kt_comments(read(UI / "settings/DiagnosticsScreen.kt"))
+        assert "Dispatchers.IO" in src
+
+    def test_punya_tab_filter(self):
+        src = read(UI / "settings/DiagnosticsScreen.kt")
+        for t in ("SEMUA", "RUN", "PAKET", "CRASH"):
+            assert f'"{t}"' in src, f"tab {t} hilang"
+
+
+# ---------------------------------------------------------------------------
+# BUILD #3 — Bagikan (menu seleksi)
+#
+# Long-press pada teks Compose hanya menawarkan "Copy"; SELECT ALL/PASTE/SHARE
+# yang biasa ada di TextView TIDAK disediakan SelectionContainer. Karena user
+# melapor bug dari HP tanpa PC, "Bagikan" harus jadi tombol nyata.
+# ---------------------------------------------------------------------------
+class TestBagikanOutput:
+    def test_terminal_punya_bagikan(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "ACTION_SEND" in src, "terminal tidak bisa membagikan output"
+        assert "createChooser" in src
+
+    def test_bagikan_tidak_boleh_membuat_crash(self):
+        """Sebagian perangkat tanpa aplikasi penerima akan melempar
+        ActivityNotFoundException. Diagnostik tidak boleh jadi sumber crash."""
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = src.find("fun shareAll()")
+        assert i > 0, "shareAll tidak ditemukan"
+        badan = src[i:i + 1200]
+        assert "runCatching" in badan, "startActivity tanpa pengaman"
