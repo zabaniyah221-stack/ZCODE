@@ -110,7 +110,13 @@ fun PipScreen(
     val consoleScroll = rememberScrollState()
 
     fun refreshInstalled() {
-        installedMap = repository.installedSnapshot().mapValues { it.value.version }
+        // Saring pustaka pendukung `chaquopy-*`. User tidak pernah memintanya,
+        // tidak bisa memakainya langsung, dan menghapusnya justru merusak paket
+        // lain yang masih membutuhkannya. Daftar ini milik user, bukan cermin
+        // isi direktori.
+        installedMap = repository.installedSnapshot()
+            .filterKeys { !it.startsWith("chaquopy-") }
+            .mapValues { it.value.version }
     }
 
     fun appendLog(text: String) {

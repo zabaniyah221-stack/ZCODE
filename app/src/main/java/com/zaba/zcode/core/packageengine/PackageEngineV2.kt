@@ -186,7 +186,8 @@ class PackageEngineV2(private val context: Context) {
                         sha256 = sha,
                         wheelUrl = p.url,
                         wheelLocalPath = p.localPath,
-                        filename = p.filename
+                        filename = p.filename,
+                        supportLibrary = p.supportLibrary
                     )
                 )
             }
@@ -217,6 +218,22 @@ class PackageEngineV2(private val context: Context) {
                 File(tx.stagingSitePackages, "${it.canonicalName}/${it.version}").absolutePath
             } + activeSitePackagePaths()
             for (p in planPackages) {
+                // Pustaka pendukung (chaquopy-openblas, chaquopy-libjpeg, ...)
+                // TIDAK punya modul Python untuk diimpor. Menjalankan uji impor
+                // terhadapnya akan selalu gagal dan membatalkan seluruh
+                // transaksi — termasuk paket utama yang sebenarnya sudah
+                // berhasil. Cukup pastikan file .so-nya benar-benar ada.
+                if (p.supportLibrary) {
+                    val dir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
+                    val adaSo = dir.walkTopDown().any { it.isFile && it.name.contains(".so") }
+                    if (!adaSo) {
+                        return fail("SMOKE_TEST", "smoke_test",
+                            "Pustaka pendukung ${p.canonicalName} tidak memuat file .so apa pun.",
+                            "staging=${dir.absolutePath}")
+                    }
+                    onStep(Step.Log("  ${p.canonicalName}: pustaka pendukung (.so) — uji impor dilewati"))
+                    continue
+                }
                 val details = repository.findByCanonicalName(p.canonicalName)
                 val importName = details?.importName ?: p.canonicalName
                 val manifestTests = repository.loadSmokeTests()[p.canonicalName]
@@ -418,7 +435,22 @@ class PackageEngineV2(private val context: Context) {
         return result
     }
 
-    fun listInstalled(): Map<String, String> = repository.installedSnapshot().mapValues { it.value.version }
+    /**
+     * Paket yang tampil di daftar "Terpasang".
+     *
+     * Pustaka pendukung `chaquopy-*` sengaja DISEMBUNYIKAN: user tidak pernah
+     * memintanya, tidak bisa memakainya langsung, dan menghapusnya justru
+     * merusak paket lain yang masih membutuhkannya. Menampilkannya hanya
+     * menimbulkan pertanyaan "ini apa dan kenapa ada".
+     */
+    fun listInstalled(): Map<String, String> =
+        repository.installedSnapshot()
+            .filterKeys { !it.startsWith("chaquopy-") }
+            .mapValues { it.value.version }
+
+    /** Termasuk pustaka pendukung — untuk Diagnostics dan perhitungan ukuran. */
+    fun listInstalledAll(): Map<String, String> =
+        repository.installedSnapshot().mapValues { it.value.version }
 
     /** Support request (SPEC Phase 3) — disimpan lokal, tanpa backend cloud. */
     fun requestSupport(canonicalName: String, note: String): Pair<Boolean, String> {

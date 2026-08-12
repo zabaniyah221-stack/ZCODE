@@ -13,6 +13,7 @@ Smoke test dijalankan terhadap STAGING dir (belum aktivasi) — sys.path disunti
 sementara, lalu dipulihkan. Deterministic & time-bounded (thread join timeout;
 catat TIMEOUT sebagai kegagalan).
 """
+import ctypes
 import importlib
 import os
 import sys
@@ -78,6 +79,55 @@ def diagnose_native(staging_dir: str, error_text: str) -> str:
     except Exception as e:  # noqa: BLE001 — diagnostik tak boleh jadi sumber error baru
         baris.append("diagnose_native gagal: %s" % e)
     return "\n".join(baris)
+
+
+def preload_native_libs(dirs: list[str] | None) -> tuple[int, list[str]]:
+    """Muat lebih dulu setiap pustaka pendukung (lib*.so) ke dalam proses.
+
+    KENAPA HARUS BEGINI (dibuktikan dengan eksperimen, 2026-08-13):
+    `_multiarray_umath.so` milik numpy mencantumkan `libopenblas.so` pada
+    entri NEEDED-nya. Ketika Python mengimpor modul itu, yang mencari
+    `libopenblas.so` adalah *dynamic linker* sistem operasi — BUKAN Python.
+    Linker sama sekali tidak melihat `sys.path`.
+
+    Karena itu menyuntikkan direktori saudara ke `sys.path` (yang sudah
+    dilakukan run_smoke) TIDAK menolong sedikit pun; sudah diuji dan tetap
+    gagal dengan pesan yang sama. Yang berhasil adalah memuat pustaka
+    pendukung lebih dulu: begitu ia berada di memori proses, linker
+    menemukannya lewat SONAME tanpa perlu mencari di disk.
+
+    Hanya berkas berawalan `lib` yang dimuat. File .so milik modul Python
+    (mis. `_multiarray_umath.so`) TIDAK boleh dimuat dengan cara ini — ia
+    butuh diinisialisasi oleh mesin impor Python, bukan ctypes.
+
+    Mengembalikan (jumlah_berhasil, catatan) dan TIDAK PERNAH melempar:
+    kegagalan preload harus menjadi diagnosa, bukan crash baru.
+    """
+    dimuat = 0
+    catatan: list[str] = []
+    if not dirs:
+        return 0, catatan
+    terlihat: set[str] = set()
+    for d in dirs:
+        if not d or not os.path.isdir(d):
+            continue
+        for root, _dirs, files in os.walk(d):
+            for fn in sorted(files):
+                if not (fn.startswith("lib") and ".so" in fn):
+                    continue
+                if fn in terlihat:
+                    continue
+                terlihat.add(fn)
+                path = os.path.join(root, fn)
+                try:
+                    ctypes.CDLL(path)
+                    dimuat += 1
+                    catatan.append("preload OK: %s" % fn)
+                except Exception as e:  # noqa: BLE001
+                    # Wajar: sebagian .so butuh pustaka lain lebih dulu.
+                    # Dicatat apa adanya, tidak dianggap kegagalan fatal.
+                    catatan.append("preload gagal: %s (%s)" % (fn, e))
+    return dimuat, catatan
 
 
 def _run_with_timeout(fn, timeout_s: float) -> tuple[bool, str]:
@@ -168,6 +218,17 @@ def run_smoke(
             sys.path.insert(0, d)
     sys.path.insert(0, staging_dir)
     importlib.invalidate_caches()
+
+    # NATIVE-LOADER: muat pustaka pendukung SEBELUM impor apa pun.
+    # sys.path di atas hanya menolong Python menemukan modul .py — linker
+    # sistem yang mencari libopenblas.so tidak melihatnya sama sekali.
+    dimuat, catatan_preload = preload_native_libs(
+        [staging_dir] + list(sibling_dirs or [])
+    )
+    native_info["preloaded"] = dimuat
+    if catatan_preload:
+        native_info["preload_log"] = catatan_preload[:40]
+
     try:
         test_list = tests or [{"name": "import", "type": "IMPORT", "target": import_name}]
         for t in test_list:

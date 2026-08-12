@@ -76,6 +76,70 @@ def fetch_pypi_metadata(name: str) -> dict:
     return data
 
 
+# ---------------------------------------------------------------------------
+# Dependensi pustaka NATIVE (build #3 lanjutan, 2026-08-13)
+#
+# AKAR MASALAH: `import numpy` gagal dengan
+#     dlopen failed: library "libopenblas.so" not found
+# padahal wheel numpy sudah terpasang benar.
+#
+# Chaquopy memisahkan pustaka C bersama (OpenBLAS, libjpeg, freetype, ...)
+# menjadi paket `chaquopy-*` tersendiri supaya tidak diduplikasi di setiap
+# wheel. Pemisahan itu HANYA tercatat di `requirements.host` pada meta.yaml
+# resep Chaquopy — PyPI tidak tahu apa-apa soal ini, dan justru melaporkan
+# numpy TANPA dependensi karena wheel PyPI biasa sudah memuat OpenBLAS di
+# dalamnya. Resolver kita membaca PyPI, jadi pustaka pendukung tidak pernah
+# ikut terunduh.
+#
+# Peta di bawah disalin dari `requirements.host` masing-masing resep:
+#   https://github.com/chaquo/chaquopy/tree/master/server/pypi/packages/<nama>/meta.yaml
+# (diperiksa 2026-08-13). Hanya entri yang benar-benar dibaca dari sumbernya
+# yang dicantumkan — tidak ada tebakan berdasarkan pola nama, karena
+# `cryptography` membuktikan polanya tidak seragam (butuh `openssl`, tanpa
+# awalan `chaquopy-`).
+#
+# Versi sengaja TIDAK dipatok. Indeks Chaquopy hanya menyimpan satu versi per
+# pustaka pendukung, dan mematoknya di sini berarti peta ini basi setiap kali
+# hulu memperbarui.
+NATIVE_HOST_DEPS: dict[str, list[str]] = {
+    "numpy": ["chaquopy-openblas"],
+    "pandas": ["numpy"],
+    "matplotlib": ["chaquopy-freetype", "chaquopy-libpng", "numpy"],
+    "pillow": ["chaquopy-libjpeg", "chaquopy-freetype"],
+    "lxml": ["chaquopy-libxml2", "chaquopy-libxslt"],
+    "pyyaml": ["chaquopy-libyaml"],
+    "opencv-python": [
+        "chaquopy-libgfortran", "chaquopy-libpng", "chaquopy-libjpeg",
+        "chaquopy-openblas", "numpy",
+    ],
+    "scipy": ["chaquopy-openblas", "chaquopy-libgfortran", "numpy"],
+    "h5py": ["chaquopy-hdf5", "numpy"],
+    "pyzmq": ["chaquopy-libzmq"],
+    "shapely": ["chaquopy-geos"],
+    "argon2-cffi-bindings": ["cffi"],
+}
+
+
+def native_host_deps(canonical_name: str) -> list[str]:
+    """Pustaka pendukung yang WAJIB ikut dipasang bersama paket ini.
+
+    Mengembalikan daftar kosong bila paket tidak butuh apa pun — itu kasus
+    mayoritas (semua paket pure-Python).
+    """
+    return list(NATIVE_HOST_DEPS.get((canonical_name or "").strip().lower(), []))
+
+
+def is_support_library(canonical_name: str) -> bool:
+    """True untuk pustaka pendukung yang BUKAN modul Python.
+
+    Paket `chaquopy-*` hanya membungkus satu file .so; tidak ada apa pun yang
+    bisa di-`import`. Menjalankan uji impor terhadapnya akan selalu gagal dan
+    membatalkan seluruh transaksi — termasuk paket utama yang sebenarnya
+    sudah berhasil.
+    """
+    return (canonical_name or "").strip().lower().startswith("chaquopy-")
+
+
 def fetch_chaquopy_wheels(name: str, index_url: str = CHAQUOPY_INDEX_URL) -> list[dict]:
     """Ambil daftar file .whl dari simple index Chaquopy (PEP 503 HTML)."""
     url = index_url.rstrip("/") + "/" + name + "/"
@@ -330,6 +394,14 @@ def resolve(
             return
 
         plan[cname] = chosen
+
+        # Pustaka pendukung native (chaquopy-openblas, chaquopy-libjpeg, ...).
+        # Diantrikan LEBIH DULU daripada dependensi PyPI: tanpa file .so ini,
+        # paket induknya terpasang tetapi gagal diimpor — kegagalan yang jauh
+        # lebih membingungkan daripada gagal mengunduh.
+        for host_dep in native_host_deps(cname):
+            queue(host_dep, "", set(), cname, depth + 1)
+
         # dependensi
         for dep_req in chosen.get("requires_dist", []) or []:
             try:
@@ -368,6 +440,9 @@ def resolve(
                 "candidates=%d" % len(cands),
             )
         best["name"] = cname
+        # Penanda untuk Kotlin: paket ini pustaka pendukung, bukan modul Python.
+        # Uji impor terhadapnya akan selalu gagal (tidak ada yang bisa diimpor).
+        best["support_library"] = is_support_library(cname)
         try:
             best["version"] = parse_wheel(best["filename"])["version"]
         except WheelInfoError:

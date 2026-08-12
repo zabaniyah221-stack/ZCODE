@@ -1498,9 +1498,13 @@ class TestDiagnostikTidakMembuangBukti:
 
     def test_smoke_test_mengisi_pesan_teknis(self):
         src = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
-        i = src.find('fail("SMOKE_TEST"')
-        assert i > 0
-        jendela = src[max(0, i - 1200):i + 200]
+        # Ada LEBIH DARI SATU fail("SMOKE_TEST") sejak pustaka pendukung punya
+        # jalur sendiri. find() menemukan yang pertama dan membuat guard ini
+        # salah sasaran (2026-08-13) — periksa SEMUA kemunculan, dan cukup satu
+        # di antaranya yang melaporkan daftar .so.
+        posisi = [m.start() for m in re.finditer(r'fail\("SMOKE_TEST"', src)]
+        assert posisi, "jalur kegagalan smoke test hilang"
+        jendela = "".join(src[max(0, i - 1200):i + 200] for i in posisi)
         assert "nativeLibs" in jendela, "daftar .so tidak ikut dilaporkan"
         assert not re.search(r'fail\("SMOKE_TEST",\s*"smoke_test",[^)]*,\s*null\s*\)', src), (
             "technicalMessage diisi null — penyebab asli ImportError tidak "
@@ -1573,4 +1577,152 @@ class TestDiagnostikTidakMembuangBukti:
         assert "except Exception" in src_py[i:i + 2500], (
             "diagnose_native tanpa pengaman umum — diagnostik bisa jadi sumber "
             "kegagalan baru"
+        )
+
+
+# ---------------------------------------------------------------------------
+# PUSTAKA PENDUKUNG NATIVE (2026-08-13) — akar kegagalan numpy di perangkat.
+#
+#   dlopen failed: library "libopenblas.so" not found
+#
+# Chaquopy memisahkan pustaka C bersama menjadi paket `chaquopy-*`. Pemisahan
+# itu hanya tercatat di `requirements.host` pada meta.yaml resep Chaquopy;
+# PyPI melaporkan numpy TANPA dependensi, jadi resolver kita tidak pernah
+# mengunduhnya.
+#
+# Perbaikannya TIGA bagian yang saling bergantung — kurang satu, numpy tetap
+# gagal. Guard di bawah mengunci ketiganya.
+# ---------------------------------------------------------------------------
+class TestPustakaPendukungNative:
+    # ---- bagian 1: tag py3-none-android_* ----
+    def test_tag_py3_none_dengan_platform_android(self):
+        """Wheel pendukung bertag `py3-none-android_16_armeabi_v7a`: tidak
+        terikat versi Python, tetapi TETAP terikat CPU."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.wheelinfo import android_supported_tags
+        tags = android_supported_tags("armeabi-v7a", 31)
+        kombinasi = {(t.interpreter, t.abi, t.platform) for t in tags}
+        assert ("py3", "none", "android_16_armeabi_v7a") in kombinasi, (
+            "kombinasi py3-none + platform Android tidak dibangkitkan — seluruh "
+            "pustaka pendukung akan ditolak dan numpy tetap gagal"
+        )
+
+    def test_wheel_pendukung_nyata_diterima(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.wheelinfo import android_supported_tags, wheel_compatible
+        tags = android_supported_tags("armeabi-v7a", 31)
+        assert wheel_compatible(
+            "chaquopy_openblas-0.2.20-5-py3-none-android_16_armeabi_v7a.whl",
+            supported_tags=tags), "wheel openblas ARMv7 ditolak"
+        assert not wheel_compatible(
+            "chaquopy_openblas-0.2.20-5-py3-none-android_21_arm64_v8a.whl",
+            supported_tags=tags), "wheel openblas arm64 diterima di perangkat armv7"
+
+    # ---- bagian 2: peta dependensi ----
+    def test_peta_dependensi_dari_metayaml(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.resolve import native_host_deps
+        # Nilai-nilai ini dibaca dari requirements.host di meta.yaml Chaquopy.
+        assert "chaquopy-openblas" in native_host_deps("numpy")
+        assert "numpy" in native_host_deps("pandas")
+        assert "chaquopy-libjpeg" in native_host_deps("pillow")
+        assert "numpy" in native_host_deps("matplotlib")
+        # Paket murni Python tidak boleh membawa apa pun.
+        assert native_host_deps("requests") == []
+        assert native_host_deps("flask") == []
+
+    def test_resolver_mengantrikan_pustaka_pendukung(self):
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        assert "for host_dep in native_host_deps(cname):" in src, (
+            "pustaka pendukung tidak pernah diantrikan — wheel-nya tidak akan diunduh"
+        )
+
+    def test_pustaka_pendukung_dikenali(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.resolve import is_support_library
+        assert is_support_library("chaquopy-openblas")
+        assert not is_support_library("numpy")
+
+    # ---- bagian 3: preload (native-loader) ----
+    def test_preload_ada_dan_dipanggil_sebelum_impor(self):
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        assert "def preload_native_libs(" in src
+        i_pre = src.find("preload_native_libs(\n")
+        i_test = src.find("test_list = tests or")
+        assert i_pre > 0 and i_test > 0
+        assert i_pre < i_test, (
+            "preload dijalankan SETELAH uji impor — tidak ada gunanya"
+        )
+
+    def test_preload_hanya_pustaka_bukan_modul_python(self):
+        """`_multiarray_umath.so` harus diimpor Python, BUKAN dimuat ctypes."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import preload_native_libs
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        for nama in ("libdukung.so", "_multiarray_umath.so"):
+            with open(_os.path.join(d, nama), "wb") as f:
+                f.write(b"\x7fELF")
+        _n, log = preload_native_libs([d])
+        gabung = " ".join(log)
+        assert "libdukung.so" in gabung, "pustaka lib*.so tidak dicoba dimuat"
+        assert "_multiarray_umath" not in gabung, (
+            "modul Python ikut dimuat ctypes — akan merusak mesin impor"
+        )
+
+    def test_preload_tidak_pernah_melempar(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import preload_native_libs
+        assert preload_native_libs(None) == (0, [])
+        assert preload_native_libs(["/tidak/ada"])[0] == 0
+        # direktori berisi file rusak: harus dicatat, bukan crash
+        import tempfile, os as _os
+        d = tempfile.mkdtemp()
+        with open(_os.path.join(d, "librusak.so"), "wb") as f:
+            f.write(b"bukan ELF sama sekali")
+        n, log = preload_native_libs([d])
+        assert n == 0 and any("gagal" in x for x in log)
+
+    # ---- bagian 4: smoke test paham pustaka pendukung ----
+    def test_uji_impor_dilewati_untuk_pustaka_pendukung(self):
+        src = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        assert "p.supportLibrary" in src, (
+            "pustaka pendukung tidak dibedakan — uji impor `import chaquopy-openblas` "
+            "akan selalu gagal dan membatalkan paket utama yang sudah berhasil"
+        )
+        i = src.find("if (p.supportLibrary)")
+        assert i > 0
+        badan = src[i:i + 900]
+        assert "continue" in badan, "tidak melewati uji impor"
+        # Periksa PEMINDAIAN sungguhan, bukan sekadar munculnya ".so": teks itu
+        # tetap ada di pesan error walau verifikasinya dihapus (bocor uji
+        # mutasi 2026-08-13).
+        assert re.search(r"walkTopDown\(\)[^\n]*\.so", badan), (
+            "keberadaan file .so tidak benar-benar diperiksa — pustaka "
+            "pendukung kosong akan lolos dan numpy gagal belakangan"
+        )
+
+    def test_flag_dibawa_dari_python_ke_kotlin(self):
+        py = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        assert '"support_library"' in py, "Python tidak mengirim penanda"
+        kt = strip_kt_comments(read(PKGENG / "DependencyResolver.kt"))
+        assert 'optBoolean("support_library"' in kt, "Kotlin tidak membaca penanda"
+        tx = strip_kt_comments(read(PKGENG / "TransactionManager.kt"))
+        assert "supportLibrary" in tx, "penanda hilang saat masuk transaksi"
+
+    # ---- bagian 5: daftar terpasang ----
+    def test_daftar_terpasang_menyaring_pustaka_pendukung(self):
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        i = src.find("fun refreshInstalled()")
+        assert i > 0
+        badan = src[i:i + 500]
+        assert 'startsWith("chaquopy-")' in badan, (
+            "daftar Terpasang menampilkan pustaka pendukung yang tidak pernah "
+            "diminta user"
         )

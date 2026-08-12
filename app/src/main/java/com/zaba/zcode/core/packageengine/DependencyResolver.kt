@@ -32,7 +32,13 @@ class DependencyResolver(private val context: Context) {
         val compatReason: String,
         val requiresDist: List<String>,
         val summary: String,
-        val requiresPython: String?
+        val requiresPython: String?,
+        /**
+         * True untuk pustaka pendukung `chaquopy-*` (OpenBLAS, libjpeg, ...).
+         * Paket ini hanya membungkus satu file .so — tidak ada modul Python
+         * yang bisa diimpor, jadi uji impor terhadapnya WAJIB dilewati.
+         */
+        val supportLibrary: Boolean = false
     )
 
     data class ResolvePlan(
@@ -132,7 +138,8 @@ class DependencyResolver(private val context: Context) {
                         compatReason = p.optString("compat_reason", ""),
                         requiresDist = strList(p, "requires_dist"),
                         summary = p.optString("summary", ""),
-                        requiresPython = p.optStringOrNull("requires_python")
+                        requiresPython = p.optStringOrNull("requires_python"),
+                        supportLibrary = p.optBoolean("support_library", false)
                     )
                 )
             }

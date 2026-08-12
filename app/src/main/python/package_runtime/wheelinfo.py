@@ -106,6 +106,18 @@ def android_supported_tags(
             platform = "android_%d_%s" % (wheel_api, norm_abi)
             for abi_tag in (python_tag, "abi3", "none"):
                 tags.append(Tag(python_tag, abi_tag, platform))
+            # FIX 2026-08-13 (lanjutan): interpreter py3/py2.py3 dengan platform
+            # ANDROID — bukan hanya "any".
+            #
+            # Pustaka pendukung Chaquopy (chaquopy-openblas, chaquopy-libjpeg,
+            # dst) bertag `py3-none-android_16_armeabi_v7a`: TIDAK terikat versi
+            # Python (isinya cuma satu file .so, bukan modul Python), tetapi
+            # TETAP terikat CPU. Versi pertama hanya membangkitkan cp311-*
+            # untuk platform Android dan py3-none-any tanpa platform, sehingga
+            # kombinasi ini tidak pernah ada — seluruh pustaka pendukung
+            # ditolak, dan numpy tetap gagal walau openblas sudah diunduh.
+            for py_tag in ("py3", "py2.py3"):
+                tags.append(Tag(py_tag, "none", platform))
     # Pure-Python selalu sah, di ABI mana pun.
     tags.append(Tag("py3", "none", "any"))
     tags.append(Tag("py2.py3", "none", "any"))
