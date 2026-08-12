@@ -1458,3 +1458,119 @@ class TestScopeContextCompose:
             "ManualTab tidak menerima parameter `context`; pakai `ctx` dari "
             "LocalContext.current"
         )
+
+
+# ---------------------------------------------------------------------------
+# DIAGNOSTIK TIDAK BOLEH MEMBUANG BUKTI (2026-08-13)
+#
+# Install numpy gagal di perangkat dengan pesan yang berhenti di
+# "...user/troubles". Bukan kebetulan: Breadcrumb.log memotong detail di
+# take(400), sedangkan pesan ImportError numpy panjangnya ~735 karakter dan
+# boilerplate-nya ada di DEPAN. Baris "Original error was: ..." di posisi 664
+# — satu-satunya baris yang menyebut sebab sebenarnya — terbuang.
+#
+# Diperparah dua hal: PackageEngineV2 mengisi technicalMessage dengan `null`
+# di jalur SMOKE_TEST, dan PipScreen tidak pernah mencatat technicalMessage
+# sama sekali. Tiga lapis pembuangan bukti untuk satu kegagalan.
+# ---------------------------------------------------------------------------
+class TestDiagnostikTidakMembuangBukti:
+    def test_breadcrumb_batas_cukup_panjang(self):
+        src = read(DIAG_DIR / "Breadcrumb.kt")
+        m = re.search(r"MAX_DETAIL\s*=\s*(\d+)", src)
+        assert m, "batas panjang detail tidak didefinisikan"
+        n = int(m.group(1))
+        assert n >= 2000, (
+            f"batas {n} terlalu pendek; pesan ImportError numpy saja ~735 "
+            "karakter dan traceback Python biasa jauh lebih panjang"
+        )
+        assert "take(400)" not in src, "batas 400 kembali — bug pemotongan hidup lagi"
+
+    def test_pangkas_dari_tengah_bukan_ekor(self):
+        """Sebab sebenarnya hampir selalu di baris TERAKHIR
+        ("Original error was:", "Caused by:"). Memotong ekor = membuang jawaban."""
+        src = read(DIAG_DIR / "Breadcrumb.kt")
+        assert "fun ringkas(" in src
+        i = src.find("fun ringkas(")
+        badan = src[i:i + 600]
+        assert "takeLast(" in badan, (
+            "pemangkasan tidak mempertahankan EKOR pesan — sebab akhirnya hilang"
+        )
+
+    def test_smoke_test_mengisi_pesan_teknis(self):
+        src = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        i = src.find('fail("SMOKE_TEST"')
+        assert i > 0
+        jendela = src[max(0, i - 1200):i + 200]
+        assert "nativeLibs" in jendela, "daftar .so tidak ikut dilaporkan"
+        assert not re.search(r'fail\("SMOKE_TEST",\s*"smoke_test",[^)]*,\s*null\s*\)', src), (
+            "technicalMessage diisi null — penyebab asli ImportError tidak "
+            "sampai ke mana pun"
+        )
+
+    def test_pipscreen_mencatat_dan_menampilkan_detail(self):
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "PKG_INSTALL_DETAIL" in src, "pesan teknis tidak dicatat ke breadcrumb"
+        assert "detail teknis" in src, (
+            "pesan teknis tidak ditampilkan di konsol — user melapor dari HP "
+            "tanpa PC dan harus bisa menyalinnya langsung"
+        )
+
+    def test_diagnosa_native_membedakan_tiga_sebab(self):
+        """Uji PERILAKU: tiga sebab yang pesan ImportError-nya identik harus
+        menghasilkan dugaan yang berbeda."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import diagnose_native
+        import tempfile, os as _os
+
+        d = tempfile.mkdtemp()
+        so = _os.path.join(d, "_multiarray_umath.cpython-311.so")
+        with open(so, "wb") as f:
+            f.write(b"\x7fELF" + b"\x00" * 64)
+
+        hasil_b = diagnose_native(d, 'dlopen failed: library "libc++_shared.so" not found')
+        assert "sebab b" in hasil_b, hasil_b
+        hasil_a = diagnose_native(d, "Attempt to load writable file")
+        assert "sebab a" in hasil_a, hasil_a
+        hasil_c = diagnose_native(d, "wrong ELF class: ELFCLASS64")
+        assert "sebab c" in hasil_c, hasil_c
+        # jujur saat tidak tahu
+        hasil_x = diagnose_native(d, "sesuatu yang tak dikenal")
+        assert "belum dapat dipastikan" in hasil_x, hasil_x
+
+    def test_diagnosa_melaporkan_status_writable(self):
+        """Sebab (a) hanya bisa dibedakan bila mode file benar-benar diperiksa."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import diagnose_native
+        import tempfile, os as _os
+
+        d = tempfile.mkdtemp()
+        so = _os.path.join(d, "x.so")
+        with open(so, "wb") as f:
+            f.write(b"\x7fELF")
+        assert "writable=True" in diagnose_native(d, "")
+        _os.chmod(so, 0o555)
+        assert "writable=False" in diagnose_native(d, "")
+
+    def test_diagnosa_tidak_pernah_melempar(self):
+        """Diagnostik tidak boleh jadi sumber kegagalan baru."""
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import diagnose_native
+        assert isinstance(diagnose_native("/tidak/ada/sama/sekali", "x"), str)
+        assert isinstance(diagnose_native("", None), str)
+        # Input yang MEMAKSA exception di dalam badan fungsi. Argumen "sopan"
+        # saja tidak cukup: mencabut `except Exception` tetap lolos karena tidak
+        # ada yang melempar (bocor uji mutasi 2026-08-13).
+        class Nakal:
+            def __str__(self): raise RuntimeError("boom")
+            def lower(self): raise RuntimeError("boom")
+        assert isinstance(diagnose_native(Nakal(), Nakal()), str)
+        # Pengaman wajib menangkap Exception secara umum, bukan satu jenis saja.
+        src_py = (ROOT / "app/src/main/python/package_runtime/smoke.py").read_text()
+        i = src_py.find("def diagnose_native(")
+        assert "except Exception" in src_py[i:i + 2500], (
+            "diagnose_native tanpa pengaman umum — diagnostik bisa jadi sumber "
+            "kegagalan baru"
+        )

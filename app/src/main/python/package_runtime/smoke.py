@@ -33,6 +33,53 @@ def _find_native_libs(staging_dir: str) -> list[str]:
     return sorted(libs)
 
 
+def diagnose_native(staging_dir: str, error_text: str) -> str:
+    """Kumpulkan fakta yang membedakan tiga sebab kegagalan muat .so.
+
+    KENAPA ADA (2026-08-13): pesan `ImportError: Importing the numpy
+    C-extensions failed` IDENTIK untuk tiga sebab yang sangat berbeda:
+
+      (a) file .so writable  -> Android W^X menolak memuatnya
+      (b) dependensi hilang  -> mis. libc++_shared.so tidak ditemukan
+      (c) ABI keliru         -> wheel arm64 di perangkat armv7
+
+    Tanpa memisahkan ketiganya, perbaikan hanya tebakan. Fungsi ini memeriksa
+    hal-hal yang bisa diperiksa dari dalam Python dan melaporkan apa adanya —
+    termasuk saat tidak menemukan apa pun.
+    """
+    baris = []
+    try:
+        libs = _find_native_libs(staging_dir)
+        baris.append("native .so: %d" % len(libs))
+        for so in libs[:10]:
+            try:
+                st = os.stat(so)
+                writable = bool(st.st_mode & 0o222)
+                baris.append(
+                    "  %s | %d bytes | writable=%s"
+                    % (os.path.basename(so), st.st_size, writable)
+                )
+            except OSError as e:
+                baris.append("  %s | stat gagal: %s" % (os.path.basename(so), e))
+        low = (error_text or "").lower()
+        if "not found" in low and ".so" in low:
+            baris.append("DUGAAN: dependensi .so tidak ditemukan (sebab b)")
+        elif "writable" in low:
+            baris.append("DUGAAN: Android menolak .so writable (sebab a)")
+        elif "wrong elf class" in low or "is 32-bit" in low or "is 64-bit" in low:
+            baris.append("DUGAAN: ABI wheel tidak cocok dengan perangkat (sebab c)")
+        else:
+            baris.append("DUGAAN: belum dapat dipastikan dari teks error")
+        try:
+            import sysconfig
+            baris.append("platform: %s" % sysconfig.get_platform())
+        except Exception:  # noqa: BLE001
+            pass
+    except Exception as e:  # noqa: BLE001 — diagnostik tak boleh jadi sumber error baru
+        baris.append("diagnose_native gagal: %s" % e)
+    return "\n".join(baris)
+
+
 def _run_with_timeout(fn, timeout_s: float) -> tuple[bool, str]:
     """Jalankan fn; batasi durasi. Tidak bisa membunuh thread, tapi UI tetap
     dibatasi waktunya (best-effort, didokumentasikan di SPEC-001)."""
@@ -129,6 +176,13 @@ def run_smoke(
             name = t.get("name") or ("%s:%s" % (kind, target))
             if kind == "IMPORT":
                 ok, err = _run_with_timeout(lambda: _do_import(target), timeout_s)
+                if not ok:
+                    # Import native yang gagal = satu-satunya kesempatan memeriksa
+                    # .so selagi staging masih ada (rollback akan menghapusnya).
+                    native_info["diagnosis"] = diagnose_native(staging_dir, err or "")
+                    err = "%s\n--- diagnosa native ---\n%s" % (
+                        err, native_info["diagnosis"]
+                    )
                 results.append({"test": name, "type": kind, "ok": ok, "error": err})
             elif kind == "NATIVE_LOAD":
                 # native load terbukti lewat import yang sukses + .so hadir

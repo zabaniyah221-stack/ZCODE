@@ -228,8 +228,25 @@ class PackageEngineV2(private val context: Context) {
                     if (outcome.nativeLibs.isNotEmpty()) TelemetryStore.increment("native_load_failure")
                     val failMsg = outcome.results.firstOrNull { !it.optBoolean("ok") }
                         ?.optString("error") ?: "smoke test gagal"
+                    // Sertakan SELURUH hasil + daftar .so yang ditemukan sebagai
+                    // pesan teknis. Sebelumnya argumen ini diisi `null`, jadi satu-
+                    // satunya jejak adalah humanMessage yang sudah dipangkas —
+                    // penyebab asli ImportError (baris "Original error was: ...")
+                    // tidak pernah sampai ke mana pun.
+                    val teknis = buildString {
+                        append("smoke gagal untuk ${p.canonicalName}==${p.version}\n")
+                        append("native .so terdeteksi: ${outcome.nativeLibs.size}\n")
+                        outcome.nativeLibs.take(20).forEach { append("  so: ").append(it).append('\n') }
+                        append("hasil test:\n")
+                        for (i in 0 until outcome.results.size) {
+                            val r = outcome.results[i]
+                            append("  [").append(r.optString("type", "?")).append("] ")
+                                .append(if (r.optBoolean("ok")) "OK" else "GAGAL").append(' ')
+                                .append(r.optString("error", "")).append('\n')
+                        }
+                    }
                     return fail("SMOKE_TEST", "smoke_test",
-                        "Import/smoke test ${p.canonicalName} gagal: $failMsg", null)
+                        "Import/smoke test ${p.canonicalName} gagal: $failMsg", teknis)
                 }
                 onStep(Step.Log("  ${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so)"))
             }

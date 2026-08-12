@@ -68,7 +68,16 @@ object Breadcrumb {
                         .append(" | ")
                         .append(step)
                     if (detail.isNotEmpty()) {
-                        w.append(" | ").append(detail.take(400).replace('\n', ' '))
+                        // BATAS 4000, BUKAN 400 (2026-08-13). Pesan ImportError numpy
+                        // panjangnya ~735 karakter dan boilerplate-nya di DEPAN:
+                        // potongan di 400 mendarat tepat di kata "troubles" dan
+                        // membuang baris "Original error was: ..." di posisi 664 —
+                        // satu-satunya baris yang menyebut sebab sebenarnya.
+                        // Diagnostik yang memotong bukti bukan diagnostik.
+                        //
+                        // Kalau tetap terlalu panjang, pangkas dari TENGAH: kepala
+                        // memberi konteks, EKOR memuat sebab akhirnya.
+                        w.append(" | ").append(ringkas(detail).replace('\n', ' '))
                     }
                     w.append('\n')
                     w.flush() // WAJIB: tanpa ini baris terakhir hilang saat crash
@@ -77,6 +86,25 @@ object Breadcrumb {
                 // sengaja diam
             }
         }
+    }
+
+    private const val MAX_DETAIL = 4000
+
+    /**
+     * Pangkas dari TENGAH bila melebihi [MAX_DETAIL].
+     *
+     * Pesan exception yang panjang hampir selalu menaruh sebab sebenarnya di
+     * baris TERAKHIR ("Original error was: ...", "Caused by: ..."). Memotong
+     * ekor berarti membuang jawabannya.
+     */
+    internal fun ringkas(detail: String): String {
+        if (detail.length <= MAX_DETAIL) return detail
+        val sisa = MAX_DETAIL - 40
+        val kepala = sisa * 2 / 3
+        val ekor = sisa - kepala
+        return detail.take(kepala) +
+            " …[${detail.length - sisa} karakter dipangkas]… " +
+            detail.takeLast(ekor)
     }
 
     /** Isi penuh breadcrumb (untuk layar Diagnostik / tombol Salin). */

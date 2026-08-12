@@ -181,11 +181,23 @@ fun PipScreen(
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_INSTALL_FAIL", "$trimmed [${result.code}/${result.stage}] ${result.humanMessage}"
                     )
+                    // Pesan teknis dicatat TERPISAH. Menggabungkannya ke baris di
+                    // atas membuat satu baris breadcrumb raksasa yang sulit dibaca;
+                    // sebagai baris sendiri ia tetap utuh dan tetap mudah di-grep.
+                    result.technicalMessage?.takeIf { it.isNotBlank() }?.let {
+                        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_DETAIL", it)
+                    }
                     appendLog(
                         "\n❌ [${result.code}] ${result.humanMessage}" +
                             (if (result.rollbackPerformed) "\n   (rollback dilakukan — environment lama utuh)" else "") +
                             "\n"
                     )
+                    // Tampilkan juga di konsol: user melapor dari HP tanpa PC, jadi
+                    // penyebab teknis harus terlihat langsung dan bisa disalin —
+                    // bukan hanya tersimpan di file yang harus dicari dulu.
+                    result.technicalMessage?.takeIf { it.isNotBlank() }?.let {
+                        appendLog("\n--- detail teknis (salin ini saat melapor) ---\n$it\n")
+                    }
                 }
             }
         }
