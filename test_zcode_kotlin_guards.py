@@ -410,8 +410,6 @@ class TestComposeDelegasiImport:
         assert not offenders, (
             "File memakai `val ... by remember` tanpa import getValue: " + "; ".join(offenders)
         )
-<<<<<<< HEAD
-=======
 
 
 # ---------------------------------------------------------------------------
@@ -644,4 +642,30 @@ class TestManifestSinkronChaquopy:
         data = json.loads(read(ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
         for pkg, real in self.NYATA.items():
             assert real in data.get(pkg, []), f"{pkg} harus memuat {real}"
->>>>>>> 074459e (fix(installer): 10 bug — resolver, terminal kosong, crash native, copas)
+
+
+class TestTidakAdaPenandaKonflik:
+    """Penanda konflik merge tidak boleh pernah ter-commit.
+
+    2026-08-13: rebase build #2 meninggalkan '<<<<<<< HEAD' di file test ini
+    sendiri. Akibatnya SELURUH berkas gagal di-parse dan 48 guard berhenti
+    berjalan — kegagalan senyap yang justru mematikan jaring pengaman. Guard
+    ini memindai seluruh repo agar hal itu ketahuan seketika.
+    """
+
+    EKSTENSI = ("*.kt", "*.py", "*.kts", "*.json")
+
+    def test_tidak_ada_penanda(self):
+        langgar = []
+        for pola in self.EKSTENSI:
+            for f in ROOT.rglob(pola):
+                if any(bag in f.parts for bag in (".git", "build", "node_modules", "__pycache__")):
+                    continue
+                try:
+                    isi = f.read_text(encoding="utf-8", errors="ignore")
+                except OSError:
+                    continue
+                for n, baris in enumerate(isi.splitlines(), 1):
+                    if baris.startswith("<<<<<<< ") or baris.startswith(">>>>>>> "):
+                        langgar.append(f"{f.relative_to(ROOT)}:{n}")
+        assert not langgar, "Penanda konflik merge ter-commit: " + ", ".join(langgar[:10])
