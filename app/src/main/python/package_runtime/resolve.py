@@ -583,10 +583,13 @@ def resolve(
         best.setdefault("deps_source", "")
         # Ambil info/version terbaru SEKALI (di-cache di _collect → 0 HTTP baru).
         # Dipakai untuk optimasi: hanya panggil per-versi bila versi terpilih ≠ terbaru.
+        _latest_data = {}
         _latest_info = {}
         try:
-            _latest_info = fetch_pypi_metadata(cname).get("info", {})
+            _latest_data = fetch_pypi_metadata(cname)
+            _latest_info = _latest_data.get("info", {}) or {}
         except ResolveError:
+            _latest_data = {}
             _latest_info = {}
         if _latest_info.get("version"):
             best["latest_version"] = _latest_info["version"]
@@ -636,13 +639,14 @@ def resolve(
                 )
 
         try:
-            data = fetch_pypi_metadata(cname)
+            # data full (riwayat rilis) — sudah di-cache, 0 HTTP baru.
+            data = _latest_data if _latest_data else fetch_pypi_metadata(cname)
             releases = data.get("releases", {})
             files_for_version = releases.get(best["version"], [])
             if files_for_version:
                 rp = files_for_version[0].get("requires_python")
                 best["requires_python"] = rp
-            info = data.get("info", {})
+            info = data.get("info", {}) or _latest_info
             # HANYA dipakai bila lapis 1 & 2 tidak memberi apa pun (wheel belum
             # ada di cache DAN endpoint per-versi gagal/versi tak tersedia).
             # Jangan ditimpa oleh info rilis terbaru (Bug K): itu yang
