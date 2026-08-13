@@ -299,9 +299,13 @@ Komponen (semua di `/var/tmp`, terverifikasi 2026-08-13 malam):
 4. `libandroid-support.so` (Termux main) + `libpython3.11.so` di prefix qemu.
 5. Env: `ANDROID_ROOT`, `ANDROID_DATA`, `TZDIR`, `QEMU_LD_PREFIX`,
    `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`.
-6. **DNS bionic:** libc bicara ke `/dev/socket/dnsproxyd` (netd). Qemu-user
-   tidak punya itu. Isi `/system/etc/hosts` dari resolver **HOST** setiap
-   jalan. Tambah domain: `/var/tmp/bionic-extra-hosts.txt`.
+6. **DNS bionic (universal, 2026-08-13 malam):** libc bicara ke
+   **`/dev/socket/dnsproxyd`**. qemu-user **tidak** memakai `QEMU_LD_PREFIX`
+   untuk AF_UNIX — socket harus di path HOST `/dev/socket/dnsproxyd`.
+   `tools/dnsproxyd.py` meniru protokol Nougat (`getaddrinfo …\\0` → kode
+   `222` + `addrinfo` BE32). Terverifikasi: `example.com`, `wikipedia.org`,
+   `httpbingo.org` (tidak ada di hosts) → HTTPS 200.
+   Fallback: `/system/etc/hosts` + `/var/tmp/bionic-extra-hosts.txt`.
 7. **JANGAN** `export PYTHONHOME=...` sebelum menjalankan `python3` host
    (refresh hosts) — host lalu memakai stdlib ARM → `No module named '_socket'`.
 

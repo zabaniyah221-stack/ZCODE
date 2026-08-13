@@ -104,6 +104,7 @@ fi
 cat > /var/tmp/bionic311.sh << 'EOF'
 #!/usr/bin/env bash
 set -e
+bash /var/tmp/start_dnsproxyd.sh 2>/dev/null || true
 PY=/var/tmp/tur311/data/data/com.termux/files/usr/bin/python3.11
 PREFIX=/var/tmp/bionic-sys
 USR=/var/tmp/tur311/data/data/com.termux/files/usr
@@ -142,6 +143,16 @@ export REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
 exec qemu-armhf -L "$PREFIX" "$PY" "$@"
 EOF
 chmod +x /var/tmp/bionic311.sh
+
+# dnsproxyd di /dev/socket (bukan prefix) — internet universal
+if [[ -f "$(dirname "$0")/dnsproxyd.py" ]]; then
+  cp "$(dirname "$0")/dnsproxyd.py" /var/tmp/dnsproxyd.py
+fi
+sudo mkdir -p /dev/socket || true
+if [[ ! -S /dev/socket/dnsproxyd ]]; then
+  sudo env DNSPROXYD_PATH=/dev/socket/dnsproxyd python3 /var/tmp/dnsproxyd.py >/tmp/dnsproxyd.live.log 2>&1 &
+  sleep 0.3
+fi
 
 /var/tmp/bionic311.sh -c 'import sys,platform; print("B+", sys.version.split()[0], platform.machine())'
 echo "siap. runner: /var/tmp/armpy  /var/tmp/bionic311.sh"
