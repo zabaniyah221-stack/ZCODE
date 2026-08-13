@@ -36,7 +36,9 @@ class TransactionManager(private val context: Context) {
         val sha256: String?,
         val wheelUrl: String?,
         val wheelLocalPath: String?,
-        val filename: String? = null
+        val filename: String? = null,
+        /** Pustaka pendukung native (.so saja) — bukan modul Python. */
+        val supportLibrary: Boolean = false
     )
 
     private val counter = AtomicLong(0)

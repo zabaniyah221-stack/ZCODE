@@ -3,7 +3,6 @@ package com.zaba.zcode.core.plugins
 import android.content.Context
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -46,8 +45,8 @@ object PluginRunner {
     }
 
     private fun runChaquopy(context: Context, pluginId: String, code: String): PluginResult {
-        if (!Python.isStarted()) {
-            Python.start(AndroidPlatform(context.applicationContext))
+        if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(context)) {
+            return PluginResult(false, code, "Python runtime tidak tersedia.")
         }
         val json = Python.getInstance()
             .getModule("zcode_plugins")
@@ -57,8 +56,8 @@ object PluginRunner {
     }
 
     private fun runChaquopyWithParam(context: Context, pluginId: String, code: String, param: String): PluginResult {
-        if (!Python.isStarted()) {
-            Python.start(AndroidPlatform(context.applicationContext))
+        if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(context)) {
+            return PluginResult(false, code, "Python runtime tidak tersedia.")
         }
         return try {
             val json = Python.getInstance()

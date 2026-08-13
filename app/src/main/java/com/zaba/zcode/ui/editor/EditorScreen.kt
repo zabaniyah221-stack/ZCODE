@@ -62,12 +62,31 @@ fun EditorScreen(
     // F1.7 & F1.8: Apply editor settings (closeBrackets, highlightSelectionMatches) ke CM6 bridge.
     // Dipanggil setiap recomposition agar perubahan dari SettingsScreen langsung berefek.
     // Audit 2026-08: jenis font (UI & editor) ikut di-apply via setFontFamily.
+    // BUG H — FIX 2026-08-13. WebView yang BELUM pernah navigasi melaporkan
+    // url `about:blank` (URI opaque) dan bundle CM6-nya belum dimuat. Memanggil
+    // evaluateJavascript pada keadaan itu tidak berguna, dan pola yang sama
+    // pernah menyebabkan CRASH LOOP saat cold start di VSCodroid
+    // ("guard folderFromUrl against opaque WebView URLs",
+    // https://github.com/rmyndharis/VSCodroid). ZCODE memanggil blok ini pada
+    // SETIAP recomposition — termasuk recomposition pertama sebelum
+    // onPageFinished — sehingga jalur rawannya identik.
+    //
+    // runCatching dipakai karena kegagalan menerapkan preferensi kosmetik tidak
+    // boleh pernah mematikan aplikasi; guard `typeof ==='function'` di sisi JS
+    // sudah ada, ini melindungi sisi Kotlin-nya.
     webViewRef.value?.post {
-        val closeBrackets = vm?.closeBracketsEnabled ?: true
-        val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
-        webViewRef.value?.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
-        webViewRef.value?.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
-        applyEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
+        val wv = webViewRef.value ?: return@post
+        val url = wv.url
+        if (url.isNullOrBlank() || url == "about:blank") return@post
+        runCatching {
+            val closeBrackets = vm?.closeBracketsEnabled ?: true
+            val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
+            wv.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
+            wv.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
+            applyEditorFontFamily(wv, vm?.appFontFamily ?: "Monospace")
+        }.onFailure {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WEBVIEW_APPLY_FAIL", it.message ?: "")
+        }
     }
 
     Surface(color = Color(0xFF050806), modifier = Modifier.fillMaxSize()) {

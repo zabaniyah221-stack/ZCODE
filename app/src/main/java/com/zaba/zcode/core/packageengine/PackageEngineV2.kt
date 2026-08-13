@@ -2,6 +2,7 @@ package com.zaba.zcode.core.packageengine
 
 import android.content.Context
 import com.zaba.zcode.core.execution.ExecutionEngine
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
 import org.json.JSONArray
 import org.json.JSONObject
@@ -56,6 +57,11 @@ class PackageEngineV2(private val context: Context) {
         // Storage margin (keputusan forum): max(1.5 × estimasi, 100 MB)
         private const val MIN_SAFETY_MARGIN_BYTES = 100L * 1024 * 1024
         private const val ESTIMATE_FACTOR = 1.5
+        // Batas putaran pencarian pustaka pendukung. Rantai terdalam yang
+        // pernah teramati = 3 tingkat (numpy -> openblas -> libgfortran);
+        // 6 memberi ruang lebih dari dua kali lipat sambil tetap menjamin
+        // perulangan ini berhenti bila peta suatu saat saling menunjuk.
+        private const val MAX_SUPPORT_ROUNDS = 6
     }
 
     // ------------------------------------------------------------------
@@ -117,12 +123,31 @@ class PackageEngineV2(private val context: Context) {
                 }
                 return fail("DEPENDENCY_CONFLICT", "resolve", "Konflik dependensi: $msg", null)
             }
+            // BUG C: modul stdlib bukan kegagalan — beri tahu apa adanya.
+            if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
+                val msg = plan.stdlib.joinToString(" ") { it.reason }
+                onStep(Step.Finish("Resolve", true, "modul bawaan Python"))
+                onStep(Step.Log("  ℹ️ $msg"))
+                return InstallResult(
+                    ok = true,
+                    code = null,
+                    stage = null,
+                    humanMessage = msg,
+                    technicalMessage = null,
+                    rollbackPerformed = false,
+                    installed = emptyList()
+                )
+            }
             if (plan.unavailable.isNotEmpty()) {
                 TelemetryStore.increment("package_not_available")
                 val msg = plan.unavailable.joinToString("; ") { "${it.name}: ${it.reason}" }
                 return fail("PACKAGE_NOT_AVAILABLE", "resolve", "Tidak tersedia: $msg", null)
             }
             onStep(Step.Finish("Resolve", true, "${plan.packages.size} package dalam plan"))
+            // Jejak resolver — memperlihatkan pustaka pendukung yang diambil
+            // ATAU yang gagal diambil. Tanpa ini kegagalan native tidak bisa
+            // dibedakan dari "peta tidak terbaca" (pelajaran v1.0.8).
+            plan.notes.forEach { onStep(Step.Log("  · $it")) }
             plan.packages.forEach {
                 onStep(Step.Log("  - ${it.canonicalName}==${it.version} [${it.source}] ${it.filename}"))
             }
@@ -171,7 +196,8 @@ class PackageEngineV2(private val context: Context) {
                         sha256 = sha,
                         wheelUrl = p.url,
                         wheelLocalPath = p.localPath,
-                        filename = p.filename
+                        filename = p.filename,
+                        supportLibrary = p.supportLibrary
                     )
                 )
             }
@@ -190,22 +216,210 @@ class PackageEngineV2(private val context: Context) {
             }
             onStep(Step.Finish("Extract", true))
 
+            // 6b. PUSTAKA PENDUKUNG YANG BELUM TERPENUHI
+            //
+            // KENAPA LANGKAH INI ADA (2026-08-13). Peta dependensi statis
+            // (NATIVE_HOST_DEPS di resolve.py) SELALU ketinggalan: meta.yaml
+            // chaquopy-openblas tidak menyebut libgfortran sama sekali, tetapi
+            // perangkat membuktikan ia membutuhkannya. Tiga rilis berturut-turut
+            // (v1.0.8, v1.0.9, v1.0.10) habis untuk menambal satu lapis per
+            // rilis, dan itu hanya menyembuhkan numpy — pemakai lxml, pillow,
+            // atau h5py akan menabrak dinding yang sama.
+            //
+            // Di sini kebenarannya dibaca dari berkas .so itu sendiri
+            // (DT_NEEDED), diterjemahkan ke nama paket lewat nativemap, lalu
+            // diunduh. Diulang sampai tidak ada lagi yang kurang, karena
+            // pustaka yang baru diunduh bisa membawa kebutuhan barunya sendiri
+            // (numpy -> openblas -> libgfortran, tiga tingkat).
+            val apiLevel = android.os.Build.VERSION.SDK_INT
+            val sudahDiambil = planPackages.map { it.canonicalName }.toMutableSet()
+            var putaran = 0
+            while (putaran < MAX_SUPPORT_ROUNDS) {
+                putaran++
+                val dirsSekarang = planPackages.map {
+                    File(tx.stagingSitePackages, "${it.canonicalName}/${it.version}").absolutePath
+                } + activeSitePackagePaths()
+                val kurang = smokeRunner.scanMissingLibs(dirsSekarang, apiLevel)
+                if (kurang.error.isNotBlank()) {
+                    // Pemindaian gagal bukan alasan membatalkan instalasi:
+                    // sebelum fitur ini ada pun instalasi tetap dicoba. Catat
+                    // apa adanya lalu lanjutkan ke smoke test.
+                    onStep(Step.Log("  ⚠️ pindai pustaka gagal: ${kurang.error}"))
+                    break
+                }
+                // Pustaka di luar peta: sebutkan namanya. Diam di sini berarti
+                // mengulang kegagalan v1.0.8 — gagal tanpa satu pun petunjuk.
+                if (kurang.unknown.isNotEmpty()) {
+                    onStep(Step.Log("  ⚠️ pustaka tidak dikenal: ${kurang.unknown.joinToString(", ")}"))
+                    onStep(Step.Log("     (pemasangan dilanjutkan; laporkan nama di atas bila impor gagal)"))
+                    Breadcrumb.log("PKG_LIB_UNKNOWN", kurang.unknown.joinToString(","))
+                }
+                // Pustaka yang dikenal tetapi tidak punya wheel untuk diunduh
+                // (libssl/libcrypto). Mencoba mengunduhnya hanya menghasilkan
+                // 404, jadi yang diberikan adalah penjelasannya.
+                kurang.notes.take(5).forEach { onStep(Step.Log("  ℹ️ $it")) }
+                val perlu = kurang.packages.filter { it !in sudahDiambil }
+                if (perlu.isEmpty()) {
+                    if (putaran == 1) {
+                        onStep(Step.Log("  pustaka native: lengkap (${kurang.scanned} .so dipindai)"))
+                    }
+                    break
+                }
+                onStep(Step.Begin("Pustaka pendukung (putaran $putaran)"))
+                for (namaPaket in perlu) {
+                    val dasar = kurang.sources[namaPaket] ?: "?"
+                    onStep(Step.Log("  butuh $namaPaket [$dasar]"))
+                    val sub = try {
+                        resolver.resolve(namaPaket)
+                    } catch (e: Exception) {
+                        onStep(Step.Log("  ⚠️ $namaPaket: resolve gagal (${e.message})"))
+                        sudahDiambil.add(namaPaket)
+                        continue
+                    }
+                    if (!sub.ok || sub.packages.isEmpty()) {
+                        onStep(Step.Log("  ⚠️ $namaPaket: tidak ada wheel yang cocok untuk perangkat ini"))
+                        sudahDiambil.add(namaPaket)
+                        continue
+                    }
+                    for (sp in sub.packages) {
+                        if (sp.canonicalName in sudahDiambil) continue
+                        val wheelFile = File(Paths.pythonWheels(context), sp.filename)
+                        var sha = sp.sha256
+                        if (sp.localPath != null) {
+                            val local = File(sp.localPath)
+                            if (!wheelFile.exists()) local.copyTo(wheelFile, overwrite = true)
+                            sha = Verifier.sha256(wheelFile)
+                        } else {
+                            val url = sp.url
+                            if (url == null) {
+                                onStep(Step.Log("  ⚠️ ${sp.canonicalName}: URL wheel kosong"))
+                                continue
+                            }
+                            val dl = download(url, wheelFile, sha) { m ->
+                                onStep(Step.Log("  ${sp.canonicalName}: $m"))
+                            }
+                            if (!dl.first) {
+                                return fail("DOWNLOAD", "download",
+                                    "Gagal mengunduh pustaka pendukung ${sp.canonicalName}: ${dl.second}", null)
+                            }
+                            sha = sha ?: dl.second
+                        }
+                        val staging = File(tx.stagingSitePackages, "${sp.canonicalName}/${sp.version}")
+                        val res = Verifier.extractWheel(wheelFile, staging) { }
+                        if (!res.ok) {
+                            return fail("EXTRACT", "extract",
+                                "Gagal mengekstrak ${sp.canonicalName}: ${res.error}", null)
+                        }
+                        planPackages.add(
+                            TransactionManager.PlanPackage(
+                                canonicalName = sp.canonicalName,
+                                version = sp.version,
+                                source = sp.source,
+                                sha256 = sha,
+                                wheelUrl = sp.url,
+                                wheelLocalPath = sp.localPath,
+                                filename = sp.filename,
+                                supportLibrary = sp.supportLibrary
+                            )
+                        )
+                        sudahDiambil.add(sp.canonicalName)
+                        onStep(Step.Log("  + ${sp.canonicalName}==${sp.version} terpasang ke staging"))
+                    }
+                    sudahDiambil.add(namaPaket)
+                }
+                onStep(Step.Finish("Pustaka pendukung (putaran $putaran)", true))
+            }
+            if (putaran >= MAX_SUPPORT_ROUNDS) {
+                // Batas ini melindungi dari peta yang saling menunjuk. Bukan
+                // kegagalan: smoke test di bawah tetap menjadi hakim terakhir.
+                onStep(Step.Log("  ⚠️ batas $MAX_SUPPORT_ROUNDS putaran pustaka tercapai"))
+            }
+
             // 7. Smoke test terhadap staging
+            //
+            // FIX 2026-08-13: seluruh direktori staging transaksi ini dikirim
+            // sebagai "saudara". Sebelumnya tiap paket diuji SENDIRIAN, sehingga
+            // `import requests` tidak menemukan urllib3 yang ada di folder
+            // sebelah — ModuleNotFoundError lalu rollback. Bukan kasus khusus
+            // requests: 52% paket populer punya dependensi runtime wajib.
             onStep(Step.Begin("Smoke Test"))
+            val allStagingDirs = planPackages.map {
+                File(tx.stagingSitePackages, "${it.canonicalName}/${it.version}").absolutePath
+            } + activeSitePackagePaths()
             for (p in planPackages) {
+                // Pustaka pendukung (chaquopy-openblas, chaquopy-libjpeg, ...)
+                // TIDAK punya modul Python untuk diimpor. Menjalankan uji impor
+                // terhadapnya akan selalu gagal dan membatalkan seluruh
+                // transaksi — termasuk paket utama yang sebenarnya sudah
+                // berhasil. Cukup pastikan file .so-nya benar-benar ada.
+                if (p.supportLibrary) {
+                    val dir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
+                    val adaSo = dir.walkTopDown().any { it.isFile && it.name.contains(".so") }
+                    if (!adaSo) {
+                        return fail("SMOKE_TEST", "smoke_test",
+                            "Pustaka pendukung ${p.canonicalName} tidak memuat file .so apa pun.",
+                            "staging=${dir.absolutePath}")
+                    }
+                    onStep(Step.Log("  ${p.canonicalName}: pustaka pendukung (.so) — uji impor dilewati"))
+                    continue
+                }
                 val details = repository.findByCanonicalName(p.canonicalName)
-                val importName = details?.importName ?: p.canonicalName
+                val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}").absolutePath
+
+                // NAMA MODUL DIBACA DARI WHEEL, BUKAN DITEBAK (v1.0.13).
+                //
+                // `fonttools` memasang modul bernama `fontTools` (huruf T
+                // besar). Katalog bawaan tidak memuatnya, sehingga v1.0.12
+                // menguji `import fonttools`, gagal, lalu me-rollback seluruh
+                // instalasi matplotlib — padahal berkasnya sudah benar.
+                //
+                // Urutan sumber: metadata wheel -> katalog -> nama paket.
+                // Metadata didahulukan karena ia satu-satunya yang tidak bisa
+                // basi: ia ikut di dalam paket yang baru saja diunduh.
+                val terbaca = smokeRunner.moduleNames(staging, p.canonicalName)
+                val importName = terbaca.names.firstOrNull()
+                    ?: details?.importName
+                    ?: p.canonicalName
+                if (terbaca.names.isNotEmpty() && terbaca.source.isNotBlank()) {
+                    onStep(Step.Log("  ${p.canonicalName}: modul '$importName' (dari ${terbaca.source})"))
+                } else if (terbaca.error.isNotBlank()) {
+                    // Jujur soal turunnya kualitas tebakan, bukan diam.
+                    onStep(Step.Log("  ⚠️ ${p.canonicalName}: metadata modul tak terbaca (${terbaca.error}); pakai '$importName'"))
+                }
+
                 val manifestTests = repository.loadSmokeTests()[p.canonicalName]
                 val tests = buildSmokeTests(p.canonicalName, importName, details?.type, manifestTests)
-                val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}").absolutePath
-                val outcome = smokeRunner.run(importName, staging, tests)
+                val outcome = smokeRunner.run(importName, staging, tests, allStagingDirs)
                 if (!outcome.ok) {
                     TelemetryStore.increment("smoke_test_failure")
                     if (outcome.nativeLibs.isNotEmpty()) TelemetryStore.increment("native_load_failure")
                     val failMsg = outcome.results.firstOrNull { !it.optBoolean("ok") }
                         ?.optString("error") ?: "smoke test gagal"
+                    // Sertakan SELURUH hasil + daftar .so yang ditemukan sebagai
+                    // pesan teknis. Sebelumnya argumen ini diisi `null`, jadi satu-
+                    // satunya jejak adalah humanMessage yang sudah dipangkas —
+                    // penyebab asli ImportError (baris "Original error was: ...")
+                    // tidak pernah sampai ke mana pun.
+                    val teknis = buildString {
+                        append("smoke gagal untuk ${p.canonicalName}==${p.version}\n")
+                        append("native .so terdeteksi: ${outcome.nativeLibs.size}\n")
+                        // NATIVE-LOADER: tanpa baris ini tidak mungkin dibedakan
+                        // antara "pustaka pendukung tidak pernah diunduh" dan
+                        // "sudah ada tapi gagal dimuat" — dua sebab yang
+                        // perbaikannya sama sekali berbeda.
+                        append("preload: ${outcome.preloadLog.size} catatan\n")
+                        outcome.preloadLog.take(15).forEach { append("  ").append(it).append('\n') }
+                        outcome.nativeLibs.take(20).forEach { append("  so: ").append(it).append('\n') }
+                        append("hasil test:\n")
+                        for (i in 0 until outcome.results.size) {
+                            val r = outcome.results[i]
+                            append("  [").append(r.optString("type", "?")).append("] ")
+                                .append(if (r.optBoolean("ok")) "OK" else "GAGAL").append(' ')
+                                .append(r.optString("error", "")).append('\n')
+                        }
+                    }
                     return fail("SMOKE_TEST", "smoke_test",
-                        "Import/smoke test ${p.canonicalName} gagal: $failMsg", null)
+                        "Import/smoke test ${p.canonicalName} gagal: $failMsg", teknis)
                 }
                 onStep(Step.Log("  ${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so)"))
             }
@@ -232,6 +446,33 @@ class PackageEngineV2(private val context: Context) {
         } catch (e: Exception) {
             return fail("RUNTIME", "engine", "Kegagalan internal engine: ${e.message}", e.toString())
         }
+    }
+
+    /**
+     * Direktori paket yang SUDAH aktif (python-env/state/installed.json).
+     *
+     * FIX 2026-08-13: tanpa ini instalasi bertahap tetap gagal. Contoh: user
+     * sudah memasang `urllib3`, lalu memasang `requests`. Plan hanya berisi
+     * requests (urllib3 dianggap ada), tetapi smoke test tidak melihat urllib3
+     * yang sudah aktif dan kembali melempar ModuleNotFoundError.
+     *
+     * Sengaja "best-effort": kegagalan membaca state tidak boleh menggagalkan
+     * instalasi — paling buruk smoke test kembali seketat sebelumnya.
+     */
+    private fun activeSitePackagePaths(): List<String> = try {
+        val stateFile = File(Paths.pythonState(context), "installed.json")
+        if (!stateFile.exists()) {
+            emptyList()
+        } else {
+            val root = Paths.pythonEnvDir(context)
+            val obj = org.json.JSONObject(stateFile.readText())
+            obj.keys().asSequence().mapNotNull { key ->
+                val rel = obj.optJSONObject(key)?.optString("path")?.takeIf { it.isNotBlank() }
+                rel?.let { File(root, it) }?.takeIf { it.isDirectory }?.absolutePath
+            }.toList()
+        }
+    } catch (e: Exception) {
+        emptyList()
     }
 
     private fun buildSmokeTests(
@@ -316,6 +557,10 @@ class PackageEngineV2(private val context: Context) {
         onLog(Step.Begin("Resolve"))
         val plan = resolver.resolve(requirementText)
         onLog(Step.Finish("Resolve", true, "${plan.packages.size} package dalam plan"))
+        plan.notes.forEach { onLog(Step.Log("  · $it")) }
+        if (plan.notes.isNotEmpty()) {
+            Breadcrumb.log("PKG_RESOLVE_NOTES", plan.notes.joinToString(" | "))
+        }
         return plan
     }
 
@@ -350,7 +595,22 @@ class PackageEngineV2(private val context: Context) {
         return result
     }
 
-    fun listInstalled(): Map<String, String> = repository.installedSnapshot().mapValues { it.value.version }
+    /**
+     * Paket yang tampil di daftar "Terpasang".
+     *
+     * Pustaka pendukung `chaquopy-*` sengaja DISEMBUNYIKAN: user tidak pernah
+     * memintanya, tidak bisa memakainya langsung, dan menghapusnya justru
+     * merusak paket lain yang masih membutuhkannya. Menampilkannya hanya
+     * menimbulkan pertanyaan "ini apa dan kenapa ada".
+     */
+    fun listInstalled(): Map<String, String> =
+        repository.installedSnapshot()
+            .filterKeys { !it.startsWith("chaquopy-") }
+            .mapValues { it.value.version }
+
+    /** Termasuk pustaka pendukung — untuk Diagnostics dan perhitungan ukuran. */
+    fun listInstalledAll(): Map<String, String> =
+        repository.installedSnapshot().mapValues { it.value.version }
 
     /** Support request (SPEC Phase 3) — disimpan lokal, tanpa backend cloud. */
     fun requestSupport(canonicalName: String, note: String): Pair<Boolean, String> {

@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -28,6 +29,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -106,7 +110,13 @@ fun PipScreen(
     val consoleScroll = rememberScrollState()
 
     fun refreshInstalled() {
-        installedMap = repository.installedSnapshot().mapValues { it.value.version }
+        // Saring pustaka pendukung `chaquopy-*`. User tidak pernah memintanya,
+        // tidak bisa memakainya langsung, dan menghapusnya justru merusak paket
+        // lain yang masih membutuhkannya. Daftar ini milik user, bukan cermin
+        // isi direktori.
+        installedMap = repository.installedSnapshot()
+            .filterKeys { !it.startsWith("chaquopy-") }
+            .mapValues { it.value.version }
     }
 
     fun appendLog(text: String) {
@@ -148,6 +158,10 @@ fun PipScreen(
         }
         isInstalling = true
         consoleLines = emptyList()
+        // BUG J: jejak Install Modules sebelumnya TIDAK tercatat sama sekali —
+        // breadcrumb hanya meliputi jalur Run (7 dari 49 berkas). Padahal justru
+        // installer yang sedang bermasalah, dan user tidak punya logcat.
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_BEGIN", trimmed)
         appendLog("\n> install $trimmed\n")
         scope.launch(Dispatchers.Default) {
             val result = try {
@@ -164,14 +178,32 @@ fun PipScreen(
             withContext(Dispatchers.Main) {
                 isInstalling = false
                 if (result.ok) {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
+                    )
                     appendLog("\n✅ Install selesai: ${result.installed.joinToString(", ")}\n")
                     refreshInstalled()
                 } else {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_INSTALL_FAIL", "$trimmed [${result.code}/${result.stage}] ${result.humanMessage}"
+                    )
+                    // Pesan teknis dicatat TERPISAH. Menggabungkannya ke baris di
+                    // atas membuat satu baris breadcrumb raksasa yang sulit dibaca;
+                    // sebagai baris sendiri ia tetap utuh dan tetap mudah di-grep.
+                    result.technicalMessage?.takeIf { it.isNotBlank() }?.let {
+                        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_DETAIL", it)
+                    }
                     appendLog(
                         "\n❌ [${result.code}] ${result.humanMessage}" +
                             (if (result.rollbackPerformed) "\n   (rollback dilakukan — environment lama utuh)" else "") +
                             "\n"
                     )
+                    // Tampilkan juga di konsol: user melapor dari HP tanpa PC, jadi
+                    // penyebab teknis harus terlihat langsung dan bisa disalin —
+                    // bukan hanya tersimpan di file yang harus dicari dulu.
+                    result.technicalMessage?.takeIf { it.isNotBlank() }?.let {
+                        appendLog("\n--- detail teknis (salin ini saat melapor) ---\n$it\n")
+                    }
                 }
             }
         }
@@ -186,6 +218,7 @@ fun PipScreen(
         }
         isInstalling = true
         consoleLines = emptyList()
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_BEGIN", trimmed)
         appendLog("\n> analyze $trimmed\n")
         scope.launch(Dispatchers.Default) {
             val plan = try {
@@ -193,6 +226,16 @@ fun PipScreen(
                     scope.launch { handleEngineStep(step) }
                 }
             } catch (e: Exception) {
+                // KEGAGALAN INI PERNAH SENYAP TOTAL (v1.0.13, log perangkat).
+                // Analisis matplotlib melempar timeout PyCall, dan jalur catch
+                // ini hanya menulis ke layar — Diagnostics tidak mencatat apa
+                // pun, sehingga dari HP mustahil dibedakan antara "aplikasi
+                // hang", "jaringan putus", dan "batas waktu terlampaui".
+                // Pemakai tidak punya logcat; diam di sini = buta total.
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "PKG_ANALYZE_ERROR",
+                    "$trimmed [${e.javaClass.simpleName}] ${e.message ?: "tanpa pesan"}"
+                )
                 withContext(Dispatchers.Main) {
                     isInstalling = false
                     appendLog("\n❌ ${e.message}\n")
@@ -203,7 +246,17 @@ fun PipScreen(
             withContext(Dispatchers.Main) {
                 if (!plan.ok) {
                     isInstalling = false
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_ANALYZE_FAIL", "$trimmed [${plan.errorCode}] ${plan.humanError}"
+                    )
                     appendLog("\n❌ [${plan.errorCode}] ${plan.humanError}\n")
+                    return@withContext
+                }
+                // BUG C: modul stdlib bukan kegagalan.
+                if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
+                    isInstalling = false
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_STDLIB", trimmed)
+                    appendLog("\nℹ️ ${plan.stdlib.joinToString(" ") { it.reason }}\n")
                     return@withContext
                 }
                 if (plan.conflicts.isNotEmpty()) {
@@ -767,9 +820,44 @@ private fun ManualTab(
                 color = Color.Gray
             )
         }
-        Row(modifier = Modifier.padding(top = 4.dp)) {
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             TextButton(onClick = onRequirementsTxt, contentPadding = PaddingValues(0.dp)) {
                 Text("requirements.txt?", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            // PASTE (build #3, permintaan user). Long-press pada OutlinedTextField
+            // Compose memang menawarkan Paste, tetapi hanya setelah field kosong
+            // ditekan lama dengan tepat — di layar sempit itu sering meleset.
+            // Nama paket biasanya disalin dari chat atau web, jadi satu tap
+            // eksplisit jauh lebih pasti daripada menebak gestur.
+            val clipboard = LocalClipboardManager.current
+            val ctx = LocalContext.current
+            TextButton(
+                onClick = {
+                    val teks = clipboard.getText()?.text.orEmpty().trim()
+                    if (teks.isEmpty()) {
+                        Toast.makeText(ctx, "Clipboard kosong", Toast.LENGTH_SHORT).show()
+                    } else {
+                        // Ambil baris pertama saja: menempelkan seluruh isi
+                        // requirements.txt ke field satu-baris hanya membuat
+                        // parser gagal dengan pesan yang membingungkan.
+                        val baris = teks.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
+                        onPackageNameChange(baris)
+                        if (teks.lines().count { it.isNotBlank() } > 1) {
+                            Toast.makeText(
+                                ctx,
+                                "Beberapa baris terdeteksi — hanya baris pertama dipakai",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp)
+            ) {
+                Text("Paste", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
             }
         }
 
@@ -788,6 +876,8 @@ private fun ManualTab(
                 .padding(12.dp)
                 .verticalScroll(consoleScroll)
         ) {
+            // BUG I: console harus bisa diseleksi & disalin (user melapor tanpa logcat).
+            SelectionContainer {
             Column {
                 if (consoleLines.isEmpty()) {
                     Text(
@@ -813,6 +903,7 @@ private fun ManualTab(
                     )
                 }
             }
+            } // SelectionContainer (BUG I)
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
@@ -829,6 +920,7 @@ private fun ManualTab(
                 .padding(12.dp)
                 .verticalScroll(logScroll)
         ) {
+            SelectionContainer {
             Text(
                 text = logText,
                 color = Color(0xFF39FF14),
@@ -836,6 +928,7 @@ private fun ManualTab(
                 fontSize = 12.sp,
                 lineHeight = 16.sp
             )
+            } // SelectionContainer (BUG I)
         }
     }
 }

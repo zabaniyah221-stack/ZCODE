@@ -13,6 +13,7 @@ Hasil: plan = {packages: [{name, canonical_name, version, source, filename, url,
 sha256, size, requires_dist, extras, priority, compat_reason, reason?}],
 conflicts: [...], unavailable: [...]}
 """
+import os
 import re
 import urllib.request
 
@@ -61,7 +62,32 @@ def _http_get(url: str) -> bytes:
         )
 
 
+# Singgahan metadata PyPI selama satu proses resolusi.
+#
+# KENAPA ADA (2026-08-13, v1.0.14). `fetch_pypi_metadata` dipanggil DUA KALI
+# untuk setiap paket dengan URL yang persis sama: sekali di `_collect()` untuk
+# mencari kandidat wheel, sekali lagi di `_choose()` untuk membaca metadata.
+# Balasan endpoint itu memuat SELURUH riwayat rilis — diukur langsung ke PyPI:
+#
+#     /pypi/matplotlib/json -> 2.390 KB (142 rilis)
+#     /pypi/pandas/json     -> 2.081 KB (117 rilis)
+#
+# Untuk matplotlib (11 paket dalam rencana) itu berarti 33 panggilan dan
+# sekitar 32 MB, yang di jaringan 4G memakan ~182 detik dan menabrak batas
+# waktu 90 detik di PyCall — persis kegagalan "senyap" yang dilaporkan dari
+# perangkat. Sepertiga dari trafik itu murni terbuang karena duplikat.
+_METADATA_CACHE: dict[str, dict] = {}
+
+
+def clear_metadata_cache() -> None:
+    """Kosongkan singgahan — dipanggil di awal setiap resolusi baru."""
+    _METADATA_CACHE.clear()
+
+
 def fetch_pypi_metadata(name: str) -> dict:
+    kunci = (name or "").strip().lower()
+    if kunci in _METADATA_CACHE:
+        return _METADATA_CACHE[kunci]
     try:
         import json
         data = json.loads(_http_get(PYPI_JSON_URL.format(name=name)).decode("utf-8"))
@@ -73,7 +99,89 @@ def fetch_pypi_metadata(name: str) -> dict:
             "Metadata package tidak bisa dibaca dari PyPI.",
             "%s: %s" % (name, e),
         )
+    _METADATA_CACHE[kunci] = data
     return data
+
+
+# ---------------------------------------------------------------------------
+# Dependensi pustaka NATIVE (build #3 lanjutan, 2026-08-13)
+#
+# AKAR MASALAH: `import numpy` gagal dengan
+#     dlopen failed: library "libopenblas.so" not found
+# padahal wheel numpy sudah terpasang benar.
+#
+# Chaquopy memisahkan pustaka C bersama (OpenBLAS, libjpeg, freetype, ...)
+# menjadi paket `chaquopy-*` tersendiri supaya tidak diduplikasi di setiap
+# wheel. Pemisahan itu HANYA tercatat di `requirements.host` pada meta.yaml
+# resep Chaquopy — PyPI tidak tahu apa-apa soal ini, dan justru melaporkan
+# numpy TANPA dependensi karena wheel PyPI biasa sudah memuat OpenBLAS di
+# dalamnya. Resolver kita membaca PyPI, jadi pustaka pendukung tidak pernah
+# ikut terunduh.
+#
+# Peta di bawah disalin dari `requirements.host` masing-masing resep:
+#   https://github.com/chaquo/chaquopy/tree/master/server/pypi/packages/<nama>/meta.yaml
+# (diperiksa 2026-08-13). Hanya entri yang benar-benar dibaca dari sumbernya
+# yang dicantumkan — tidak ada tebakan berdasarkan pola nama, karena
+# `cryptography` membuktikan polanya tidak seragam (butuh `openssl`, tanpa
+# awalan `chaquopy-`).
+#
+# Versi sengaja TIDAK dipatok. Indeks Chaquopy hanya menyimpan satu versi per
+# pustaka pendukung, dan mematoknya di sini berarti peta ini basi setiap kali
+# hulu memperbarui.
+#
+# TAMBAHAN DARI PERANGKAT (2026-08-13). Sebagian kebutuhan TIDAK tercatat di
+# meta.yaml mana pun dan hanya terlihat saat berjalan. Log user v1.0.9:
+#     preload gagal: libopenblas.so
+#       (dlopen failed: library "libgfortran.so.3" not found)
+# meta.yaml chaquopy-openblas TIDAK punya requirements.host sama sekali, jadi
+# hubungan ini mustahil diketahui dari dokumen. Sumbernya = bukti runtime.
+# Entri semacam itu ditandai "[dari perangkat]" supaya jelas dasarnya berbeda.
+NATIVE_HOST_DEPS: dict[str, list[str]] = {
+    # [dari perangkat] log v1.0.10: _multiarray_umath.so menautkan
+    # libc++_shared.so. Peta ini hanya jaring PERTAMA — jaring sesungguhnya
+    # adalah pemindaian DT_NEEDED di nativemap.py, yang menemukan kebutuhan
+    # ini tanpa perlu ditulis lebih dulu. Entri di sini menghemat satu putaran
+    # unduh untuk paket yang sudah kita ketahui polanya.
+    "numpy": ["chaquopy-openblas", "chaquopy-libcxx"],
+    # [dari perangkat] libopenblas.so menautkan libgfortran.so.3
+    "chaquopy-openblas": ["chaquopy-libgfortran"],
+    # [dari meta.yaml] libxslt menautkan libxml2
+    "chaquopy-libxslt": ["chaquopy-libxml2"],
+    "pandas": ["numpy"],
+    "matplotlib": ["chaquopy-freetype", "chaquopy-libpng", "numpy"],
+    "pillow": ["chaquopy-libjpeg", "chaquopy-freetype"],
+    "lxml": ["chaquopy-libxml2", "chaquopy-libxslt"],
+    "pyyaml": ["chaquopy-libyaml"],
+    "opencv-python": [
+        "chaquopy-libgfortran", "chaquopy-libpng", "chaquopy-libjpeg",
+        "chaquopy-openblas", "numpy",
+    ],
+    "scipy": ["chaquopy-openblas", "chaquopy-libgfortran", "numpy"],
+    "h5py": ["chaquopy-hdf5", "numpy"],
+    "pyzmq": ["chaquopy-libzmq"],
+    "shapely": ["chaquopy-geos"],
+    "argon2-cffi-bindings": ["cffi"],
+}
+
+
+def native_host_deps(canonical_name: str) -> list[str]:
+    """Pustaka pendukung yang WAJIB ikut dipasang bersama paket ini.
+
+    Mengembalikan daftar kosong bila paket tidak butuh apa pun — itu kasus
+    mayoritas (semua paket pure-Python).
+    """
+    return list(NATIVE_HOST_DEPS.get((canonical_name or "").strip().lower(), []))
+
+
+def is_support_library(canonical_name: str) -> bool:
+    """True untuk pustaka pendukung yang BUKAN modul Python.
+
+    Paket `chaquopy-*` hanya membungkus satu file .so; tidak ada apa pun yang
+    bisa di-`import`. Menjalankan uji impor terhadapnya akan selalu gagal dan
+    membatalkan seluruh transaksi — termasuk paket utama yang sebenarnya
+    sudah berhasil.
+    """
+    return (canonical_name or "").strip().lower().startswith("chaquopy-")
 
 
 def fetch_chaquopy_wheels(name: str, index_url: str = CHAQUOPY_INDEX_URL) -> list[dict]:
@@ -111,16 +219,63 @@ def _contains(spec_str: str, version: str) -> bool:
         return False
 
 
-def _requires_python_ok(requires_python: str | None, version: str) -> bool:
+def is_stdlib_module(name: str) -> bool:
+    """
+    True bila `name` adalah modul bawaan Python (BUG C).
+
+    Memakai sys.stdlib_module_names (CPython 3.10+) supaya jawabannya mengikuti
+    runtime yang benar-benar berjalan, bukan daftar statis yang bisa basi.
+    Nama dinormalkan: 'Math' dan 'math' sama; tanda '-' diubah ke '_' karena
+    pengguna terbiasa mengetik gaya nama paket.
+    """
+    if not name:
+        return False
+    import sys
+    candidate = name.strip().lower().replace("-", "_")
+    names = getattr(sys, "stdlib_module_names", None)
+    if names:
+        return candidate in names
+    # Fallback untuk Python < 3.10 (tidak terjadi di Chaquopy 3.11).
+    return candidate in set(sys.builtin_module_names)
+
+
+def runtime_python_version() -> str:
+    """Versi Python runtime ('3.11' di Chaquopy) — pembanding untuk Requires-Python."""
+    import sys
+    return "%d.%d" % sys.version_info[:2]
+
+
+def _requires_python_ok(requires_python: str | None, python_version: str | None = None) -> bool:
+    """
+    Apakah RUNTIME PYTHON memenuhi `Requires-Python` sebuah rilis?
+
+    BUG A — FIX 2026-08-13. Versi lama menerima `version` = versi PAKET lalu
+    membandingkannya dengan spesifikasi versi PYTHON:
+
+        SpecifierSet(">=3.7").contains(Version("0.4.6"))  -> False
+
+    Pertanyaan yang diajukan menjadi "apakah colorama 0.4.6 memenuhi >=3.7?",
+    padahal yang benar "apakah Python 3.11 memenuhi >=3.7?". Akibatnya SEMUA
+    rilis modern dibuang dan hanya rilis kuno (era sebelum Requires-Python ada,
+    sehingga field-nya kosong dan lolos otomatis) yang tersisa:
+
+        colorama 13 kandidat -> 7      urllib3 82 -> 23
+        pygments 50 -> 16              mdurl     3 -> 0   (PACKAGE_NOT_AVAILABLE)
+
+    Itulah sebab ZCODE memilih colorama 0.3.5 (2015) dan melaporkan mdurl
+    "tidak ada wheel kompatibel". Diukur dari metadata PyPI nyata, 2026-08-13.
+    """
     if not requires_python:
         return True
+    probe = python_version or runtime_python_version()
     try:
-        return SpecifierSet(requires_python).contains(Version(version), prereleases=True)
+        return SpecifierSet(requires_python).contains(Version(probe), prereleases=True)
     except (InvalidSpecifier, InvalidVersion):
-        return False
+        # Spesifikasi rusak di metadata upstream: jangan buang kandidat karenanya.
+        return True
 
 
-def _pypi_candidates(data: dict, spec: dict) -> list[dict]:
+def _pypi_candidates(data: dict, spec: dict, python_version: str | None = None) -> list[dict]:
     """Kandidat wheel dari data PyPI JSON, sudah difilter constraint + Requires-Python."""
     out = []
     releases = data.get("releases", {})
@@ -136,7 +291,8 @@ def _pypi_candidates(data: dict, spec: dict) -> list[dict]:
             if f.get("yanked"):
                 continue
             rp = f.get("requires_python") or None
-            if not _requires_python_ok(rp, version):
+            # BUG A: pembandingnya versi PYTHON runtime, bukan versi paket.
+            if not _requires_python_ok(rp, python_version):
                 continue
             digest = (f.get("digests") or {}).get("sha256")
             out.append({
@@ -215,9 +371,40 @@ def resolve(
     """
     spec = parse_requirement(requirement_text)  # RequirementError → propagasi
     root_name = spec["canonical_name"]
+
+    # BUG C — FIX 2026-08-13. Modul stdlib TIDAK ADA di PyPI, jadi mencarinya
+    # ke sana selalu berakhir "Tidak ada wheel kompatibel untuk runtime ZCODE
+    # ini." — pesan yang MENYESATKAN, karena `math` justru sudah tersedia dan
+    # memang tidak perlu dipasang. ZCODE bahkan sudah punya daftar 305 nama di
+    # assets/package_catalog/stdlib.json, tetapi resolver tak pernah membacanya
+    # (kata "stdlib" muncul 0 kali di berkas ini sebelum perbaikan).
+    # Sumber kebenaran dipakai sys.stdlib_module_names (CPython 3.10+) karena
+    # ia mencerminkan runtime yang BENAR-BENAR berjalan, bukan daftar statis.
+    if is_stdlib_module(root_name):
+        return {
+            "packages": [],
+            "conflicts": [],
+            "unavailable": [],
+            "stdlib": [{
+                "name": spec["name"],
+                "canonical_name": root_name,
+                "reason": (
+                    "'%s' adalah modul bawaan Python — sudah tersedia di ZCODE "
+                    "dan tidak perlu dipasang. Langsung 'import %s' di script."
+                ) % (spec["name"], spec["name"]),
+            }],
+        }
+
     plan: dict[str, dict] = {}
     conflicts: list[dict] = []
     unavailable: list[dict] = []
+    # Jejak keputusan resolver yang tidak terlihat dari daftar paket akhir.
+    # Dipakai untuk mendiagnosis dari perangkat (user tidak punya logcat).
+    notes: list[str] = []
+    # Singgahan hanya berlaku untuk SATU resolusi. Menyimpannya lebih lama
+    # berarti pemakai yang memasang paket lagi setengah jam kemudian bisa
+    # mendapat daftar versi yang sudah basi.
+    clear_metadata_cache()
     seen: set[str] = set()
     env = dict(marker_env) if marker_env else {}
     if "python_version" not in env:
@@ -258,6 +445,28 @@ def resolve(
             return
 
         plan[cname] = chosen
+
+        # Pustaka pendukung native (chaquopy-openblas, chaquopy-libjpeg, ...).
+        # Diantrikan LEBIH DULU daripada dependensi PyPI: tanpa file .so ini,
+        # paket induknya terpasang tetapi gagal diimpor — kegagalan yang jauh
+        # lebih membingungkan daripada gagal mengunduh.
+        host_deps = native_host_deps(cname)
+        if host_deps:
+            # Jejak eksplisit: v1.0.8 gagal TANPA menyebut chaquopy-openblas
+            # sama sekali, sehingga tidak mungkin dibedakan apakah peta ini
+            # tidak terbaca, indeks tidak terjangkau, atau wheel-nya ditolak.
+            # Catatan ini menjawabnya langsung dari perangkat.
+            notes.append("host_deps %s -> %s" % (cname, ",".join(host_deps)))
+        for host_dep in native_host_deps(cname):
+            before = set(plan.keys())
+            queue(host_dep, "", set(), cname, depth + 1)
+            if host_dep not in plan and canonicalize_name(host_dep) not in plan:
+                notes.append(
+                    "host_dep GAGAL diambil: %s (indeks/tag menolak)" % host_dep
+                )
+            elif set(plan.keys()) != before:
+                notes.append("host_dep OK: %s" % host_dep)
+
         # dependensi
         for dep_req in chosen.get("requires_dist", []) or []:
             try:
@@ -296,12 +505,51 @@ def resolve(
                 "candidates=%d" % len(cands),
             )
         best["name"] = cname
+        # Penanda untuk Kotlin: paket ini pustaka pendukung, bukan modul Python.
+        # Uji impor terhadapnya akan selalu gagal (tidak ada yang bisa diimpor).
+        best["support_library"] = is_support_library(cname)
         try:
             best["version"] = parse_wheel(best["filename"])["version"]
         except WheelInfoError:
             best["version"] = ""
-        # informasi dependensi dari metadata PyPI (bila tersedia)
+        # DEPENDENSI — SUMBER BERLAPIS (v1.0.14).
+        #
+        # Lapis 1: METADATA di dalam wheel yang sudah ada di singgahan lokal.
+        # Ini sumber paling jujur DAN paling murah: wheel-nya memang harus
+        # diunduh untuk dipasang, jadi membacanya nol panggilan jaringan.
+        # Terverifikasi terhadap 79 wheel PyPI asli — cocok persis dengan
+        # daftar yang benar-benar dipasang pip, nol selisih.
+        #
+        # Lapis 2 (di bawah): metadata PyPI, dipakai bila wheel belum ada di
+        # singgahan. Wheel indeks Chaquopy belum bisa diuji dari lingkungan
+        # pengembangan (TLS ke chaquo.com ditutup), jadi lapis ini WAJIB tetap
+        # ada — bukan sekadar formalitas.
         best.setdefault("requires_dist", [])
+        best.setdefault("deps_source", "")
+        try:
+            from .wheeldeps import deps_from_wheel
+            berkas = best.get("local_path") or ""
+            if not berkas and wheels_dir and best.get("filename"):
+                calon = os.path.join(wheels_dir, best["filename"])
+                if os.path.isfile(calon):
+                    berkas = calon
+            if berkas:
+                dw = deps_from_wheel(berkas, env)
+                if not dw.get("error"):
+                    best["requires_dist"] = [
+                        (r["name"] + " " + r["specifier"]).strip()
+                        for r in dw.get("requires", [])
+                    ]
+                    best["deps_source"] = "wheel"
+                    notes.append(
+                        "deps %s dari METADATA wheel: %s" % (
+                            cname,
+                            ",".join(r["name"] for r in dw.get("requires", [])) or "(tidak ada)",
+                        )
+                    )
+        except Exception:  # noqa: BLE001 — pembaca lokal tidak boleh fatal
+            pass
+
         try:
             data = fetch_pypi_metadata(cname)
             releases = data.get("releases", {})
@@ -310,8 +558,14 @@ def resolve(
                 rp = files_for_version[0].get("requires_python")
                 best["requires_python"] = rp
             info = data.get("info", {})
-            if "requires_dist" in info and info["requires_dist"]:
+            # HANYA dipakai bila lapis 1 (METADATA wheel) tidak memberi apa pun.
+            # Kalau ditimpa, jawaban paling jujur justru dibuang: METADATA
+            # wheel terikat pada versi yang BENAR-BENAR akan dipasang,
+            # sedangkan info PyPI selalu milik rilis terbaru.
+            if (not best.get("requires_dist")
+                    and "requires_dist" in info and info["requires_dist"]):
                 best["requires_dist"] = info["requires_dist"]
+                best["deps_source"] = "pypi"
             best["summary"] = (info.get("summary") or "")[:200]
             best["license"] = (info.get("license") or "")[:200]
             best["project_url"] = info.get("project_url")
@@ -334,7 +588,50 @@ def resolve(
         "packages": list(plan.values()),
         "conflicts": conflicts,
         "unavailable": unavailable,
+        "notes": notes,
     }
+
+
+def device_supported_tags(abi: str | None = None, device_api: int | None = None):
+    """
+    Tag runtime untuk pencocokan wheel — Android-aware (build #3).
+
+    sys_tags() TIDAK dipakai di Android karena menghasilkan tag gaya Linux
+    (`linux_armv7l`) yang tidak pernah beririsan dengan tag wheel Chaquopy
+    (`android_21_armeabi_v7a`). Lihat wheelinfo.android_supported_tags().
+
+    Bila ABI/API tidak diketahui (mis. dijalankan di desktop untuk
+    pengembangan), kembalikan None agar pemanggil jatuh ke sys_tags() —
+    perilaku lama yang benar di luar Android.
+    """
+    from .wheelinfo import android_supported_tags
+
+    resolved_abi = abi
+    if not resolved_abi:
+        try:
+            from .probe import probe_runtime
+            abis = probe_runtime().get("abis") or []
+            resolved_abi = abis[0] if abis else None
+        except Exception:
+            resolved_abi = None
+
+    resolved_api = device_api
+    if not resolved_api:
+        try:
+            import sysconfig
+            plat = sysconfig.get_platform()  # 'android-21-arm64-v8a'
+            if plat.startswith("android"):
+                resolved_api = int(plat.split("-")[1])
+        except Exception:
+            resolved_api = None
+
+    import sys
+    is_android = "android" in sys.platform or (resolved_api is not None)
+    if not resolved_abi or not is_android:
+        return None  # desktop/dev → sys_tags() tetap benar
+
+    py_tag = "cp%d%d" % sys.version_info[:2]
+    return android_supported_tags(resolved_abi, resolved_api or 21, py_tag)
 
 
 def resolve_json(
@@ -342,6 +639,8 @@ def resolve_json(
     wheels_dir: str | None = None,
     marker_env_json: str | None = None,
     tested_versions_json: str | None = None,
+    abi: str | None = None,
+    device_api: int | None = None,
 ) -> str:
     """Wrapper JSON-string untuk Kotlin. Error → dict {ok:false, code, stage, ...}."""
     import json
@@ -350,7 +649,8 @@ def resolve_json(
         tested = json.loads(tested_versions_json) if tested_versions_json else None
         plan = resolve(
             requirement_text,
-            supported_tags=None,  # sys_tags() runtime di device
+            # BUILD #3: tag Android dibangun sendiri; None hanya di desktop/dev.
+            supported_tags=device_supported_tags(abi, device_api),
             wheels_dir=wheels_dir,
             marker_env=marker_env,
             tested_versions=tested,

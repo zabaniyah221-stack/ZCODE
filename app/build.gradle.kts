@@ -93,6 +93,16 @@ chaquopy {
             install("pip==23.3.1")     // jangan latest 24+ (bug AssetPath.parent)
             install("setuptools==68.2.2")
             install("wheel==0.41.2")
+            // WAJIB — jangan dihapus (fix FATAL 2026-08-12).
+            // `packaging` TIDAK ikut dengan pip/setuptools/wheel: ketiganya hanya
+            // memuat salinan ter-vendor (pip._vendor.packaging,
+            // pkg_resources._vendor.packaging, wheel.vendored.packaging) yang TIDAK
+            // bisa di-`import packaging`. Tanpa baris ini, tiga modul runtime kita
+            // (package_runtime/requirement.py, resolve.py, wheelinfo.py) gagal import
+            // dan SELURUH fitur Install Modules mati dengan pesan
+            // "ModuleNotFoundError: No module named 'packaging'".
+            // Dijaga oleh test_zcode_kotlin_guards.py::TestChaquopyPipBundle.
+            install("packaging==24.1")
         }
     }
 }

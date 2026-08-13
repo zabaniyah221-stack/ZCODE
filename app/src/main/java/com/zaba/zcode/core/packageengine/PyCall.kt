@@ -2,7 +2,6 @@ package com.zaba.zcode.core.packageengine
 
 import android.content.Context
 import com.chaquo.python.Python
-import com.chaquo.python.android.AndroidPlatform
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -33,8 +32,16 @@ object PyCall {
         val latch = CountDownLatch(1)
         Thread {
             try {
-                if (!Python.isStarted()) {
-                    Python.start(AndroidPlatform(appContext))
+                if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(appContext)) {
+                    // CATATAN: JANGAN memakai `error(...)` di sini — di scope ini ada
+                    // variabel lokal bernama `error` (AtomicReference), sehingga
+                    // pemanggilan `error(...)` berisiko resolusi ambigu di compiler.
+                    // Set nilai langsung; blok finally tetap menjalankan countDown().
+                    error.set(
+                        com.zaba.zcode.core.execution.PythonRuntime.failureMessage()
+                            ?: "Python runtime tidak tersedia (butuh Chaquopy)"
+                    )
+                    return@Thread
                 }
                 val py = Python.getInstance().getModule(module)
                 val obj = py.callAttr(fn, *args)

@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,7 +100,10 @@ fun SamplesScreen(
                     SampleListRow(
                         title = category.title,
                         description = category.description,
-                        onClick = { activeCategory = category }
+                        onClick = {
+                            Breadcrumb.log("SAMPLES_KATEGORI", category.id)
+                            activeCategory = category
+                        }
                     )
                 }
             } else {
@@ -108,7 +112,10 @@ fun SamplesScreen(
                     SampleListRow(
                         title = entry.title,
                         description = entry.description,
-                        onClick = { onPick(entry) }
+                        onClick = {
+                            Breadcrumb.log("SAMPLES_PILIH", entry.id)
+                            onPick(entry)
+                        }
                     )
                 }
             }

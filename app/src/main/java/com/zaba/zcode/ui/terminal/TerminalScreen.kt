@@ -1,8 +1,6 @@
 package com.zaba.zcode.ui.terminal
 
 import android.content.Context
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -13,7 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,14 +19,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -41,12 +38,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -59,6 +58,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zaba.zcode.core.diagnostics.Breadcrumb
+import com.zaba.zcode.core.diagnostics.RunLogStore
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.execution.OutputBatcher
 import com.zaba.zcode.core.execution.RunId
@@ -76,6 +77,9 @@ import java.io.File
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontWeight
+import com.zaba.zcode.ui.common.EditorHandle
+import com.zaba.zcode.ui.common.HandleKey
+import com.zaba.zcode.ui.common.terminalKeys
 import com.zaba.zcode.ui.theme.ZcodeThemeType
 import com.zaba.zcode.ui.theme.getTerminalPalette
 
@@ -123,9 +127,11 @@ fun TerminalScreen(
     var sessionState by remember { mutableStateOf(SessionState.START) }
     var logBytes by remember { mutableStateOf(0L) }
     var memChars by remember { mutableLongStateOf(0L) }
+    // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
+    // jadi tanpa ini renderer tidak punya alasan untuk disusun ulang.
+    var bufferVersion by remember { mutableIntStateOf(0) }
     var runId by remember { mutableStateOf(RunId.newId("run")) }
     var logger by remember { mutableStateOf<RunLogger?>(null) }
-    var logFilePath by remember { mutableStateOf<File?>(null) }
     val listState: LazyListState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
@@ -135,12 +141,31 @@ fun TerminalScreen(
     fun appendToTerminal(stream: String, text: String) {
         // 1) line-oriented buffer (RAM terbatas) — hanya baris baru di-parse
         buffer.append(text)
+        // FIX 2026-08-13 (terminal kosong, lanjutan bug E):
+        // TerminalBuffer adalah objek biasa yang di-remember, BUKAN Compose
+        // state — menambah baris ke dalamnya tidak memicu rekomposisi apa pun.
+        // Selama ini renderer ikut tersegarkan hanya sebagai EFEK SAMPING:
+        // `memChars`/`logBytes` (keduanya state) berubah di fungsi ini, dan
+        // LazyColumn kebetulan berada di scope rekomposisi yang sama.
+        // Membungkus LazyColumn dengan SelectionContainer memutus kebetulan itu:
+        // isinya menjadi sub-komposisi tersendiri yang tidak membaca satu pun
+        // state, sehingga tidak pernah disusun ulang. Hasilnya persis yang
+        // dilaporkan user — metrik menunjukkan "5 baris" sementara layar kosong.
+        // bufferVersion membuat ketergantungan itu EKSPLISIT dan tidak lagi
+        // bergantung pada tata letak.
+        bufferVersion++
         memChars += text.length
-        TelemetryStore.recordPeak("terminal_memory_peak_chars", memChars)
-        // 2) disk log lengkap (tidak terpotong)
-        logger?.append(stream, text)
+        // 2) disk log lengkap (tidak terpotong) + telemetri — DIPINDAH KE THREAD IO.
+        //    Sebelumnya keduanya berjalan di Main thread setiap batch (40ms):
+        //    RunLogger.flush() 1x + TelemetryStore.saveLocked() 2x = ±75 tulis-file
+        //    per detik di UI thread → ANR di eMMC lambat (fix 2026-08-12).
+        val lg = logger
+        scope.launch(Dispatchers.IO) {
+            lg?.append(stream, text)
+            TelemetryStore.recordPeak("terminal_memory_peak_chars", memChars)
+            TelemetryStore.recordPeak("terminal_log_bytes", lg?.bytesWritten ?: 0L)
+        }
         logBytes = logger?.bytesWritten ?: 0L
-        TelemetryStore.recordPeak("terminal_log_bytes", logBytes)
 
         // auto-scroll bila user masih di bawah (stickToBottom)
         if (stickToBottom) {
@@ -153,6 +178,65 @@ fun TerminalScreen(
         }
     }
 
+
+    /** Seluruh isi terminal sebagai teks (dari buffer, bukan komposisi). */
+    fun terminalText(): String {
+        val sb = StringBuilder()
+        val first = buffer.startOffset
+        for (rel in 0 until buffer.lineCount) {
+            buffer.get(first + rel)?.let { sb.append(it).append('\n') }
+        }
+        buffer.currentLine().takeIf { it.isNotEmpty() }?.let { sb.append(it) }
+        return sb.toString()
+    }
+
+    fun copyAllToClipboard() {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
+            as? android.content.ClipboardManager
+        cm?.setPrimaryClip(
+            android.content.ClipData.newPlainText("ZCODE terminal", terminalText())
+        )
+        android.widget.Toast.makeText(
+            context, "Output disalin (${buffer.lineCount} baris)",
+            android.widget.Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    /**
+     * Bagikan output ke aplikasi lain (WhatsApp, Gmail, Notes).
+     *
+     * Long-press pada Text Compose hanya menawarkan "Copy" — SELECT ALL /
+     * PASTE / SHARE yang biasa muncul di TextView Android tidak disediakan
+     * SelectionContainer. Karena user melapor bug tanpa PC dan tanpa logcat,
+     * "Bagikan" dibuat eksplisit: satu tap mengirim log utuh ke chat.
+     */
+    fun shareAll() {
+        val text = terminalText()
+        if (text.isBlank()) {
+            android.widget.Toast.makeText(
+                context, "Belum ada output untuk dibagikan",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            return
+        }
+        runCatching {
+            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "ZCODE — $filename")
+                putExtra(android.content.Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(
+                android.content.Intent.createChooser(send, "Bagikan output")
+            )
+        }.onFailure {
+            Breadcrumb.log("SHARE_FAIL", it.message ?: "")
+            android.widget.Toast.makeText(
+                context, "Gagal membagikan: ${it.message}",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     // Output batching (SPEC-001 §14) — thread consumer menjaga urutan.
     val batcher = remember {
         OutputBatcher(
@@ -161,7 +245,14 @@ fun TerminalScreen(
             }
         )
     }
-    batcher.start()
+    // FIX 2026-08-12: `batcher.start()` DULU dipanggil telanjang di badan komposisi.
+    // Itu melanggar kontrak Compose (side-effect harus di dalam effect handler):
+    // badan composable bisa dijalankan berkali-kali / dibatalkan, sehingga thread
+    // batcher bisa lahir yatim. Sekarang siklus hidupnya terikat komposisi.
+    DisposableEffect(batcher) {
+        batcher.start()
+        onDispose { batcher.close() }
+    }
 
     // Deteksi posisi scroll: di bawah → ikut output; scroll naik → jangan ganggu
     LaunchedEffect(listState) {
@@ -171,44 +262,34 @@ fun TerminalScreen(
             }
     }
 
-    // Export full log (SAF) — dari DISK, bukan buffer (SPEC-001 §16)
-    val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("text/plain")
-    ) { uri ->
-        if (uri != null) {
-            try {
-                val src = logFilePath
-                if (src != null && src.exists()) {
-                    context.contentResolver.openOutputStream(uri)?.use { out ->
-                        src.inputStream().use { it.copyTo(out) }
-                    }
-                    scope.launch { appendToTerminal("sys", "\n✅ Log diekspor (${src.name}).\n") }
-                } else {
-                    scope.launch { appendToTerminal("sys", "\n⚠️ Belum ada log (proses belum jalan).\n") }
-                }
-            } catch (e: Exception) {
-                scope.launch { appendToTerminal("sys", "\n❌ Export gagal: ${e.message}\n") }
-            }
-        }
-    }
+    // Export log DIPINDAH ke Diagnostics (build #3, permintaan user): di sana
+    // seluruh riwayat run terlihat sekaligus, bukan hanya run yang kebetulan
+    // sedang dibuka. exportLauncher lama ikut dicabut agar tidak jadi kode mati.
 
     // Jalankan proses saat terminal dibuka (callback datang dari thread background)
     LaunchedEffect(filename) {
-        TelemetryStore.increment("terminal_runs")
+        Breadcrumb.log("TERMINAL_EFFECT", filename)
+        withContext(Dispatchers.IO) { TelemetryStore.increment("terminal_runs") }
         val targetFile = File(filesDir, filename)
         if (!targetFile.exists()) {
+            Breadcrumb.log("FILE_MISSING", filename)
             appendToTerminal("err", "\nError: File $filename not found!\n")
             startingPython = false
             return@LaunchedEffect
         }
         // RunLogger: disk-backed full log (SPEC-001 §16)
+        // Rotasi SEBELUM run baru menulis: pada titik ini file lama pasti
+        // tidak sedang dipakai. Tanpa ini log run menumpuk selamanya — tidak
+        // pernah terlihat sampai storage HP penuh.
+        withContext(Dispatchers.IO) { RunLogStore.rotate(context) }
         val rl = RunLogger(File(Paths.runLogsDir(context), "$runId.log"))
-        rl.start("ZCODE run $runId — $filename")
+        withContext(Dispatchers.IO) { rl.start("ZCODE run $runId — $filename") }
         logger = rl
-        logFilePath = File(Paths.runLogsDir(context), "$runId.log")
+        Breadcrumb.log("LOGGER_OK", runId)
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
         if (showPythonIndicator) appendToTerminal("sys", "\u2699 Menyalakan Python\u2026\n")
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
+        Breadcrumb.log("SESSION_START_CALL")
         val activeSession = ExecutionEngine.startInteractiveSession(
             context = context,
             file = targetFile,
@@ -217,12 +298,23 @@ fun TerminalScreen(
             onOutput = { stream, chunk -> batcher.append(stream, chunk) },
             onExit = { code ->
                 startingPython = false
-                scope.launch {
-                    appendToTerminal(
-                        "sys",
-                        "\n\nProcess finished with exit code $code (state: ${sessionState.name})\n"
-                    )
-                }
+                Breadcrumb.log("SESSION_EXIT", "code=$code state=${sessionState.name}")
+                // BUG URUTAN (dilaporkan user, v1.0.5): pesan ini DULU ditulis
+                // lewat `scope.launch { appendToTerminal(...) }` — menembak
+                // langsung ke buffer sambil melewati OutputBatcher. Karena
+                // output print() menunggu jendela flush 40ms, script yang
+                // selesai cepat membuat "Process finished..." menyalip dan
+                // muncul DI ATAS "Hello, ZCODE!".
+                //
+                // Sekarang pesan penutup memakai jalur yang sama dengan output
+                // biasa, dan antrean dikosongkan lebih dulu. onExit dipanggil
+                // dari thread Python (bukan Main), jadi drain() yang memblokir
+                // di sini aman dan tidak membekukan UI.
+                batcher.drain()
+                batcher.append(
+                    "sys",
+                    "\n\nProcess finished with exit code $code (state: ${sessionState.name})\n"
+                )
                 rl.writeExit(sessionState, code)
                 rl.close()
             },
@@ -230,20 +322,27 @@ fun TerminalScreen(
         )
         session = activeSession
         startingPython = false
+        Breadcrumb.log("SESSION_READY", runId)
         // waitForExit TANPA hard timeout (SPEC-001 §17) — menunggu sampai selesai
         withContext(Dispatchers.IO) {
             activeSession.waitForExit()
         }
     }
 
-    // Fokus otomatis + bersihkan proses saat keluar
+    // Fokus otomatis. FIX 2026-08-12: requestFocus() DULU dipanggil langsung di
+    // LaunchedEffect — effect berjalan setelah komposisi tapi SEBELUM node ter-place,
+    // sehingga bisa melempar "FocusRequester is not initialized" (crash saat layar
+    // terminal baru dibuka). withFrameNanos menunda sampai satu frame terlewati,
+    // dan runCatching memastikan kegagalan fokus tidak pernah mematikan aplikasi.
     LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+        withFrameNanos { }
+        runCatching { focusRequester.requestFocus() }
+            .onFailure { Breadcrumb.log("FOCUS_FAIL", it.message ?: "") }
     }
     DisposableEffect(Unit) {
         onDispose {
+            // batcher ditutup oleh DisposableEffect(batcher) di atas.
             session?.sendKill()
-            batcher.close()
             logger?.close()
         }
     }
@@ -304,61 +403,77 @@ fun TerminalScreen(
         bottomBar = {
             Surface(color = Color(0xFF1E1F29)) {
                 Column {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 3.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Button(
+                    // EDITOR HANDLE (build #3) — menggantikan baris tombol lama.
+                    // Ctrl+C menjadi "terowongan": ukuran & bentuk sama dengan
+                    // tombol lain, warna merah, dan TIDAK ikut bergeser supaya
+                    // tombol darurat selalu terjangkau. Sisanya "kereta".
+                    //
+                    // Ini juga menutup sumber "bar raksasa" v1.0.2: seluruh
+                    // tinggi kini dikunci di EditorHandle, bukan bergantung pada
+                    // tinggi minimum bawaan komponen Material3.
+                    EditorHandle(
+                        keys = terminalKeys(),
+                        tunnelKey = HandleKey(
+                            label = "^C",
+                            danger = true,
                             onClick = {
                                 TelemetryStore.increment("terminal_interrupts")
                                 session?.sendCtrlC()
                                 appendToTerminal("sys", "^C\nProcess Interrupted\n")
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 2.dp)
-                        ) {
-                            Text("Ctrl+C", fontSize = 11.sp, color = Color.White)
+                            }
+                        ),
+                        onInsert = { text ->
+                            inputVal = TextFieldValue(
+                                text = inputVal.text + text,
+                                selection = androidx.compose.ui.text.TextRange(inputVal.text.length + text.length)
+                            )
+                            runCatching { focusRequester.requestFocus() }
                         }
-                        Text(
-                            "Tap terminal untuk mengetik langsung",
-                            color = Color.Gray,
-                            fontSize = 10.sp
-                        )
-                        Button(
-                            onClick = { exportLauncher.launch("zcode_${runId}.log") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp)
-                        ) {
-                            Text("Export Log", fontSize = 11.sp, color = Color.White)
-                        }
-                    }
+                    )
                     // Metrik (SPEC-001 Phase 0 #8): memori tampilan, log disk, storage
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 10.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris · log ${logBytes / 1024}KB · $runId",
+                            // Pemisah terakhir DULU menggantung tanpa apa-apa
+                            // sesudahnya ("… 4 baris ·") karena runId dipotong
+                            // maxLines saat layar sempit. Rangkai eksplisit.
+                            "mem ${memChars / 1024}KB · ${buffer.lineCount} baris",
                             color = Color.Gray,
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace,
-                            maxLines = 1
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // Salin & Bagikan: user melapor tanpa PC dan tanpa logcat.
+                        // Long-press Compose hanya menawarkan "Copy" (batas
+                        // SelectionContainer), jadi Salin-semua dan Bagikan
+                        // disediakan eksplisit di sini.
+                        Text(
+                            "Salin",
+                            color = Color(0xFF8A9BB0),
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { copyAllToClipboard() }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                         Text(
-                            if (freeStorageMb < 0) "storage ?" else "storage ${freeStorageMb}MB",
-                            color = if (freeStorageMb in 1 until 100) Color(0xFFFFB000) else Color.Gray,
-                            fontSize = 9.sp,
-                            fontFamily = FontFamily.Monospace
+                            "Bagikan",
+                            color = Color(0xFF8A9BB0),
+                            fontSize = 10.sp,
+                            modifier = Modifier
+                                .clickable { shareAll() }
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
                         )
+
                     }
                 }
             }
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -388,17 +503,53 @@ fun TerminalScreen(
                 }
             }
 
-            // Virtualized renderer: LazyColumn hanya menyusun baris yang terlihat
-            LazyColumn(
-                state = listState,
+            // Virtualized renderer: LazyColumn hanya menyusun baris yang terlihat.
+            //
+            // BUG I — FIX 2026-08-13. Seluruh UI ZCODE tidak punya SATU PUN
+            // SelectionContainer, sehingga tidak ada teks yang bisa disalin —
+            // termasuk traceback error. User adalah QA tester tunggal TANPA PC
+            // dan tanpa akses logcat; melapor berarti mengetik ulang error dari
+            // layar. Diagnostik yang tidak bisa disalin hanya berguna separuh.
+            //
+            // SelectionContainer membungkus LazyColumn: long-press memulai
+            // seleksi, dan hanya baris yang sedang tersusun (visible) yang ikut.
+            // Untuk mengambil SELURUH isi terminal tersedia tombol "Salin" di
+            // bawah, yang membaca buffer, bukan komposisi.
+            SelectionContainer(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                val relCount = buffer.lineCount
-                items(relCount, key = { it -> (buffer.startOffset + it) }) { rel ->
-                    val abs = buffer.startOffset + rel
-                    val lineText = buffer.get(abs) ?: ""
+            // WAJIB di scope composable ini (bukan di dalam LazyListScope, yang
+            // hanya berjalan saat item disusun): inilah yang mengikat isi terminal
+            // ke rekomposisi. Tanpa ini SelectionContainer menjadi sub-komposisi
+            // tanpa ketergantungan state dan layar tetap kosong walau buffer terisi.
+            // Snapshot diambil DI SINI, di scope composable, dan
+            // di-key pada bufferVersion. Dua manfaat sekaligus: pembacaan state
+            // menjadi nyata (bukan trik yang bisa dibuang compiler), dan
+            // LazyColumn membaca List biasa yang identitasnya berubah tiap
+            // buffer bertambah.
+            val lines = remember(bufferVersion) {
+                val first = buffer.startOffset
+                List(buffer.lineCount) { rel -> buffer.get(first + rel) ?: "" }
+            }
+            val partialLine = remember(bufferVersion) { buffer.currentLine() }
+            val firstAbs = remember(bufferVersion) { buffer.startOffset }
+            val totalAbs = remember(bufferVersion) { buffer.totalLines }
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val relCount = lines.size
+                // FIX 2026-08-12: `key` DIHAPUS (dulu `key = { buffer.startOffset + it }`).
+                // `startOffset` bukan Compose state dan BERGESER saat buffer di-trim di
+                // 10.000 baris; Compose mengevaluasi key secara lazy, sehingga dua item
+                // bisa menghasilkan key sama → IllegalArgumentException "Key was used
+                // multiple times" = force close. Key bersifat opsional untuk daftar
+                // append-only seperti terminal; menghapusnya melenyapkan seluruh kelas bug ini.
+                items(relCount) { rel ->
+                    val abs = firstAbs + rel
+                    val lineText = lines[rel]
                     if (lineText.isNotEmpty()) {
                         Text(
                             text = ansiCache.render(abs, lineText),
@@ -408,13 +559,17 @@ fun TerminalScreen(
                         )
                     }
                 }
-                // current line (output yang belum diakhiri newline) + input + cursor
-                item(key = { -1L }) {
+                // current line (output yang belum diakhiri newline) + input + cursor.
+                // FIX 2026-08-12: dulu ditulis `item(key = { -1L })` — yang terkirim
+                // BUKAN angka -1L melainkan sebuah objek lambda (Function0). Compose
+                // menyimpan key ke Bundle saat save-state; key bertipe lambda adalah
+                // bom waktu. Key dihapus, konsisten dengan items() di atas.
+                item {
                     Column {
-                        val partial = buffer.currentLine()
+                        val partial = partialLine
                         if (partial.isNotEmpty()) {
                             Text(
-                                text = ansiCache.render(buffer.totalLines, partial),
+                                text = ansiCache.render(totalAbs, partial),
                                 fontFamily = resolvedFontFamily,
                                 fontSize = fontSizeSp,
                                 lineHeight = lineHeightSp
@@ -440,6 +595,7 @@ fun TerminalScreen(
                     }
                 }
             }
+            } // SelectionContainer (BUG I)
 
             // TextField transparan 1dp: pengikat keyboard virtual (ketik langsung di terminal)
             TextField(
