@@ -666,7 +666,7 @@ class TestManifestSinkronChaquopy:
     """
 
     HANTU = {"numpy": "1.26.4", "pillow": "10.3.0"}
-    NYATA = {"numpy": "1.26.2", "pillow": "9.2.0", "matplotlib": "3.6.0"}
+    NYATA = {"numpy": "1.26.2", "pillow": "11.0.0", "matplotlib": "3.6.0", "pandas": "2.1.3"}
 
     def test_tidak_ada_versi_hantu(self):
         import json
@@ -682,6 +682,29 @@ class TestManifestSinkronChaquopy:
         data = json.loads(read(ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
         for pkg, real in self.NYATA.items():
             assert real in data.get(pkg, []), f"{pkg} harus memuat {real}"
+
+    def test_katalog_tested_sinkron_manifest(self):
+        """KELAS bug, bukan satu paket: tombol Install Tested mengirim
+        name==testedVersion. Kalau itu tidak ada di manifest/Chaquopy,
+        setiap paket TESTED baru akan mengulang siklus numpy==1.26.4."""
+        import json
+        cat = json.loads(read(ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        man = json.loads(read(ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
+        salah = []
+        for p in cat:
+            if p.get("status") != "TESTED":
+                continue
+            nama = p.get("name") or ""
+            tv = p.get("testedVersion")
+            if not tv:
+                salah.append("%s: TESTED tanpa testedVersion" % nama)
+                continue
+            versi_man = man.get(nama) or man.get(nama.lower()) or []
+            if tv not in versi_man:
+                salah.append("%s==%s tidak ada di tested-manifest %s" % (nama, tv, versi_man))
+            if nama in self.HANTU and tv == self.HANTU[nama]:
+                salah.append("%s==%s adalah versi hantu Chaquopy" % (nama, tv))
+        assert not salah, "katalog TESTED tidak sinkron:\\n  " + "\\n  ".join(salah)
 
 
 class TestTidakAdaPenandaKonflik:
@@ -2607,6 +2630,9 @@ class TestDependensiDariWheel:
         """
         src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
         assert "_METADATA_CACHE" in src, "tidak ada singgahan metadata"
+        assert "for _percobaan in range(3)" in src, (
+            "HTTP tanpa ulang — host_dep GAGAL di 4G (kadang 3 kadang 4 paket)"
+        )
         i = src.find("def fetch_pypi_metadata")
         assert i > 0
         jendela = src[i:i + 400]

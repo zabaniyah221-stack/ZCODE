@@ -156,6 +156,10 @@ fun PipScreen(
             appendLog("\n⚠️ Requirement kosong.\n")
             return
         }
+        if (PackageEngineV2.isBusy()) {
+            appendLog("\n⚠️ Instalasi lain masih berjalan. Tunggu selesai.\n")
+            return
+        }
         isInstalling = true
         consoleLines = emptyList()
         // BUG J: jejak Install Modules sebelumnya TIDAK tercatat sama sekali —
@@ -214,6 +218,10 @@ fun PipScreen(
         val trimmed = req.trim()
         if (trimmed.isBlank()) {
             appendLog("\n⚠️ Requirement kosong.\n")
+            return
+        }
+        if (PackageEngineV2.isBusy()) {
+            appendLog("\n⚠️ Instalasi/analisis lain masih berjalan. Tunggu selesai.\n")
             return
         }
         isInstalling = true

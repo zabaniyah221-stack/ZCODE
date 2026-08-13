@@ -51,15 +51,20 @@ class ResolveError(Exception):
 
 def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(req, timeout=_NETWORK_TIMEOUT_S) as resp:
-            return resp.read()
-    except Exception as e:
-        raise ResolveError(
-            "NETWORK", "metadata",
-            "Tidak bisa menghubungi repository package (network error).",
-            "GET %s → %s" % (url, e),
-        )
+    last = None
+    # 4G HP: satu timeout 20s ke chaquo.com membuat host_dep GAGAL
+    # (libgfortran hilang → "kadang 3 kadang 4"). Dua kali ulang.
+    for _percobaan in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=_NETWORK_TIMEOUT_S) as resp:
+                return resp.read()
+        except Exception as e:
+            last = e
+    raise ResolveError(
+        "NETWORK", "metadata",
+        "Tidak bisa menghubungi repository package (network error).",
+        "GET %s → %s" % (url, last),
+    )
 
 
 # Singgahan metadata PyPI selama satu proses resolusi.
