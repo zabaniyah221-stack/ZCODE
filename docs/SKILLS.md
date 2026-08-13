@@ -438,6 +438,8 @@ gh api repos/<owner>/<repo>/actions/runs/<id>/jobs   # pantau sampai completed
 | Kompilasi PRoot di CI | butuh NDK; risiko E-03 |
 | Selidiki ulang tersangka FC yang gugur | K-1 I/O main-thread, K-4 penumpukan thread, K-5 overlay WebView — semua butuh output sudah mengalir, sedangkan FC terjadi **sebelum** layar output tampil |\n| Taruh `system.img` / zip ≥100 MB di `/home/user` | disk workspace penuh → platform gagal clear workspace |\n| Pakai Termux Python 3.14 untuk wheel Chaquopy 3.11 | `CYTHON_COMPRESS_STRINGS` — pakai TUR python3.11 + `bionic311` |\n| `https://chaquopy.com` sebagai indeks wheel | cert untuk `chaquo.com`; indeks = `https://chaquo.com/pypi-13.1/` |
 | Kirim Gmail lewat SMTP mentah / Guerrilla `send_email` | Guerrilla: `needs_captcha`. SMTP :25 ke MX Gmail **terbuka**, tapi Gmail **550 5.7.26** (DMARC / wajib SPF atau DKIM). Manus kirim lewat **OAuth akun user** atau API (Nylas) di HTTPS, bukan `smtplib` telanjang. |
+| "Kredensial tak terdeteksi bot" / bypass captcha | **Jangan.** Itu pabrik akun siluman. |
+| Inbox sementara tanpa captcha (TERIMA) | `https://api.mail.tm` — POST `/accounts` + `/token`, GET `/messages`. Terverifikasi 2026-08-13: akun `z…@emalupe.com` 201, JWT 200, inbox `[]`, **tanpa captcha**. Skrip: `tools/temp_inbox.py`. Guerrilla `get_email_address` juga terima-saja. Surat disposable sering ditolak situs besar; Gmail **tidak** bisa dikirim dari sini. |
 
 ---
 
