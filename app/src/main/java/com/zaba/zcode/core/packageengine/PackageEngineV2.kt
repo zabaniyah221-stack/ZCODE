@@ -364,10 +364,31 @@ class PackageEngineV2(private val context: Context) {
                     continue
                 }
                 val details = repository.findByCanonicalName(p.canonicalName)
-                val importName = details?.importName ?: p.canonicalName
+                val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}").absolutePath
+
+                // NAMA MODUL DIBACA DARI WHEEL, BUKAN DITEBAK (v1.0.13).
+                //
+                // `fonttools` memasang modul bernama `fontTools` (huruf T
+                // besar). Katalog bawaan tidak memuatnya, sehingga v1.0.12
+                // menguji `import fonttools`, gagal, lalu me-rollback seluruh
+                // instalasi matplotlib — padahal berkasnya sudah benar.
+                //
+                // Urutan sumber: metadata wheel -> katalog -> nama paket.
+                // Metadata didahulukan karena ia satu-satunya yang tidak bisa
+                // basi: ia ikut di dalam paket yang baru saja diunduh.
+                val terbaca = smokeRunner.moduleNames(staging, p.canonicalName)
+                val importName = terbaca.names.firstOrNull()
+                    ?: details?.importName
+                    ?: p.canonicalName
+                if (terbaca.names.isNotEmpty() && terbaca.source.isNotBlank()) {
+                    onStep(Step.Log("  ${p.canonicalName}: modul '$importName' (dari ${terbaca.source})"))
+                } else if (terbaca.error.isNotBlank()) {
+                    // Jujur soal turunnya kualitas tebakan, bukan diam.
+                    onStep(Step.Log("  ⚠️ ${p.canonicalName}: metadata modul tak terbaca (${terbaca.error}); pakai '$importName'"))
+                }
+
                 val manifestTests = repository.loadSmokeTests()[p.canonicalName]
                 val tests = buildSmokeTests(p.canonicalName, importName, details?.type, manifestTests)
-                val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}").absolutePath
                 val outcome = smokeRunner.run(importName, staging, tests, allStagingDirs)
                 if (!outcome.ok) {
                     TelemetryStore.increment("smoke_test_failure")

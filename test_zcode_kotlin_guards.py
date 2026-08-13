@@ -2271,3 +2271,178 @@ class TestPetaPustakaNative:
         assert "return fail(" not in jendela, (
             "pemindaian yang gagal membatalkan instalasi — regresi perilaku"
         )
+
+
+class TestNamaModulDariWheel:
+    """Guard v1.0.13 — nama modul dibaca dari wheel, bukan ditebak.
+
+    KEGAGALAN YANG DIJAGA (log perangkat 2026-08-13):
+        PKG_INSTALL_FAIL | matplotlib [SMOKE_TEST]
+        ModuleNotFoundError: No module named 'fonttools'
+        native .so: 0
+    `native .so: 0` membuktikan ini BUKAN masalah pustaka native — pustaka
+    native justru sudah sukses semuanya di log yang sama. Paket `fonttools`
+    memasang modul bernama `fontTools` (huruf T besar); katalog bawaan tidak
+    memuatnya, jadi uji impor salah alamat lalu me-rollback seluruh transaksi.
+
+    16% paket di katalog punya nama impor berbeda; paket dengan 7 dependensi
+    punya ~71% peluang minimal satu meleset. Karena itu penyembuhannya bukan
+    memperbesar katalog, melainkan berhenti menebak.
+    """
+
+    def _mn(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        import package_runtime.modulename as m
+        return m
+
+    def _buat_paket(self, tmp, dist_info_nama, top_level=None, record=None,
+                    direktori=()):
+        import os as _os
+        di = _os.path.join(tmp, dist_info_nama)
+        _os.makedirs(di, exist_ok=True)
+        with open(_os.path.join(di, "METADATA"), "w") as f:
+            f.write("Metadata-Version: 2.1\nName: x\nVersion: 1.0\n")
+        if top_level is not None:
+            with open(_os.path.join(di, "top_level.txt"), "w") as f:
+                f.write("\n".join(top_level) + "\n")
+        if record is not None:
+            with open(_os.path.join(di, "RECORD"), "w") as f:
+                f.write("\n".join("%s,," % r for r in record) + "\n")
+        for d in direktori:
+            _os.makedirs(_os.path.join(tmp, d), exist_ok=True)
+            open(_os.path.join(tmp, d, "__init__.py"), "w").close()
+        return tmp
+
+    def test_modul_pembaca_ada(self):
+        p = ROOT / "app/src/main/python/package_runtime/modulename.py"
+        assert p.exists(), (
+            "modulename.py hilang — ZCODE kembali menebak nama impor dari "
+            "katalog, dan paket di luar katalog akan gagal lagi"
+        )
+
+    def test_fonttools_huruf_besar_terbaca(self):
+        """Kasus persis yang menumbangkan matplotlib di perangkat."""
+        import tempfile
+        mn = self._mn()
+        t = self._buat_paket(
+            tempfile.mkdtemp(), "fonttools-4.63.0.dist-info",
+            top_level=["fontTools"], record=["fontTools/__init__.py"],
+        )
+        r = mn.module_names(t, "fonttools")
+        assert r["names"] == ["fontTools"], (
+            "nama modul terbaca %r, seharusnya fontTools — matplotlib akan "
+            "gagal lagi dengan ModuleNotFoundError" % (r["names"],)
+        )
+        assert r["source"] == "top_level.txt"
+
+    def test_record_dipakai_saat_top_level_tidak_ada(self):
+        """PEP 427 tidak mewajibkan top_level.txt; packaging & pygments
+        versi baru memang tidak menyertakannya."""
+        import tempfile
+        mn = self._mn()
+        t = self._buat_paket(
+            tempfile.mkdtemp(), "attrs-2.0.dist-info",
+            top_level=None, record=["attr/__init__.py", "attrs-2.0.dist-info/METADATA"],
+        )
+        r = mn.module_names(t, "attrs")
+        assert r["names"] == ["attr"], (
+            "RECORD tidak dipakai sebagai cadangan; paket tanpa top_level.txt "
+            "akan jatuh ke tebakan nama paket dan gagal"
+        )
+        assert r["source"] == "RECORD"
+
+    def test_egg_info_format_lama_juga_dibaca(self):
+        """DITEMUKAN SAAT PENGUJIAN: setuptools memakai .egg-info, bukan
+        .dist-info. Versi pertama pembaca ini melewatkannya."""
+        import tempfile
+        mn = self._mn()
+        t = self._buat_paket(
+            tempfile.mkdtemp(), "setuptools-66.1.1.egg-info",
+            top_level=["_distutils_hack", "pkg_resources", "setuptools"],
+        )
+        r = mn.module_names(t, "setuptools")
+        assert "pkg_resources" in r["all"], ".egg-info diabaikan"
+        assert r["source"] == "top_level.txt"
+
+    def test_modul_internal_tidak_dijadikan_sasaran_uji(self):
+        """`_distutils_hack` dan `_pytest` itu detail internal, bukan
+        antarmuka publik yang layak diuji impor."""
+        import tempfile
+        mn = self._mn()
+        t = self._buat_paket(
+            tempfile.mkdtemp(), "pytest-7.0.dist-info",
+            top_level=["_pytest", "py", "pytest"],
+        )
+        r = mn.module_names(t, "pytest")
+        assert not r["names"][0].startswith("_"), (
+            "modul internal dijadikan sasaran uji impor pertama"
+        )
+        assert "_pytest" in r["all"], "daftar lengkap tidak boleh kehilangan apa pun"
+
+    def test_tidak_pernah_melempar_dan_selalu_punya_cadangan(self):
+        mn = self._mn()
+        for arg in ("/tidak/ada/sama/sekali", "", None):
+            r = mn.module_names(arg, "requests")
+            assert r["names"] == ["requests"], (
+                "kehilangan cadangan nama paket untuk input %r" % (arg,)
+            )
+
+    def test_tanda_hubung_jadi_garis_bawah_pada_cadangan(self):
+        mn = self._mn()
+        r = mn.module_names("/tidak/ada", "python-dateutil")
+        assert r["names"] == ["python_dateutil"], (
+            "tanda hubung tidak diubah; `import python-dateutil` bukan "
+            "sintaks Python yang sah"
+        )
+
+    def test_engine_membaca_metadata_sebelum_katalog(self):
+        """Urutan sumber menentukan: katalog dulu = bug lama kembali."""
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        assert "smokeRunner.moduleNames(" in src, (
+            "engine tidak pernah membaca metadata modul dari wheel"
+        )
+        i = src.find("val importName =")
+        assert i > 0, "penentuan importName hilang"
+        jendela = src[i:i + 260]
+        pos_baca = jendela.find("terbaca.names")
+        pos_katalog = jendela.find("details?.importName")
+        assert pos_baca >= 0, "metadata wheel tidak dipakai untuk importName"
+        assert pos_katalog < 0 or pos_baca < pos_katalog, (
+            "katalog didahulukan atas metadata wheel — fonttools akan gagal lagi"
+        )
+
+    def test_kegagalan_baca_metadata_tidak_membatalkan_instalasi(self):
+        """Pembaca ini menambah ketepatan; ia tidak boleh mengurangi keandalan."""
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        i = src.find("terbaca.error.isNotBlank()")
+        assert i > 0, "kegagalan pembacaan metadata tidak ditangani"
+        jendela = src[i:i + 320]
+        assert "return fail(" not in jendela, (
+            "metadata tak terbaca membatalkan instalasi — regresi perilaku"
+        )
+        assert "onStep(" in jendela, "penurunan kualitas tebakan tidak dilaporkan"
+
+    def test_jalur_pustaka_native_tidak_ikut_berubah(self):
+        """PERMINTAAN USER (2026-08-13): perbaikan ini TIDAK BOLEH
+        menghidupkan lagi kegagalan numpy yang butuh 5 rilis untuk sembuh.
+
+        Fungsi native bekerja atas DIREKTORI dan byte ELF; tidak satu pun
+        menerima nama modul. Guard ini mengunci pemisahan itu, supaya
+        perubahan di masa depan tidak diam-diam menyilangkan keduanya.
+        """
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        for tanda in ("def preload_native_libs(dirs",
+                      "def scan_missing_libs(dirs",
+                      "def elf_needed(path"):
+            assert tanda in src, (
+                "tanda tangan fungsi native berubah (%r) — jalur numpy "
+                "berisiko ikut terpengaruh" % tanda
+            )
+        import re as _re
+        for fn in ("preload_native_libs", "scan_missing_libs"):
+            m = _re.search(r"def %s\(([^)]*)\)" % fn, src)
+            assert m and "import_name" not in m.group(1), (
+                "%s mulai menerima nama modul — pemisahan native vs impor "
+                "bocor" % fn
+            )

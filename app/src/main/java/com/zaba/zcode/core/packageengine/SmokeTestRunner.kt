@@ -92,6 +92,54 @@ class SmokeTestRunner(private val context: Context) {
     }
 
     /**
+     * Nama modul yang benar-benar bisa diimpor dari sebuah paket terpasang.
+     *
+     * KENAPA DIBACA, BUKAN DITEBAK (2026-08-13, v1.0.13). Nama paket dan nama
+     * modul sering berbeda: `fonttools` -> `fontTools`, `pillow` -> `PIL`.
+     * Sampai v1.0.12 ZCODE menebaknya dari katalog bawaan; katalog itu tidak
+     * memuat `fonttools`, sehingga instalasi matplotlib gagal dan seluruh
+     * transaksinya di-rollback padahal berkasnya sudah terpasang benar.
+     *
+     * 16% paket di katalog punya nama impor berbeda, jadi paket dengan 7
+     * dependensi punya ~71% peluang salah tebak. Memperbesar katalog hanya
+     * menunda; jawabannya dibaca dari `*.dist-info/` milik wheel itu sendiri.
+     */
+    data class ModuleNames(
+        val names: List<String>,
+        val source: String,
+        val error: String
+    )
+
+    /**
+     * Best-effort: bila Python tidak tersedia atau metadata tidak terbaca,
+     * mengembalikan daftar kosong supaya pemanggil memakai tebakan lamanya.
+     * Fitur ini menambah ketepatan; ia tidak boleh mengurangi keandalan.
+     */
+    fun moduleNames(stagingDir: String, canonicalName: String): ModuleNames {
+        val kosong = ModuleNames(emptyList(), "", "")
+        val json = try {
+            PyCall.callJson(
+                context,
+                "package_runtime.modulename",
+                "module_names_json",
+                stagingDir,
+                canonicalName
+            )
+        } catch (e: Exception) {
+            return kosong.copy(error = e.message ?: e.toString())
+        } ?: return kosong
+        return try {
+            val o = JSONObject(json)
+            val arr = o.optJSONArray("names")
+            val names = if (arr == null) emptyList() else
+                (0 until arr.length()).map { arr.optString(it) }.filter { it.isNotBlank() }
+            ModuleNames(names, o.optString("source", ""), o.optString("error", ""))
+        } catch (e: Exception) {
+            kosong.copy(error = "hasil nama modul tidak valid: ${e.message}")
+        }
+    }
+
+    /**
      * @param siblingDirs direktori staging paket LAIN dalam transaksi yang sama.
      *
      * FIX 2026-08-13: tanpa ini smoke test hanya melihat satu paket, sehingga
