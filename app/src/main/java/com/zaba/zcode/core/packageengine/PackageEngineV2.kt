@@ -54,6 +54,23 @@ class PackageEngineV2(private val context: Context) {
         private const val USER_AGENT = "zcode-package-runtime/1.0"
         private const val CONNECT_TIMEOUT_MS = 15_000
         private const val READ_TIMEOUT_MS = 60_000
+        @Volatile
+        private var busyFlag = false
+
+        /** Satu install/analyze di seluruh app — PipScreen baru tidak boleh dobel. */
+        fun isBusy(): Boolean = busyFlag
+
+        fun tryAcquire(): Boolean {
+            synchronized(this) {
+                if (busyFlag) return false
+                busyFlag = true
+                return true
+            }
+        }
+
+        fun release() {
+            busyFlag = false
+        }
         // Storage margin (keputusan forum): max(1.5 × estimasi, 100 MB)
         private const val MIN_SAFETY_MARGIN_BYTES = 100L * 1024 * 1024
         private const val ESTIMATE_FACTOR = 1.5
@@ -71,6 +88,26 @@ class PackageEngineV2(private val context: Context) {
     fun install(
         requirementText: String,
         preResolved: DependencyResolver.ResolvePlan? = null,
+        onStep: (Step) -> Unit
+    ): InstallResult {
+        if (!tryAcquire()) {
+            onStep(Step.Finish("engine", false, "Instalasi lain masih berjalan."))
+            return InstallResult(
+                false, "BUSY", "engine",
+                "Instalasi lain masih berjalan. Tunggu selesai; jangan tap Install berulang.",
+                null, false, emptyList()
+            )
+        }
+        try {
+            return installBody(requirementText, preResolved, onStep)
+        } finally {
+            release()
+        }
+    }
+
+    private fun installBody(
+        requirementText: String,
+        preResolved: DependencyResolver.ResolvePlan?,
         onStep: (Step) -> Unit
     ): InstallResult {
         TelemetryStore.increment("install_attempts")
@@ -184,6 +221,8 @@ class PackageEngineV2(private val context: Context) {
                 } else {
                     val url = p.url ?: return fail("DOWNLOAD", "download",
                         "URL wheel tidak tersedia untuk ${p.canonicalName}", null)
+                    Breadcrumb.log("PKG_DOWNLOAD", "${p.canonicalName} ${p.filename}")
+                    onStep(Step.Log("  ${p.canonicalName}: mengunduh ${p.filename}…"))
                     val dl = download(url, wheelFile, sha) { msg -> onStep(Step.Log("  ${p.canonicalName}: $msg")) }
                     if (!dl.first) return fail("DOWNLOAD", "download", dl.second, null)
                     sha = sha ?: dl.second
@@ -551,6 +590,22 @@ class PackageEngineV2(private val context: Context) {
      * kalau risky → Install (plan di-reuse supaya tidak double network).
      */
     fun analyze(requirementText: String, onLog: (Step) -> Unit = {}): DependencyResolver.ResolvePlan {
+        if (!tryAcquire()) {
+            return DependencyResolver.ResolvePlan(
+                false, emptyList(), emptyList(), emptyList(),
+                "BUSY", "engine",
+                "Instalasi/analisis lain masih berjalan. Tunggu selesai.",
+                null
+            )
+        }
+        try {
+        return analyzeBody(requirementText, onLog)
+        } finally {
+            release()
+        }
+    }
+
+    private fun analyzeBody(requirementText: String, onLog: (Step) -> Unit): DependencyResolver.ResolvePlan {
         onLog(Step.Begin("Requirement"))
         val req = RequirementParser.parse(context, requirementText)
         onLog(Step.Finish("Requirement", true, "${req.name}${if (req.specifier.isNotBlank()) req.specifier else ""}"))

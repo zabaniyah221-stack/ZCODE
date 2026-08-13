@@ -230,9 +230,108 @@ ARMv7 **Android**. Selalu periksa: ini glibc atau bionic?
 
 | Situs | Status | Solusi |
 |---|---|---|
-| `chaquo.com` via `urllib` | ❌ TLS EOF | pakai `fetch_page` |
+| `chaquo.com` via `urllib` | ⚠️ **TERBANTAH** — ternyata BISA (2026-08-13) | jangan menyerah: langsung `urllib.request.urlopen('https://chaquo.com/pypi-13.1/<pkg>/')` |
 | Log CI (blob storage) | ❌ permanen | audit mandiri |
 | `kaskus.co.id`, `api.pushshift.io` | ❌ | — |
+
+### Mengakali keterbatasan sandbox (pelajaran berbayar, 2026-08-13)
+
+**Jangan pernah menyerah sebelum MENCARI cara, bukan cuma menebak.**
+Aku sempat bilang "sandbox tak bisa akses chaquopy.com" dan "tak bisa uji ARMv7"
+— **dua-duanya salah.** Aturan: **klaim "tidak bisa" harus dibuktikan dengan
+mencoba, bukan asumsi.** Pecah kegagalan: DNS / User-Agent / sertifikat /
+hostname salah / libc salah — jangan langsung "diblok".
+
+**DISK — kemalangan yang sudah terjadi:** menaruh `system.img` (1.8 GB) di
+`/home/user` membuat workspace 100% → "Failed to clear workspace" → semua
+bash/read_file mati. **JANGAN ulangi.**
+
+| Boleh | Jangan |
+|---|---|
+| `/var/tmp/...` (di luar snapshot workspace) | `/home/user/system.img`, zip 270 MB, Termux root |
+| unzip → ambil file kecil → **hapus** image | biarkan image 1.8 GB hidup |
+| skrip resep di `tools/` | commit tree emulator |
+
+Pasang ulang (idempotent): `bash tools/setup_armv7_emu.sh`
+
+#### 1. Jaringan: indeks Chaquopy = `chaquo.com` (bukan `chaquopy.com`)
+- `https://chaquo.com/pypi-13.1/<pkg>/` → HTTP **200** (host & qemu).
+- `chaquopy.com` memakai IP yang sama tapi **sertifikat untuk chaquo.com** →
+  Hostname mismatch. Pakai **chaquo.com**.
+- Cloudflare 403 di `tur.kcubeterm.com` dengan UA default
+  `Python-urllib/3.11` — **bukan** blokir tetap. UA
+  `zcode-package-runtime/1.0` (yang sudah dipakai resolver) → **200**.
+- Bongkar wheel: `METADATA` / `Requires-Dist` + `readelf` `DT_NEEDED`.
+
+#### 2. Lapisan A — `armpy` (3.11.15 **glibc** armv7l)
+Resolver ZCODE di ISA/versi Chaquopy. **Bukan** Android.
+DNS glibc jalan tanpa trik. Tag Android **dipaksa** lewat
+`resolve_json(..., abi="armeabi-v7a", device_api=24)` — jangan andalkan
+`sys_tags()` Linux.
+
+```bash
+/var/tmp/armpy -c 'import sys,platform; print(sys.version, platform.machine())'
+# → 3.11.15  armv7l
+```
+
+Sumber: [python-build-standalone 20260807](https://github.com/astral-sh/python-build-standalone/releases/tag/20260807)
+`cpython-3.11.15+20260807-armv7-unknown-linux-gnueabihf-install_only.tar.gz`
++ Debian `libc6`/`libgcc-s1` **armhf**.
+
+#### 3. Lapisan B — Termux 3.14 bionic (bukan Chaquopy)
+`import` numpy/pillow **Termux**. pandas/matplotlib Termux arm 32-bit **tidak ada**.
+Jangan pakai ini untuk wheel Chaquopy (Cython 3.11 vs interpreter 3.14 =
+`CYTHON_COMPRESS_STRINGS`).
+
+#### 4. Senjata pamungkas — `bionic311` (3.11.15 **bionic** + linker API 24)
+
+Ini yang menutup celah sesi pagi: **versi Python = Chaquopy**, **libc = Android**.
+
+Komponen (semua di `/var/tmp`, terverifikasi 2026-08-13 malam):
+1. `qemu-armhf`.
+2. Linker + `libc.so`/`libm.so`/`libdl.so`/`liblog.so` dari **API 24** ARMv7
+   (`https://dl.google.com/android/repository/sys-img/android/armeabi-v7a-24_r07.zip`).
+   Extract **hanya** file itu via `debugfs` ke `/var/tmp/bionic-sys`, lalu
+   **hapus** `system.img`. Linker API &lt; 24 gagal `DT_GNU_HASH`.
+3. Interpreter: TUR **`python3.11_3.11.15_arm.deb`**
+   (`https://tur.kcubeterm.com/pool/tur/python3.11_3.11.15_arm.deb`) —
+   ELF `interpreter /system/bin/linker`, Android 24. Bukan Termux 3.14.
+4. `libandroid-support.so` (Termux main) + `libpython3.11.so` di prefix qemu.
+5. Env: `ANDROID_ROOT`, `ANDROID_DATA`, `TZDIR`, `QEMU_LD_PREFIX`,
+   `SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt`.
+6. **DNS bionic (universal, 2026-08-13 malam):** libc bicara ke
+   **`/dev/socket/dnsproxyd`**. qemu-user **tidak** memakai `QEMU_LD_PREFIX`
+   untuk AF_UNIX — socket harus di path HOST `/dev/socket/dnsproxyd`.
+   `tools/dnsproxyd.py` meniru protokol Nougat (`getaddrinfo …\\0` → kode
+   `222` + `addrinfo` BE32). Terverifikasi: `example.com`, `wikipedia.org`,
+   `httpbingo.org` (tidak ada di hosts) → HTTPS 200.
+   Fallback: `/system/etc/hosts` + `/var/tmp/bionic-extra-hosts.txt`.
+7. **JANGAN** `export PYTHONHOME=...` sebelum menjalankan `python3` host
+   (refresh hosts) — host lalu memakai stdlib ARM → `No module named '_socket'`.
+
+```bash
+bash tools/setup_armv7_emu.sh          # sekali per sandbox
+/var/tmp/bionic311.sh -c 'import urllib.request; print(urllib.request.urlopen("https://chaquo.com/pypi-13.1/numpy/", timeout=15).status)'
+# resolve + tag HP (kode ZCODE asli):
+/var/tmp/bionic311.sh -c 'import json,sys; sys.path.insert(0,"app/src/main/python"); from package_runtime.resolve import resolve_json; print(resolve_json("pandas==2.1.3", abi="armeabi-v7a", device_api=24)[:200])'
+```
+
+**Terverifikasi di senjata ini (bukan dugaan):**
+- `import` wheel Chaquopy `cp311` `armeabi_v7a`: numpy 1.26.2 (`sum=15`),
+  pandas 2.1.3 (`Series.sum=6`), matplotlib 3.6.0 + `pyplot.savefig`.
+- `resolve_json("pandas==2.1.3")` 14s: pytz/tzdata/dateutil + host
+  openblas/libcxx/gfortran (`deps_source=pypi-version` = Bug K).
+- `resolve_json("matplotlib")` 31s, 17 paket (&lt; 90s PyCall).
+
+Host deps `.so` Chaquopy (`chaquopy-openblas`, `chaquopy-libcxx`,
+`chaquopy-freetype`, …) di-extract ke
+`/var/tmp/bionic-sys/system/lib` + site-packages `/var/tmp/chaquo-sp`.
+
+#### Batas jujur senjata (bukan HP)
+- Bukan JVM / `Python.start` / UI / timeout PyCall di proses APK.
+- `/var/tmp` hilang saat sandbox restart → jalankan `setup_armv7_emu.sh` lagi.
+- Bukan pengganti UAT Infinix. User tetap uji APK; laporan UAT + senjata ini
+  dipakai bersama.
 
 ---
 
@@ -337,7 +436,10 @@ gh api repos/<owner>/<repo>/actions/runs/<id>/jobs   # pantau sampai completed
 | Coba unduh isi log CI | blob storage diblokir, sudah dicoba 6× |
 | `gh run list --status failure` | tidak valid di versi gh ini |
 | Kompilasi PRoot di CI | butuh NDK; risiko E-03 |
-| Selidiki ulang tersangka FC yang gugur | K-1 I/O main-thread, K-4 penumpukan thread, K-5 overlay WebView — semua butuh output sudah mengalir, sedangkan FC terjadi **sebelum** layar output tampil |
+| Selidiki ulang tersangka FC yang gugur | K-1 I/O main-thread, K-4 penumpukan thread, K-5 overlay WebView — semua butuh output sudah mengalir, sedangkan FC terjadi **sebelum** layar output tampil |\n| Taruh `system.img` / zip ≥100 MB di `/home/user` | disk workspace penuh → platform gagal clear workspace |\n| Pakai Termux Python 3.14 untuk wheel Chaquopy 3.11 | `CYTHON_COMPRESS_STRINGS` — pakai TUR python3.11 + `bionic311` |\n| `https://chaquopy.com` sebagai indeks wheel | cert untuk `chaquo.com`; indeks = `https://chaquo.com/pypi-13.1/` |
+| Kirim Gmail lewat SMTP mentah / Guerrilla `send_email` | Guerrilla: `needs_captcha`. SMTP :25 ke MX Gmail **terbuka**, tapi Gmail **550 5.7.26** (DMARC / wajib SPF atau DKIM). Manus kirim lewat **OAuth akun user** atau API (Nylas) di HTTPS, bukan `smtplib` telanjang. |
+| "Kredensial tak terdeteksi bot" / bypass captcha | **Jangan.** Itu pabrik akun siluman. |
+| Inbox sementara tanpa captcha (TERIMA) | `https://api.mail.tm` — POST `/accounts` + `/token`, GET `/messages`. Terverifikasi 2026-08-13: akun `z…@emalupe.com` 201, JWT 200, inbox `[]`, **tanpa captcha**. Skrip: `tools/temp_inbox.py`. Guerrilla `get_email_address` juga terima-saja. Surat disposable sering ditolak situs besar; Gmail **tidak** bisa dikirim dari sini. |
 
 ---
 

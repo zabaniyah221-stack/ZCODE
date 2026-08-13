@@ -195,12 +195,65 @@ CHAQUOPY_NUMPY_HTML = """<!DOCTYPE html><html><head><title>Index of /pypi-13.1/n
 <body><a href="numpy-1.26.4-cp311-cp311-android_21_arm64_v8a.whl">numpy-1.26.4-cp311-cp311-android_21_arm64_v8a.whl</a>
 <a href="numpy-1.26.4-cp38-cp38-android_21_arm64_v8a.whl">numpy-1.26.4-cp38-cp38-android_21_arm64_v8a.whl</a></body></html>"""
 
+# ---- BUG K (2026-08-13): dependensi harus dibaca PER-VERSI, bukan versi terbaru ----
+# pandas 2.1.3 punya deps wajib pytz/python-dateutil/tzdata yang TIDAK muncul di
+# info rilis terbaru (di rilis baru pytz jadi extra). Sebelum fix, resolver jatuh
+# ke info terbaru -> pytz hilang -> No module named 'pytz'.
+PYPI_PANDAS = {
+    "info": {
+        "name": "pandas", "summary": "", "license": "",
+        # VERSI TERBARU di mock ini: pytz TIDAK ada (simulasi rilis baru yang
+        # menggeser pytz jadi extra). Sebelum fix, resolver membaca ini dan
+        # pytz hilang.
+        "requires_dist": ["numpy>=1.24.3"],
+    },
+    "releases": {
+        "2.1.3": [{
+            "filename": "pandas-2.1.3-py3-none-any.whl",
+            "packagetype": "bdist_wheel",
+            "url": "https://files.pythonhosted.org/pandas-2.1.3-py3-none-any.whl",
+            "digests": {"sha256": "dd" * 32}, "size": 100000, "yanked": False,
+        }],
+    },
+}
+# Endpoint per-versi memberi requires_dist yang BENAR untuk 2.1.3.
+PYPI_PANDAS_VERSION = {
+    "info": {
+        "name": "pandas", "summary": "", "license": "",
+        "requires_dist": [
+            "numpy>=1.24.3; python_version >= \"3.8\"",
+            "python-dateutil>=2.8.2",
+            "pytz>=2020.1",
+            "tzdata>=2022.1",
+        ],
+    },
+    "releases": {"2.1.3": []},
+}
+# rich 13.5.3 butuh typing-extensions hanya untuk python<3.9; di 3.11 di-skip.
+PYPI_RICH_VERSION = {
+    "info": {
+        "name": "rich", "summary": "", "license": "",
+        "requires_dist": [
+            "typing-extensions (>=4.0.0,<5.0); python_version < \"3.9\"",
+            "pygments>=2.13.0,<3.0.0",
+            "markdown-it-py>=2.2.0",
+        ],
+    },
+    "releases": {"13.5.3": []},
+}
+
 
 def _mock_http_get(url: str) -> bytes:
     if "/pypi/requests/json" in url:
         return json.dumps(PYPI_REQUESTS).encode()
     if "/pypi/charset-normalizer/json" in url:
         return json.dumps(PYPI_CHARSET).encode()
+    if "/pypi/pandas/2.1.3/json" in url:
+        return json.dumps(PYPI_PANDAS_VERSION).encode()
+    if "/pypi/pandas/json" in url:
+        return json.dumps(PYPI_PANDAS).encode()
+    if "/pypi/rich/13.5.3/json" in url:
+        return json.dumps(PYPI_RICH_VERSION).encode()
     if "pypi-13.1/numpy" in url:
         return CHAQUOPY_NUMPY_HTML.encode()
     if "/pypi/numpy/json" in url:
@@ -274,6 +327,52 @@ class TestResolve:
             "requests==2.32.3",
             supported_tags=[Tag("py3", "none", "any")],
         )
+
+    def test_requires_dist_per_version_pandas_pytz(self, mock_net):
+        """BUG K: requires_dist dibaca PER-VERSI, bukan versi terbaru.
+
+        pandas 2.1.3 wajib butuh pytz/python-dateutil/tzdata. info pada
+        /pypi/pandas/json (versi terbaru) TIDAK memuat pytz (simulasi rilis
+        baru yang menggeser pytz jadi extra). Resolver HARUS membaca endpoint
+        per-versi sehingga pytz masuk plan. Kalau ini lewat dari info terbaru,
+        pytz hilang -> No module named 'pytz'.
+        """
+        # pandas punya NATIVE_HOST_DEPS -> numpy (wheel Chaquopy android).
+        # Sertakan tag android agar host dep numpy ikut ter-resolve.
+        plan = resolve_mod.resolve(
+            "pandas==2.1.3",
+            supported_tags=[
+                Tag("py3", "none", "any"),
+                Tag("cp311", "cp311", "android_21_arm64_v8a"),
+            ],
+        )
+        pd = next((p for p in plan["packages"] if p["name"] == "pandas"), None)
+        assert pd is not None
+        assert pd["deps_source"] in ("pypi-version", "wheel")
+        import re as _re
+        names = []
+        for r in pd["requires_dist"]:
+            m = _re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)", r.split(";")[0])
+            names.append(m.group(1) if m else "")
+        assert "pytz" in names
+        assert "python-dateutil" in names
+
+    def test_requires_dist_per_version_rich_marker_py311(self, mock_net):
+        """BUG K + marker: rich 13.5.3 butuh typing-extensions HANYA utk py<3.9.
+
+        Pada Python 3.11 marker 'python_version < "3.9"' bernilai False sehingga
+        typing-extensions TIDAK wajib (sudah ada di stdlib typing). Ini membuktikan
+        marker evaluation tetap berjalan setelah fix per-versi.
+        """
+        env = {"python_version": "3.11", "extra": ""}
+        req = resolve_mod.requires_dist_for_version("rich", "13.5.3")
+        # marker disaring di level queue; pastikan string mentah ada
+        assert any("typing-extensions" in r for r in req)
+        from packaging.requirements import Requirement
+        te = [r for r in req if "typing-extensions" in r][0]
+        r = Requirement(te)
+        # di Python 3.11 marker false → tidak perlu diinstall
+        assert r.marker.evaluate(env) is False
 
 # =====================================================================
 # Smoke test
@@ -361,3 +460,88 @@ class TestEnvPaths:
             assert requests.FAKE
         finally:
             sys.path[:] = before
+
+
+class TestEnvPathsEntryPoints:
+    """Langkah 3 (2026-08-13): layout ZCODE `<norm>/<version>/` di sys.path
+    HARUS bisa dibaca importlib.metadata & pkg_resources (entry-points).
+
+    Ini mencegah regresi: paket yang bergantung pkg_resources/entry-points
+    tidak boleh gagal karena layout yang berbeda dari site-packages biasa.
+    """
+
+    def _buat_layout(self, tmp_path):
+        pkg = tmp_path / "requests" / "2.32.3"
+        pkg.mkdir(parents=True)
+        (pkg / "requests").mkdir()
+        (pkg / "requests" / "__init__.py").write_text("__version__='2.32.3'\n")
+        di = pkg / "requests-2.32.3.dist-info"
+        di.mkdir()
+        (di / "METADATA").write_text(
+            "Metadata-Version: 2.1\nName: requests\nVersion: 2.32.3\n")
+        (di / "top_level.txt").write_text("requests\n")
+        (di / "entry_points.txt").write_text(
+            "[console_scripts]\nmycmd = requests.cli:main\n")
+        (di / "RECORD").write_text("")
+        return str(pkg)
+
+    def test_importlib_metadata_menemukan_dist(self, tmp_path):
+        # Paket unik supaya tidak tercemar versi host. Jalur nyata:
+        # envpaths.activate() (seperti runner) lalu importlib.metadata.
+        nama = "zcode-testpkg"
+        versi = "1.0.0"
+        pkg = tmp_path / "python-env" / "site-packages" / nama / versi
+        pkg.mkdir(parents=True)
+        (pkg / "zcode_testpkg").mkdir()
+        (pkg / "zcode_testpkg" / "__init__.py").write_text("__version__='1.0.0'\n")
+        di = pkg / ("%s-%s.dist-info" % (nama, versi))
+        di.mkdir()
+        (di / "METADATA").write_text(
+            "Metadata-Version: 2.1\nName: zcode-testpkg\nVersion: 1.0.0\n")
+        (di / "top_level.txt").write_text("zcode_testpkg\n")
+        (di / "entry_points.txt").write_text(
+            "[console_scripts]\nzcmd = zcode_testpkg:main\n")
+        (di / "RECORD").write_text("")
+        state = tmp_path / "python-env" / "state"
+        state.mkdir(parents=True)
+        (state / "installed.json").write_text(json.dumps({
+            nama: {"version": versi,
+                   "path": "site-packages/%s/%s" % (nama, versi),
+                   "installed_at": 1, "source": "pypi"},
+        }))
+        before = list(sys.path)
+        try:
+            env_mod.activate(str(tmp_path))
+            import importlib.metadata as md
+            from packaging.utils import canonicalize_name
+            cn = canonicalize_name(nama)
+            d = next((x for x in md.distributions()
+                      if canonicalize_name(x.metadata["Name"] or "") == cn), None)
+            assert d is not None, "distributions() tidak melihat zcode-testpkg"
+            assert d.version == versi
+            eps = list(d.entry_points)
+            assert any(e.name == "zcmd" for e in eps), "entry_points tidak terbaca"
+        finally:
+            sys.path[:] = before
+
+    # CATATAN (2026-08-13): pkg_resources TIDAK dijadikan guard unit test.
+    # API ini deprecated & tidak stabil terhadap dist-info sintetis / lintas
+    # versi Python (3.11 vs 3.13) dan setuptools — ia memotong nama ber-dash
+    # pada dist-info buatan manual, menghasilkan false-failure yang bukan bug
+    # ZCODE. Yang membuktikan layout ZCODE bekerja utk entry-points adalah
+    # importlib.metadata (test di atas, API modern Python 3.10+). pkg_resources
+    # hanya perlu TERSEDIA di Chaquopy (setuptools dibundle) — dijaga oleh
+    # test_chaquopy_meng_bundle_setuptools. Verifikasi penuh paket berbasis
+    # pkg_resources tetap via UAT device.
+
+    def test_chaquopy_meng_bundle_setuptools(self):
+        # pkg_resources berasal dari setuptools yang WAJIB di-bundle di
+        # Chaquopy build.gradle. Tanpa ini, paket yang butuh pkg_resources
+        # akan gagal di device walau layout sudah benar.
+        import re
+        p = ROOT / "app/build.gradle.kts"
+        txt = p.read_text()
+        assert re.search(r"install\(\"setuptools==[0-9.]+\"\)", txt), (
+            "setuptools harus di-bundle di chaquopy pip{ install } — "
+            "pkg_resources/entry-points bergantung padanya"
+        )

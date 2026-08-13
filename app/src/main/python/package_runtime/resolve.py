@@ -51,15 +51,20 @@ class ResolveError(Exception):
 
 def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urllib.request.urlopen(req, timeout=_NETWORK_TIMEOUT_S) as resp:
-            return resp.read()
-    except Exception as e:
-        raise ResolveError(
-            "NETWORK", "metadata",
-            "Tidak bisa menghubungi repository package (network error).",
-            "GET %s → %s" % (url, e),
-        )
+    last = None
+    # 4G HP: satu timeout 20s ke chaquo.com membuat host_dep GAGAL
+    # (libgfortran hilang → "kadang 3 kadang 4"). Dua kali ulang.
+    for _percobaan in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=_NETWORK_TIMEOUT_S) as resp:
+                return resp.read()
+        except Exception as e:
+            last = e
+    raise ResolveError(
+        "NETWORK", "metadata",
+        "Tidak bisa menghubungi repository package (network error).",
+        "GET %s → %s" % (url, last),
+    )
 
 
 # Singgahan metadata PyPI selama satu proses resolusi.
@@ -77,11 +82,15 @@ def _http_get(url: str) -> bytes:
 # waktu 90 detik di PyCall — persis kegagalan "senyap" yang dilaporkan dari
 # perangkat. Sepertiga dari trafik itu murni terbuang karena duplikat.
 _METADATA_CACHE: dict[str, dict] = {}
+# Singgahan metadata PER-VERSI (BUG K). Kunci: (nama, versi). Dipisah dari
+# cache utama karena meng-hash per rilis, bukan satu dokumen besar.
+_METADATA_VERSION_CACHE: dict[tuple[str, str], dict] = {}
 
 
 def clear_metadata_cache() -> None:
     """Kosongkan singgahan — dipanggil di awal setiap resolusi baru."""
     _METADATA_CACHE.clear()
+    _METADATA_VERSION_CACHE.clear()
 
 
 def fetch_pypi_metadata(name: str) -> dict:
@@ -101,6 +110,52 @@ def fetch_pypi_metadata(name: str) -> dict:
         )
     _METADATA_CACHE[kunci] = data
     return data
+
+
+def fetch_pypi_metadata_version(name: str, version: str) -> dict:
+    """Metadata PyPI untuk SATU VERSI spesifik.
+
+    BUG K (2026-08-13). `info.requires_dist` pada `/pypi/<nama>/json` SELALU
+    milik rilis TERBARU, padahal ZCODE memilih versi tertentu (bisa lama). Saat
+    dependensi berbeda antara versi terpilih dan versi terbaru, dependensi jadi
+    salah → `ModuleNotFoundError` (contoh: pandas 2.1.3 butuh pytz, rich 13.5.3
+    butuh typing-extensions — keduanya hilang saat fallback ke versi terbaru).
+
+    Endpoint `/pypi/<nama>/<versi>/json` mengembalikan `info.requires_dist`
+    yang BENAR untuk versi itu. Terverifikasi (2026-08-13) terhadap pandas
+    2.1.3 (pytz wajib) dan rich 13.5.3 (typing-extensions wajib).
+
+    Return dict mentah; None bila versi tidak ada / gagal (bukan fatal).
+    """
+    if not name or not version:
+        return None
+    kunci = ((name or "").strip().lower(), str(version).strip())
+    if kunci in _METADATA_VERSION_CACHE:
+        return _METADATA_VERSION_CACHE[kunci]
+    url = "https://pypi.org/pypi/%s/%s/json" % (kunci[0], kunci[1])
+    try:
+        import json
+        data = json.loads(_http_get(url).decode("utf-8"))
+    except ResolveError:
+        return None
+    except Exception:
+        return None
+    _METADATA_VERSION_CACHE[kunci] = data
+    return data
+
+
+def requires_dist_for_version(name: str, version: str) -> list[str]:
+    """`requires_dist` (hanya wajib, tanpa extra) untuk versi spesifik.
+
+    Sumber paling jujur untuk BUG K: endpoint per-versi. Bila tidak tersedia,
+    kembalikan [] — pemanggil memutuskan fallback.
+    """
+    meta = fetch_pypi_metadata_version(name, version)
+    if not meta:
+        return []
+    info = meta.get("info") or {}
+    raw = info.get("requires_dist") or []
+    return [r for r in raw if "extra ==" not in (r or "")]
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +567,7 @@ def resolve(
             best["version"] = parse_wheel(best["filename"])["version"]
         except WheelInfoError:
             best["version"] = ""
-        # DEPENDENSI — SUMBER BERLAPIS (v1.0.14).
+        # DEPENDENSI — SUMBER BERLAPIS (v1.0.14 + BUG K 2026-08-13).
         #
         # Lapis 1: METADATA di dalam wheel yang sudah ada di singgahan lokal.
         # Ini sumber paling jujur DAN paling murah: wheel-nya memang harus
@@ -520,12 +575,29 @@ def resolve(
         # Terverifikasi terhadap 79 wheel PyPI asli — cocok persis dengan
         # daftar yang benar-benar dipasang pip, nol selisih.
         #
-        # Lapis 2 (di bawah): metadata PyPI, dipakai bila wheel belum ada di
-        # singgahan. Wheel indeks Chaquopy belum bisa diuji dari lingkungan
-        # pengembangan (TLS ke chaquo.com ditutup), jadi lapis ini WAJIB tetap
-        # ada — bukan sekadar formalitas.
+        # Lapis 2 (BUG K): metadata PyPI PER-VERSI (`/pypi/<nama>/<versi>/json`).
+        # Dipakai bila wheel belum ada di singgahan — persis kasus instal
+        # PERTAMA (resolve berjalan SEBELUM download). Endpoint per-versi memberi
+        # requires_dist yang BENAR untuk versi yang dipilih, tidak seperti
+        # `info` pada `/pypi/<nama>/json` yang selalu milik rilis TERBARU.
+        #
+        # Lapis 3 (di bawah): metadata PyPI rilis terbaru, fallback terakhir.
+        # Wheel indeks Chaquopy belum bisa diuji dari lingkungan pengembangan
+        # (TLS ke chaquo.com ditutup), jadi lapis ini WAJIB tetap ada.
         best.setdefault("requires_dist", [])
         best.setdefault("deps_source", "")
+        # Ambil info/version terbaru SEKALI (di-cache di _collect → 0 HTTP baru).
+        # Dipakai untuk optimasi: hanya panggil per-versi bila versi terpilih ≠ terbaru.
+        _latest_data = {}
+        _latest_info = {}
+        try:
+            _latest_data = fetch_pypi_metadata(cname)
+            _latest_info = _latest_data.get("info", {}) or {}
+        except ResolveError:
+            _latest_data = {}
+            _latest_info = {}
+        if _latest_info.get("version"):
+            best["latest_version"] = _latest_info["version"]
         try:
             from .wheeldeps import deps_from_wheel
             berkas = best.get("local_path") or ""
@@ -550,21 +622,45 @@ def resolve(
         except Exception:  # noqa: BLE001 — pembaca lokal tidak boleh fatal
             pass
 
+        # BUG K — lapis 2: requires_dist per-versi bila wheel belum ada di cache.
+        #
+        # OPTIMASI (2026-08-13, mencegah timeout matplotlib v1.0.14 regresi):
+        # HANYA panggil endpoint per-versi bila versi TERPILIH ≠ versi TERBARU.
+        # Untuk paket yang memilih versi terbaru, `info.requires_dist` (dari
+        # fetch_pypi_metadata yang sudah di-cache di _collect) sudah benar dan
+        # TIDAK butuh HTTP tambahan. Ini memotong panggilan HTTP per-versi utk
+        # matplotlib (banyak deps versi terbaru) yang dulu membuatnya timeout.
+        if (not best.get("requires_dist") and best.get("version")
+                and best.get("version") != best.get("latest_version")):
+            pv_req = requires_dist_for_version(cname, best["version"])
+            if pv_req:
+                best["requires_dist"] = pv_req
+                best["deps_source"] = "pypi-version"
+                notes.append(
+                    "deps %s dari PyPI per-versi %s: %s" % (
+                        cname, best["version"],
+                        ",".join(r.split(";")[0].strip() for r in pv_req),
+                    )
+                )
+
         try:
-            data = fetch_pypi_metadata(cname)
+            # data full (riwayat rilis) — sudah di-cache, 0 HTTP baru.
+            data = _latest_data if _latest_data else fetch_pypi_metadata(cname)
             releases = data.get("releases", {})
             files_for_version = releases.get(best["version"], [])
             if files_for_version:
                 rp = files_for_version[0].get("requires_python")
                 best["requires_python"] = rp
-            info = data.get("info", {})
-            # HANYA dipakai bila lapis 1 (METADATA wheel) tidak memberi apa pun.
-            # Kalau ditimpa, jawaban paling jujur justru dibuang: METADATA
-            # wheel terikat pada versi yang BENAR-BENAR akan dipasang,
-            # sedangkan info PyPI selalu milik rilis terbaru.
+            info = data.get("info", {}) or _latest_info
+            # HANYA dipakai bila lapis 1 & 2 tidak memberi apa pun (wheel belum
+            # ada di cache DAN endpoint per-versi gagal/versi tak tersedia).
+            # Jangan ditimpa oleh info rilis terbaru (Bug K): itu yang
+            # menyebabkan pytz/typing-extensions hilang.
             if (not best.get("requires_dist")
                     and "requires_dist" in info and info["requires_dist"]):
-                best["requires_dist"] = info["requires_dist"]
+                best["requires_dist"] = [
+                    r for r in info["requires_dist"] if "extra ==" not in (r or "")
+                ]
                 best["deps_source"] = "pypi"
             best["summary"] = (info.get("summary") or "")[:200]
             best["license"] = (info.get("license") or "")[:200]
