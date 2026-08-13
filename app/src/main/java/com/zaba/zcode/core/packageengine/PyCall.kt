@@ -1,61 +1,48 @@
 package com.zaba.zcode.core.packageengine
 
 import android.content.Context
+import android.os.Looper
 import com.chaquo.python.Python
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
- * PyCall — helper panggil fungsi Python (package_runtime) dan terima hasil JSON.
+ * PyCall — helper sinkron untuk fungsi Python package_runtime.
  *
- * Kontrak: fungsi Python menerima argumen primitif/JSON-string dan MENGEMBALIKAN
- * JSON string (bukan dict — PyObject.toString() dict = repr, bukan JSON).
- * Semua panggilan berjalan di thread background dengan timeout (metadata/resolve
- * BOLEH punya timeout — yang dilarang hard timeout hanya interactive session).
+ * PENTING: sinkron di sini berarti worker Python dimiliki thread pemanggil.
+ * Caller WAJIB thread background. Versi v1.0.15 membuat Thread internal lalu
+ * hanya menunggu CountDownLatch 90 detik: saat await timeout, worker Python
+ * tidak dibatalkan dan terus hidup tanpa owner. PackageEngine melepas busyFlag,
+ * sehingga resolve berikutnya dapat overlap dan merusak cache global.
+ *
+ * Timeout operasi panjang bukan tanggung jawab wrapper ini. Network timeout,
+ * retry budget, progress, dan cooperative cancellation dimiliki resolver.
  */
 object PyCall {
 
     class PyCallException(message: String) : Exception(message)
 
-    /** Panggil fn di module Python; hasil = JSON string. Null → gagal/timeout. */
+    /** Panggil fn di module Python; hasil harus JSON string. */
     fun callJson(
         context: Context,
         module: String,
         fn: String,
         vararg args: Any?
     ): String? {
+        check(Looper.myLooper() != Looper.getMainLooper()) {
+            "PyCall $module.$fn wajib dipanggil dari background thread"
+        }
         if (!RuntimeProbe.isChaquopyAvailable()) return null
         val appContext = context.applicationContext
-        val result = AtomicReference<String?>(null)
-        val error = AtomicReference<String?>(null)
-        val latch = CountDownLatch(1)
-        Thread {
-            try {
-                if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(appContext)) {
-                    // CATATAN: JANGAN memakai `error(...)` di sini — di scope ini ada
-                    // variabel lokal bernama `error` (AtomicReference), sehingga
-                    // pemanggilan `error(...)` berisiko resolusi ambigu di compiler.
-                    // Set nilai langsung; blok finally tetap menjalankan countDown().
-                    error.set(
-                        com.zaba.zcode.core.execution.PythonRuntime.failureMessage()
-                            ?: "Python runtime tidak tersedia (butuh Chaquopy)"
-                    )
-                    return@Thread
-                }
-                val py = Python.getInstance().getModule(module)
-                val obj = py.callAttr(fn, *args)
-                result.set(obj.toString())
-            } catch (e: Exception) {
-                error.set(e.message ?: e.toString())
-            } finally {
-                latch.countDown()
-            }
-        }.start()
-        if (!latch.await(90, TimeUnit.SECONDS)) {
-            throw PyCallException("Python call timeout: $module.$fn")
+        if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(appContext)) {
+            throw PyCallException(
+                com.zaba.zcode.core.execution.PythonRuntime.failureMessage()
+                    ?: "Python runtime tidak tersedia (butuh Chaquopy)"
+            )
         }
-        error.get()?.let { throw PyCallException("$module.$fn: $it") }
-        return result.get()
+        return try {
+            val py = Python.getInstance().getModule(module)
+            py.callAttr(fn, *args).toString()
+        } catch (e: Exception) {
+            throw PyCallException("$module.$fn: ${e.message ?: e}")
+        }
     }
 }

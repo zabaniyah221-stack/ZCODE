@@ -50,6 +50,10 @@ class PackageEngineV2(private val context: Context) {
     private val repository = PackageRepository(context)
     private val db = PackageDb(context)
 
+    /** Bridge hidup tepat selama satu resolve; dilepas hanya di finally. */
+    @Volatile
+    private var activeResolveBridge: ResolveOperationBridge? = null
+
     companion object {
         private const val USER_AGENT = "zcode-package-runtime/1.0"
         private const val CONNECT_TIMEOUT_MS = 15_000
@@ -79,6 +83,42 @@ class PackageEngineV2(private val context: Context) {
         // 6 memberi ruang lebih dari dua kali lipat sambil tetap menjamin
         // perulangan ini berhenti bila peta suatu saat saling menunjuk.
         private const val MAX_SUPPORT_ROUNDS = 6
+    }
+
+    /**
+     * Minta resolver aktif berhenti di cancellation point berikutnya.
+     * Return false berarti operasi sedang di tahap non-resolve (mis. download)
+     * atau sudah terminal; kita tidak mengklaim pekerjaan telah berhenti.
+     */
+    fun cancelCurrentOperation(): Boolean {
+        val bridge = activeResolveBridge ?: return false
+        bridge.cancel()
+        Breadcrumb.log("PKG_RESOLVE_CANCEL_REQUEST", "op=${bridge.operationId}")
+        return true
+    }
+
+    private fun resolveWithProgress(
+        requirementText: String,
+        onStep: (Step) -> Unit
+    ): DependencyResolver.ResolvePlan {
+        val bridge = ResolveOperationBridge { display, raw, keepDiagnostic ->
+            onStep(Step.Log("  $display"))
+            if (keepDiagnostic) {
+                Breadcrumb.log("PKG_RESOLVE_PROGRESS", "op=${activeResolveBridge?.operationId} $raw")
+            }
+        }
+        check(activeResolveBridge == null) { "Resolve bridge lama belum terminal" }
+        activeResolveBridge = bridge
+        Breadcrumb.log("PKG_RESOLVE_WORKER_BEGIN", "op=${bridge.operationId} $requirementText")
+        return try {
+            resolver.resolve(requirementText, bridge)
+        } finally {
+            // Ownership invariant: baru terminal setelah Python kembali.
+            if (activeResolveBridge?.operationId == bridge.operationId) {
+                activeResolveBridge = null
+            }
+            Breadcrumb.log("PKG_RESOLVE_WORKER_END", "op=${bridge.operationId}")
+        }
     }
 
     // ------------------------------------------------------------------
@@ -148,7 +188,7 @@ class PackageEngineV2(private val context: Context) {
 
             // 2. Resolve dependencies (reuse plan dari analyze bila diberikan)
             onStep(Step.Begin("Resolve"))
-            val plan = preResolved ?: resolver.resolve(requirementText)
+            val plan = preResolved ?: resolveWithProgress(requirementText, onStep)
             if (!plan.ok) {
                 return fail(plan.errorCode ?: "RESOLUTION", plan.errorStage ?: "resolve",
                     plan.humanError ?: "Resolusi gagal.", plan.technicalError)
@@ -309,7 +349,7 @@ class PackageEngineV2(private val context: Context) {
                     val dasar = kurang.sources[namaPaket] ?: "?"
                     onStep(Step.Log("  butuh $namaPaket [$dasar]"))
                     val sub = try {
-                        resolver.resolve(namaPaket)
+                        resolveWithProgress(namaPaket, onStep)
                     } catch (e: Exception) {
                         onStep(Step.Log("  ⚠️ $namaPaket: resolve gagal (${e.message})"))
                         sudahDiambil.add(namaPaket)
@@ -610,8 +650,15 @@ class PackageEngineV2(private val context: Context) {
         val req = RequirementParser.parse(context, requirementText)
         onLog(Step.Finish("Requirement", true, "${req.name}${if (req.specifier.isNotBlank()) req.specifier else ""}"))
         onLog(Step.Begin("Resolve"))
-        val plan = resolver.resolve(requirementText)
-        onLog(Step.Finish("Resolve", true, "${plan.packages.size} package dalam plan"))
+        val plan = resolveWithProgress(requirementText, onLog)
+        onLog(
+            Step.Finish(
+                "Resolve",
+                plan.ok,
+                if (plan.ok) "${plan.packages.size} package dalam plan"
+                else plan.humanError ?: "Resolusi gagal"
+            )
+        )
         plan.notes.forEach { onLog(Step.Log("  · $it")) }
         if (plan.notes.isNotEmpty()) {
             Breadcrumb.log("PKG_RESOLVE_NOTES", plan.notes.joinToString(" | "))

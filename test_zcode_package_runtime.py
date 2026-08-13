@@ -375,6 +375,160 @@ class TestResolve:
         assert r.marker.evaluate(env) is False
 
 # =====================================================================
+# Resolver reliability — timeout/retry/progress/cancellation (v1.0.15 regression)
+# =====================================================================
+
+class _FakeResolveBridge:
+    def __init__(self):
+        self.cancelled = False
+        self.events = []
+
+    def isCancelled(self):
+        return self.cancelled
+
+    def emit(self, event_json):
+        self.events.append(json.loads(str(event_json)))
+
+
+class _FakeHttpResponse:
+    def __init__(self, body=b"ok"):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def read(self):
+        return self.body
+
+
+class TestResolverReliability:
+    """Guard kelas regresi v1.0.15, bukan guard khusus satu package."""
+
+    def _with_bridge(self, bridge):
+        token = resolve_mod._CURRENT_BRIDGE.set(bridge)
+        pkg_token = resolve_mod._CURRENT_PACKAGE.set("demo")
+        return token, pkg_token
+
+    def _reset_bridge(self, tokens):
+        token, pkg_token = tokens
+        resolve_mod._CURRENT_PACKAGE.reset(pkg_token)
+        resolve_mod._CURRENT_BRIDGE.reset(token)
+
+    def test_timeout_sekali_lalu_sukses_dengan_dua_attempt(self, monkeypatch):
+        import socket
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            if len(calls) == 1:
+                raise socket.timeout("sementara")
+            return _FakeHttpResponse(b"pulih")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        bridge = _FakeResolveBridge()
+        tokens = self._with_bridge(bridge)
+        try:
+            assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"pulih"
+        finally:
+            self._reset_bridge(tokens)
+
+        assert len(calls) == 2, "retry budget harus tepat dua total attempt"
+        assert any(e["stage"] == "http_retry" for e in bridge.events)
+        assert bridge.events[-1]["stage"] == "http_ok"
+        assert all(e.get("package") == "demo" for e in bridge.events)
+
+    def test_http_404_tidak_diretry(self, monkeypatch):
+        from urllib.error import HTTPError
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            raise HTTPError(req.full_url, 404, "not found", {}, None)
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        with pytest.raises(resolve_mod.ResolveError):
+            resolve_mod._http_get("https://chaquo.com/pypi-13.1/tidak-ada/")
+        assert len(calls) == 1, "404 permanen tidak boleh menghabiskan retry"
+
+    def test_http_503_diretry(self, monkeypatch):
+        from urllib.error import HTTPError
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            if len(calls) == 1:
+                raise HTTPError(req.full_url, 503, "busy", {}, None)
+            return _FakeHttpResponse(b"ok")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"ok"
+        assert len(calls) == 2
+
+    def test_cancel_sebelum_request_tidak_menyentuh_network(self, monkeypatch):
+        bridge = _FakeResolveBridge()
+        bridge.cancelled = True
+        tokens = self._with_bridge(bridge)
+        touched = []
+        monkeypatch.setattr(
+            resolve_mod.urllib.request,
+            "urlopen",
+            lambda *a, **k: touched.append(True),
+        )
+        try:
+            with pytest.raises(resolve_mod.ResolveError) as exc:
+                resolve_mod._http_get("https://pypi.org/pypi/demo/json")
+        finally:
+            self._reset_bridge(tokens)
+        assert exc.value.code == "CANCELLED"
+        assert touched == []
+
+    def test_cancel_selama_retry_wait_dihormati(self, monkeypatch):
+        bridge = _FakeResolveBridge()
+        tokens = self._with_bridge(bridge)
+
+        def fake_sleep(_seconds):
+            bridge.cancelled = True
+
+        monkeypatch.setattr(resolve_mod.time, "sleep", fake_sleep)
+        monkeypatch.setattr(resolve_mod.random, "uniform", lambda *a: 0.0)
+        try:
+            with pytest.raises(resolve_mod.ResolveError) as exc:
+                resolve_mod._retry_wait(1)
+        finally:
+            self._reset_bridge(tokens)
+        assert exc.value.code == "CANCELLED"
+
+    def test_resolve_json_selalu_reset_bridge(self, monkeypatch):
+        bridge = _FakeResolveBridge()
+
+        def meledak(*args, **kwargs):
+            raise RuntimeError("uji finally")
+
+        monkeypatch.setattr(resolve_mod, "resolve", meledak)
+        result = json.loads(resolve_mod.resolve_json("demo", progress_bridge=bridge))
+        assert result["ok"] is False
+        assert resolve_mod._CURRENT_BRIDGE.get() is None
+        assert resolve_mod._CURRENT_PACKAGE.get() == ""
+
+    def test_source_progress_tidak_membocorkan_url(self):
+        bridge = _FakeResolveBridge()
+        tokens = self._with_bridge(bridge)
+        try:
+            resolve_mod._emit_progress("http_begin", source="pypi", attempt=1)
+        finally:
+            self._reset_bridge(tokens)
+        event = bridge.events[0]
+        assert event["source"] == "pypi"
+        assert "url" not in event
+
+
+# =====================================================================
 # Smoke test
 # =====================================================================
 
