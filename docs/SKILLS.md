@@ -230,9 +230,53 @@ ARMv7 **Android**. Selalu periksa: ini glibc atau bionic?
 
 | Situs | Status | Solusi |
 |---|---|---|
-| `chaquo.com` via `urllib` | ❌ TLS EOF | pakai `fetch_page` |
+| `chaquo.com` via `urllib` | ⚠️ **TERBANTAH** — ternyata BISA (2026-08-13) | jangan menyerah: langsung `urllib.request.urlopen('https://chaquo.com/pypi-13.1/<pkg>/')` |
 | Log CI (blob storage) | ❌ permanen | audit mandiri |
 | `kaskus.co.id`, `api.pushshift.io` | ❌ | — |
+
+### Mengakali keterbatasan sandbox (pelajaran berbayar, 2026-08-13)
+
+**Jangan pernah menyerah sebelum MENCARI cara, bukan cuma menebak.**
+Aku sempat bilang "sandbox tak bisa akses chaquopy.com" dan "tak bisa uji ARMv7"
+— **dua-duanya salah.** Keduanya ternyata bisa, dan membuka verifikasi yang jauh
+lebih kuat. Aturannya: **klaim "tidak bisa" harus dibuktikan dengan mencoba, bukan
+asumsi.**
+
+#### 1. Jaringan: sandbox BISA akses chaquopy.com & PyPI
+- `urllib.request.urlopen('https://chaquo.com/pypi-13.1/pandas/', timeout=15)` → **HTTP 200**.
+- Dokumen lama bilang "TLS ke chaquo.com ditutup" — **itu kedaluwarsa**. Selalu uji langsung.
+- Yang bisa diambil: daftar wheel per paket, dan **bongkar wheel** (`zipfile`) untuk baca
+  `METADATA` (`Requires-Dist`) & `DT_NEEDED` dari `.so` — verifikasi resolver & peta native
+  terhadap data NYATA, bukan mock.
+
+#### 2. Emulator ARMv7 via qemu (tanpa Android SDK)
+Aku berhasil menjalankan **Python 3.11 ARMv7 asli** di sandbox x86_64 — persis versi &
+arsitektur device user. Langkahnya:
+
+```bash
+sudo apt-get install -y qemu-user-static          # qemu-armhf
+# Python 3.11.15 ARMv7 (glibc) dari python-build-standalone:
+#   https://github.com/astral-sh/python-build-standalone/releases/latest
+#   cpython-3.11.15+<ts>-armv7-unknown-linux-gnueabihf-install_only.tar.gz
+# glibc armhf (ld-linux-armhf.so.3): debian pool/main/g/glibc/libc6_..._armhf.deb
+# libgcc_s armhf:                          libgcc-s1_..._armhf.deb
+# (extract semua ke /tmp/glibc-armhf dgn dpkg-deb -x)
+alias armpy='QEMU_LD_PREFIX=/tmp/glibc-armhf qemu-armhf -L /tmp/glibc-armhf \
+  /tmp/py311armv7/python/bin/python3.11'
+armpy -c "import platform; print(platform.machine())"   # -> armv7l
+```
+
+- **Network juga jalan di dalam qemu** (`urllib` ke chaquopy OK).
+- `packaging` pure-Python: download wheel `py3-none-any`, unzip ke `site-packages` ARMv7.
+- Dengan ini, resolver ZCODE bisa diuji di **Python 3.11 ARMv7 persis**, bukan 3.13 host.
+
+#### 3. Nilai & batas emulator ini
+- **BISA:** verifikasi logika & timing resolver di Python 3.11 ARMv7 (persis device).
+  Contoh: resolve matplotlib diukur **23 detik** < batas 90s PyCall → membuktikan
+  optimasi timeout benar.
+- **TIDAK BISA:** menjalankan **wheel native Android** (matplotlib `.so`) karena butuh
+  **bionic libc + Chaquopy runtime** yang hanya ada di APK. Jadi eksekusi `import` penuh
+  tetap hanya di device. Jangan klaim lebih dari itu.
 
 ---
 
