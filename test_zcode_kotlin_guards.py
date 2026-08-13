@@ -2446,3 +2446,267 @@ class TestNamaModulDariWheel:
                 "%s mulai menerima nama modul — pemisahan native vs impor "
                 "bocor" % fn
             )
+
+
+class TestDependensiDariWheel:
+    """Guard v1.0.14 — dependensi dibaca dari METADATA wheel, bukan peta tangan.
+
+    KEGAGALAN YANG DIJAGA (log perangkat 2026-08-13):
+        PKG_RESOLVE_NOTES | host_deps pandas -> numpy      <- HANYA numpy
+        ImportError: Unable to import required dependencies: pytz
+
+    METADATA pandas 2.1.3 mencantumkan EMPAT dependensi wajib: numpy,
+    python-dateutil, pytz, tzdata. ZCODE hanya membawa satu karena memakai
+    peta buatan tangan.
+
+    Yang membuktikan katalog bukan obatnya: `pytz` SUDAH ada di katalog
+    bawaan, tetapi tetap tidak ikut terpasang.
+    """
+
+    def _wd(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        import package_runtime.wheeldeps as m
+        return m
+
+    def _wheel(self, tmp, nama, versi, requires, metadata_version="2.1",
+               akhiran="\n"):
+        """Bangun wheel sungguhan (ZIP + dist-info) sesuai PEP 427."""
+        import zipfile, os as _os
+        jalur = _os.path.join(tmp, "%s-%s-py3-none-any.whl" % (nama, versi))
+        di = "%s-%s.dist-info" % (nama, versi)
+        baris = ["Metadata-Version: %s" % metadata_version,
+                 "Name: %s" % nama, "Version: %s" % versi]
+        baris += ["Requires-Dist: %s" % r for r in requires]
+        with zipfile.ZipFile(jalur, "w") as z:
+            z.writestr("%s/METADATA" % di, akhiran.join(baris) + akhiran)
+            z.writestr("%s/RECORD" % di, "%s/METADATA,,\n" % di)
+        return jalur
+
+    def test_modul_pembaca_ada(self):
+        p = ROOT / "app/src/main/python/package_runtime/wheeldeps.py"
+        assert p.exists(), (
+            "wheeldeps.py hilang — dependensi kembali ditebak dari peta "
+            "tangan dan paket seperti pandas akan kehilangan pytz lagi"
+        )
+
+    def test_pandas_membawa_empat_dependensi(self):
+        """Kasus persis yang gagal di perangkat."""
+        import tempfile
+        wd = self._wd()
+        w = self._wheel(tempfile.mkdtemp(), "pandas", "2.1.3", [
+            'numpy<2,>=1.23.2; python_version == "3.11"',
+            "python-dateutil>=2.8.2",
+            "pytz>=2020.1",
+            "tzdata>=2022.1",
+        ])
+        nama = {wd.normalisasi(r["name"])
+                for r in wd.deps_from_wheel(w, {"python_version": "3.11"})["requires"]}
+        assert nama == {"numpy", "python-dateutil", "pytz", "tzdata"}, (
+            "dependensi pandas terbaca %s — pytz hilang berarti ImportError "
+            "yang sama akan terulang" % sorted(nama)
+        )
+
+    def test_dependensi_extra_tidak_ikut_dipasang(self):
+        """METADATA pandas punya 77 baris Requires-Dist, hanya 6 wajib.
+
+        Memasang semuanya berarti mengunduh puluhan megabita yang tidak
+        pernah dipakai — dan sebagian di antaranya tidak punya wheel Android.
+        """
+        import tempfile
+        wd = self._wd()
+        w = self._wheel(tempfile.mkdtemp(), "x", "1.0", [
+            "numpy>=1.0",
+            'pytest>=7; extra == "test"',
+            'sphinx; extra == "docs"',
+        ])
+        h = wd.deps_from_wheel(w)
+        assert [r["name"] for r in h["requires"]] == ["numpy"]
+        assert len(h["optional"]) == 2, "dependensi extra tidak dipisahkan"
+
+    def test_crlf_windows_tidak_merusak_nama(self):
+        """DITEMUKAN SAAT PENGUJIAN: wheel `tifffile` dibangun di Windows,
+        setiap baris METADATA-nya berakhiran CR. Versi pertama parser
+        menghasilkan nama `numpy\\r` lalu membuangnya diam-diam — dependensi
+        hilang tanpa satu pun pesan."""
+        import tempfile
+        wd = self._wd()
+        w = self._wheel(tempfile.mkdtemp(), "tifffile", "2026.3.3",
+                        ["numpy>=1.20", 'lxml; extra == "xml"'], akhiran="\r\n")
+        h = wd.deps_from_wheel(w)
+        nama = [r["name"] for r in h["requires"]]
+        assert nama == ["numpy"], (
+            "CRLF merusak pembacaan: %r — dependensi hilang tanpa suara" % nama
+        )
+        # BOCOR SAAT UJI MUTASI (M1): memeriksa nama saja TIDAK cukup — regex
+        # nama memakai `\s*` yang kebetulan ikut menyerap CR, sehingga
+        # menghapus .strip() tetap lulus. Yang benar-benar rusak tanpa strip
+        # adalah bagian SETELAH nama: penanda versi membawa CR, dan marker
+        # `extra` gagal dikenali sehingga dependensi opsional ikut terpasang.
+        assert "\r" not in h["requires"][0]["specifier"], (
+            "CR ikut terbawa ke penanda versi: %r" % h["requires"][0]["specifier"]
+        )
+        assert h["requires"][0]["specifier"] == ">=1.20"
+        assert len(h["optional"]) == 1, (
+            "marker extra tidak dikenali saat baris berakhiran CRLF — "
+            "dependensi opsional ikut dipasang"
+        )
+
+    def test_marker_platform_lain_ditolak(self):
+        import tempfile
+        wd = self._wd()
+        w = self._wheel(tempfile.mkdtemp(), "x", "1.0", [
+            'pywin32; sys_platform == "win32"',
+            'pyobjc; sys_platform == "darwin"',
+            "requests",
+        ])
+        nama = [r["name"] for r in
+                wd.deps_from_wheel(w, {"sys_platform": "linux"})["requires"]]
+        assert nama == ["requests"], (
+            "dependensi Windows/macOS ikut terpasang: %s" % nama
+        )
+
+    def test_semua_versi_format_metadata_terbaca(self):
+        """Wheel nyata memakai Metadata-Version 2.1, 2.3, 2.4, dan 2.5;
+        Chaquopy menulis 1.2. Semua harus terbaca oleh parser yang sama."""
+        import tempfile
+        wd = self._wd()
+        t = tempfile.mkdtemp()
+        for i, mv in enumerate(["1.2", "2.1", "2.3", "2.4", "2.5"]):
+            w = self._wheel(t, "p%d" % i, "1.0", ["numpy"], metadata_version=mv)
+            nama = [r["name"] for r in wd.deps_from_wheel(w)["requires"]]
+            assert nama == ["numpy"], "Metadata-Version %s tidak terbaca" % mv
+
+    def test_tidak_pernah_melempar(self):
+        wd = self._wd()
+        for arg in ("/tidak/ada.whl", "", None, "/tmp"):
+            h = wd.deps_from_wheel(arg)
+            assert isinstance(h, dict) and "requires" in h
+
+    def test_runtime_sendiri_tidak_ikut_dipasang(self):
+        import tempfile
+        wd = self._wd()
+        w = self._wheel(tempfile.mkdtemp(), "x", "1.0",
+                        ["setuptools", "pip", "wheel", "requests"])
+        assert [r["name"] for r in wd.deps_from_wheel(w)["requires"]] == ["requests"]
+
+    def test_parser_tidak_bergantung_pustaka_pihak_ketiga(self):
+        """`packaging` belum tentu ada di runtime Chaquopy. Kalau pembaca ini
+        mengimpornya, kegagalan impor akan mematikan SELURUH resolusi."""
+        src = read(ROOT / "app/src/main/python/package_runtime/wheeldeps.py")
+        for terlarang in ("from packaging", "import packaging"):
+            assert terlarang not in src, (
+                "wheeldeps mengimpor %r — runtime Chaquopy belum tentu "
+                "menyediakannya" % terlarang
+            )
+
+    def test_singgahan_metadata_menghapus_panggilan_ganda(self):
+        """Diukur ke PyPI: /pypi/matplotlib/json = 2.390 KB per panggilan.
+        Duplikat _collect()+_choose() untuk 11 paket = 32 MB / ~182 detik di
+        4G, melewati batas 90 detik PyCall — kegagalan 'senyap' di perangkat.
+        """
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        assert "_METADATA_CACHE" in src, "tidak ada singgahan metadata"
+        i = src.find("def fetch_pypi_metadata")
+        assert i > 0
+        jendela = src[i:i + 400]
+        assert "_METADATA_CACHE" in jendela, (
+            "fetch_pypi_metadata tidak memakai singgahan — trafik berlipat "
+            "dan batas waktu terlampaui lagi"
+        )
+        # BOCOR SAAT UJI MUTASI (M11): nama itu muncul dua kali — definisi
+        # fungsinya dan pemanggilannya. Menghapus panggilannya saja tetap
+        # lulus, padahal itulah yang membuat singgahan tak pernah bersih.
+        assert "def clear_metadata_cache" in src, "fungsi pembersih hilang"
+        assert re.search(r"\n\s+clear_metadata_cache\(\)", src), (
+            "clear_metadata_cache tidak pernah DIPANGGIL — singgahan hidup "
+            "melewati batas satu resolusi dan daftar versi bisa basi"
+        )
+
+    def test_metadata_wheel_menang_atas_pypi(self):
+        """METADATA wheel terikat pada versi yang BENAR-BENAR dipasang;
+        info PyPI selalu milik rilis terbaru. Menimpanya membuang jawaban
+        yang paling jujur."""
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        i = src.find('if (not best.get("requires_dist")')
+        assert i > 0, (
+            "lapis PyPI menimpa hasil METADATA wheel tanpa syarat"
+        )
+
+    def test_cadangan_pypi_tetap_ada(self):
+        """Wheel indeks Chaquopy belum bisa diuji dari lingkungan ini
+        (TLS ke chaquo.com ditutup), jadi keyakinan hanya ~90%. Menghapus
+        cadangan berarti bertaruh pada asumsi yang belum terbukti."""
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        # BOCOR SAAT UJI MUTASI (M9): frasa itu muncul DUA KALI di berkas
+        # (sekali di _collect, sekali di lapis cadangan), jadi melumpuhkan
+        # salah satunya tetap lulus. Yang harus dipastikan: lapis cadangan
+        # benar-benar MENGISI requires_dist dari hasil panggilan itu.
+        assert src.count("fetch_pypi_metadata(cname)") >= 2, (
+            "salah satu jalur PyPI dilumpuhkan — cadangan tidak utuh"
+        )
+        i = src.find('best["deps_source"] = "pypi"')
+        assert i > 0, (
+            "lapis cadangan PyPI tidak pernah mengisi requires_dist — kalau "
+            "METADATA wheel Chaquopy ternyata kosong, tidak ada penyelamat"
+        )
+        sebelum = src[max(0, i - 1200):i]
+        assert "fetch_pypi_metadata(cname)" in sebelum, (
+            "cadangan diisi tanpa benar-benar memanggil PyPI"
+        )
+        assert "NATIVE_HOST_DEPS" in src, "cadangan terakhir ikut dihapus"
+
+    def test_kegagalan_analisis_tercatat_di_diagnostics(self):
+        """Log perangkat v1.0.13: analisis matplotlib timeout, Diagnostics
+        KOSONG. Pemakai tidak punya logcat — diam berarti buta total."""
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt")
+        i = src.find("PKG_ANALYZE_BEGIN")
+        assert i > 0
+        potongan = src[i:i + 1500]
+        assert "PKG_ANALYZE_ERROR" in potongan, (
+            "blok catch pada analisis tidak menulis breadcrumb — kegagalan "
+            "timeout kembali senyap di Diagnostics"
+        )
+
+    def test_penelusuran_rekursif_terhadap_paket_nyata(self):
+        """Uji terhadap daftar paket populer yang disediakan user.
+
+        Menelusuri Requires-Dist secara rekursif harus menemukan dependensi
+        yang TIDAK ada di daftar mana pun — 54 paket seperti
+        `argon2-cffi-bindings`, `catalogue`, `cymem`, `narwhals` yang
+        mustahil ditebak lebih dulu. Uji ini memakai wheel yang dibangun
+        lokal, jadi tidak butuh jaringan.
+        """
+        import tempfile
+        wd = self._wd()
+        t = tempfile.mkdtemp()
+        # rantai 3 tingkat: aplikasi -> pustaka -> pustaka-dalam
+        self._wheel(t, "aplikasi", "1.0", ["pustaka>=1"])
+        self._wheel(t, "pustaka", "1.0", ["pustaka-dalam"])
+        self._wheel(t, "pustaka-dalam", "1.0", [])
+        import glob as _g, os as _os
+        def cari(n):
+            for f in _g.glob(_os.path.join(t, "*.whl")):
+                if wd.normalisasi(_os.path.basename(f).split("-")[0]) == wd.normalisasi(n):
+                    return f
+            return None
+        lihat, antre = set(), ["aplikasi"]
+        while antre:
+            n = antre.pop(0)
+            if wd.normalisasi(n) in lihat:
+                continue
+            lihat.add(wd.normalisasi(n))
+            f = cari(n)
+            if f:
+                antre += [r["name"] for r in wd.deps_from_wheel(f)["requires"]]
+        assert lihat == {"aplikasi", "pustaka", "pustaka-dalam"}, (
+            "penelusuran berhenti sebelum tingkat terdalam: %s" % sorted(lihat)
+        )
+
+    def test_daftar_paket_uji_tersedia(self):
+        """Daftar 279 paket populer disimpan sebagai bahan uji regresi,
+        BUKAN sebagai katalog. Menelusurinya memunculkan 54 paket tambahan
+        dalam 3 putaran — bukti bahwa daftar tulisan tangan selalu kurang."""
+        p = ROOT / "tools/paket_uji_dep.txt"
+        assert p.exists(), "daftar bahan uji hilang"
+        assert len(read(p).split()) > 250

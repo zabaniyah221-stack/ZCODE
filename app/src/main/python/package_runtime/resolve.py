@@ -13,6 +13,7 @@ Hasil: plan = {packages: [{name, canonical_name, version, source, filename, url,
 sha256, size, requires_dist, extras, priority, compat_reason, reason?}],
 conflicts: [...], unavailable: [...]}
 """
+import os
 import re
 import urllib.request
 
@@ -61,7 +62,32 @@ def _http_get(url: str) -> bytes:
         )
 
 
+# Singgahan metadata PyPI selama satu proses resolusi.
+#
+# KENAPA ADA (2026-08-13, v1.0.14). `fetch_pypi_metadata` dipanggil DUA KALI
+# untuk setiap paket dengan URL yang persis sama: sekali di `_collect()` untuk
+# mencari kandidat wheel, sekali lagi di `_choose()` untuk membaca metadata.
+# Balasan endpoint itu memuat SELURUH riwayat rilis — diukur langsung ke PyPI:
+#
+#     /pypi/matplotlib/json -> 2.390 KB (142 rilis)
+#     /pypi/pandas/json     -> 2.081 KB (117 rilis)
+#
+# Untuk matplotlib (11 paket dalam rencana) itu berarti 33 panggilan dan
+# sekitar 32 MB, yang di jaringan 4G memakan ~182 detik dan menabrak batas
+# waktu 90 detik di PyCall — persis kegagalan "senyap" yang dilaporkan dari
+# perangkat. Sepertiga dari trafik itu murni terbuang karena duplikat.
+_METADATA_CACHE: dict[str, dict] = {}
+
+
+def clear_metadata_cache() -> None:
+    """Kosongkan singgahan — dipanggil di awal setiap resolusi baru."""
+    _METADATA_CACHE.clear()
+
+
 def fetch_pypi_metadata(name: str) -> dict:
+    kunci = (name or "").strip().lower()
+    if kunci in _METADATA_CACHE:
+        return _METADATA_CACHE[kunci]
     try:
         import json
         data = json.loads(_http_get(PYPI_JSON_URL.format(name=name)).decode("utf-8"))
@@ -73,6 +99,7 @@ def fetch_pypi_metadata(name: str) -> dict:
             "Metadata package tidak bisa dibaca dari PyPI.",
             "%s: %s" % (name, e),
         )
+    _METADATA_CACHE[kunci] = data
     return data
 
 
@@ -374,6 +401,10 @@ def resolve(
     # Jejak keputusan resolver yang tidak terlihat dari daftar paket akhir.
     # Dipakai untuk mendiagnosis dari perangkat (user tidak punya logcat).
     notes: list[str] = []
+    # Singgahan hanya berlaku untuk SATU resolusi. Menyimpannya lebih lama
+    # berarti pemakai yang memasang paket lagi setengah jam kemudian bisa
+    # mendapat daftar versi yang sudah basi.
+    clear_metadata_cache()
     seen: set[str] = set()
     env = dict(marker_env) if marker_env else {}
     if "python_version" not in env:
@@ -481,8 +512,44 @@ def resolve(
             best["version"] = parse_wheel(best["filename"])["version"]
         except WheelInfoError:
             best["version"] = ""
-        # informasi dependensi dari metadata PyPI (bila tersedia)
+        # DEPENDENSI — SUMBER BERLAPIS (v1.0.14).
+        #
+        # Lapis 1: METADATA di dalam wheel yang sudah ada di singgahan lokal.
+        # Ini sumber paling jujur DAN paling murah: wheel-nya memang harus
+        # diunduh untuk dipasang, jadi membacanya nol panggilan jaringan.
+        # Terverifikasi terhadap 79 wheel PyPI asli — cocok persis dengan
+        # daftar yang benar-benar dipasang pip, nol selisih.
+        #
+        # Lapis 2 (di bawah): metadata PyPI, dipakai bila wheel belum ada di
+        # singgahan. Wheel indeks Chaquopy belum bisa diuji dari lingkungan
+        # pengembangan (TLS ke chaquo.com ditutup), jadi lapis ini WAJIB tetap
+        # ada — bukan sekadar formalitas.
         best.setdefault("requires_dist", [])
+        best.setdefault("deps_source", "")
+        try:
+            from .wheeldeps import deps_from_wheel
+            berkas = best.get("local_path") or ""
+            if not berkas and wheels_dir and best.get("filename"):
+                calon = os.path.join(wheels_dir, best["filename"])
+                if os.path.isfile(calon):
+                    berkas = calon
+            if berkas:
+                dw = deps_from_wheel(berkas, env)
+                if not dw.get("error"):
+                    best["requires_dist"] = [
+                        (r["name"] + " " + r["specifier"]).strip()
+                        for r in dw.get("requires", [])
+                    ]
+                    best["deps_source"] = "wheel"
+                    notes.append(
+                        "deps %s dari METADATA wheel: %s" % (
+                            cname,
+                            ",".join(r["name"] for r in dw.get("requires", [])) or "(tidak ada)",
+                        )
+                    )
+        except Exception:  # noqa: BLE001 — pembaca lokal tidak boleh fatal
+            pass
+
         try:
             data = fetch_pypi_metadata(cname)
             releases = data.get("releases", {})
@@ -491,8 +558,14 @@ def resolve(
                 rp = files_for_version[0].get("requires_python")
                 best["requires_python"] = rp
             info = data.get("info", {})
-            if "requires_dist" in info and info["requires_dist"]:
+            # HANYA dipakai bila lapis 1 (METADATA wheel) tidak memberi apa pun.
+            # Kalau ditimpa, jawaban paling jujur justru dibuang: METADATA
+            # wheel terikat pada versi yang BENAR-BENAR akan dipasang,
+            # sedangkan info PyPI selalu milik rilis terbaru.
+            if (not best.get("requires_dist")
+                    and "requires_dist" in info and info["requires_dist"]):
                 best["requires_dist"] = info["requires_dist"]
+                best["deps_source"] = "pypi"
             best["summary"] = (info.get("summary") or "")[:200]
             best["license"] = (info.get("license") or "")[:200]
             best["project_url"] = info.get("project_url")

@@ -226,6 +226,16 @@ fun PipScreen(
                     scope.launch { handleEngineStep(step) }
                 }
             } catch (e: Exception) {
+                // KEGAGALAN INI PERNAH SENYAP TOTAL (v1.0.13, log perangkat).
+                // Analisis matplotlib melempar timeout PyCall, dan jalur catch
+                // ini hanya menulis ke layar — Diagnostics tidak mencatat apa
+                // pun, sehingga dari HP mustahil dibedakan antara "aplikasi
+                // hang", "jaringan putus", dan "batas waktu terlampaui".
+                // Pemakai tidak punya logcat; diam di sini = buta total.
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "PKG_ANALYZE_ERROR",
+                    "$trimmed [${e.javaClass.simpleName}] ${e.message ?: "tanpa pesan"}"
+                )
                 withContext(Dispatchers.Main) {
                     isInstalling = false
                     appendLog("\n❌ ${e.message}\n")

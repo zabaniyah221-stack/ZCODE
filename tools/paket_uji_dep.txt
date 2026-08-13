@@ -1,0 +1,33 @@
+absl-py aiofiles aiohttp aiosignal alembic annotated-types antlr4-python3-runtime anyio
+appdirs argon2-cffi arrow asttokens async-timeout attrs audioread babel backcall
+beautifulsoup4 bidict bleach blinker bokeh botocore Brotli cachetools certifi cffi
+chardet charset-normalizer click cloudpickle colorama comm confection contourpy coverage
+cryptography cycler dataclasses decorator defusedxml dill distlib docutils eccodes einops
+email-validator emoji entrypoints et-xmlfile exceptiongroup executing filelock filterpy
+firebase-admin flake8 fonttools fqdn frozenlist fsspec ftfy future gast geographiclib
+google-api-core google-auth google-crc32c googleapis-common-protos grpcio gTTS h11 h2
+h5py hpack html5lib httpcore httpx humanize hyperframe idna imageio importlib-metadata
+importlib-resources inflection iniconfig intervaltree ipaddress ipython ipywidgets
+isoduration isort itsdangerous jedi Jinja2 jmespath joblib json5 jsonpointer jsonschema
+jupyter-client jupyter-core jupyterlab-pygments kiwisolver langcodes lazy-loader lerc
+librosa lightgbm locket loguru lxml lz4 Mako Markdown markdown-it-py MarkupSafe
+matplotlib matplotlib-inline mdit-py-plugins mdurl mistune more-itertools mpmath msgpack
+multidict multipledispatch murmurhash mutagen mypy-extensions natsort nbformat
+nest-asyncio networkx nltk numba numexpr numpy oauthlib opencv-python
+opencv-python-headless openpyxl opt-einsum orjson outcome overrides packaging pandas
+pandocfilters parso pathspec pexpect pickleshare Pillow pip pkgutil-resolve-name
+platformdirs plotly pluggy pooch portalocker preshed priority proglog prometheus-client
+prompt-toolkit protobuf psutil ptyprocess pure-eval py py-cpuinfo pyasn1 pyasn1-modules
+pycodestyle pycountry pycparser pycryptodome pydantic pydantic-core pydub pyee pyerfa
+pyfiglet pygments pymongo pynacl pyopenssl pyparsing pyrsistent pysocks pytest
+python-dateutil python-dotenv python-json-logger python-multipart pytz pywavelets pyyaml
+pyzmq qrcode qtconsole QtPy regex requests requests-oauthlib rfc3339-validator
+rfc3986-validator rich rope rsa ruamel-yaml safetensors scikit-image scikit-learn scipy
+seaborn send2trash sentencepiece setuptools shapely shellingham six smart-open sniffio
+sortedcontainers sounddevice soundfile soupsieve spacy srsly stack-data starlette
+statsmodels sympy tabulate tenacity termcolor terminado text-unidecode thinc
+threadpoolctl tifffile tinycss2 tokenizers toml tomli toolz torch torchvision tornado
+tqdm traitlets transformers typer types-python-dateutil typing-extensions tzdata ujson
+unicodedata2 urllib3 validators wasabi wcwidth webcolors webencodings websocket-client
+websockets werkzeug wheel wrapt wsproto xarray xlrd xlsxwriter xlwt xmltodict yarl zipp
+zstandard
