@@ -82,7 +82,10 @@ class DependencyResolver(private val context: Context) {
         return optString(key).takeIf { it.isNotBlank() }
     }
 
-    fun resolve(requirementText: String): ResolvePlan {
+    fun resolve(
+        requirementText: String,
+        progressBridge: ResolveOperationBridge? = null
+    ): ResolvePlan {
         val wheelsDir = Paths.pythonWheels(context).absolutePath
         val tested = loadTestedManifestJson()
         val json = PyCall.callJson(
@@ -99,7 +102,10 @@ class DependencyResolver(private val context: Context) {
             // pernah cocok dengan wheel Chaquopy — sebab numpy/pandas/pillow/
             // matplotlib selalu ditolak walau wheel-nya ADA.
             Paths.currentAbi().replace('_', '-'),
-            android.os.Build.VERSION.SDK_INT
+            android.os.Build.VERSION.SDK_INT,
+            // Callback per-operasi: progress + cooperative cancellation.
+            // Null tetap didukung untuk caller lama/test non-UI.
+            progressBridge
         ) ?: return ResolvePlan(false, emptyList(), emptyList(), emptyList(),
             "ENGINE_UNAVAILABLE", "engine", "Package engine tidak tersedia (butuh Chaquopy runtime).", null)
 

@@ -101,6 +101,10 @@ fun PipScreen(
     var packageName by remember { mutableStateOf("") }
     var logText by remember { mutableStateOf(initialLog()) }
     var isInstalling by remember { mutableStateOf(false) }
+    // Analyze punya cooperative Cancel. Download/install belum boleh mengklaim
+    // bisa dibatalkan karena transaction stage-nya berbeda.
+    var isAnalyzing by remember { mutableStateOf(false) }
+    var isCancelling by remember { mutableStateOf(false) }
     var consoleLines by remember { mutableStateOf(listOf<ConsoleLine>()) }
     var pendingRiskyReq by remember { mutableStateOf<String?>(null) }
     var pendingRiskyReason by remember { mutableStateOf("") }
@@ -213,6 +217,17 @@ fun PipScreen(
         }
     }
 
+    fun cancelCurrentAnalyze() {
+        if (!isAnalyzing || isCancelling) return
+        if (engine.cancelCurrentOperation()) {
+            isCancelling = true
+            appendLog("\n⏳ Membatalkan analisis setelah operasi jaringan aktif selesai…\n")
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCEL_REQUEST", packageName.trim())
+        } else {
+            appendLog("\nℹ️ Analisis sudah selesai atau sedang berpindah tahap.\n")
+        }
+    }
+
     fun analyzeThenInstall(req: String) {
         if (isInstalling) return
         val trimmed = req.trim()
@@ -225,6 +240,8 @@ fun PipScreen(
             return
         }
         isInstalling = true
+        isAnalyzing = true
+        isCancelling = false
         consoleLines = emptyList()
         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_BEGIN", trimmed)
         appendLog("\n> analyze $trimmed\n")
@@ -246,18 +263,32 @@ fun PipScreen(
                 )
                 withContext(Dispatchers.Main) {
                     isInstalling = false
+                    isAnalyzing = false
+                    isCancelling = false
                     appendLog("\n❌ ${e.message}\n")
                 }
                 return@launch
             }
             val risk = engine.riskDescription(plan, trimmed)
             withContext(Dispatchers.Main) {
+                // Python sudah kembali: baru sekarang operasi resolve terminal
+                // dan tombol Start boleh tersedia lagi.
+                isAnalyzing = false
+                isCancelling = false
                 if (!plan.ok) {
                     isInstalling = false
-                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
-                        "PKG_ANALYZE_FAIL", "$trimmed [${plan.errorCode}] ${plan.humanError}"
-                    )
-                    appendLog("\n❌ [${plan.errorCode}] ${plan.humanError}\n")
+                    if (plan.errorCode == "CANCELLED") {
+                        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCELLED", trimmed)
+                        appendLog("\n🛑 Analisis dibatalkan. Tidak ada package yang diubah.\n")
+                    } else {
+                        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                            "PKG_ANALYZE_FAIL", "$trimmed [${plan.errorCode}] ${plan.humanError}"
+                        )
+                        appendLog("\n❌ [${plan.errorCode}] ${plan.humanError}\n")
+                        plan.technicalError?.takeIf { it.isNotBlank() }?.let {
+                            appendLog("--- detail teknis ---\n$it\n")
+                        }
+                    }
                     return@withContext
                 }
                 // BUG C: modul stdlib bukan kegagalan.
@@ -390,7 +421,10 @@ fun PipScreen(
                     packageName = packageName,
                     onPackageNameChange = { packageName = it },
                     isInstalling = isInstalling,
+                    isAnalyzing = isAnalyzing,
+                    isCancelling = isCancelling,
                     onInstall = { analyzeThenInstall(packageName) },
+                    onCancel = { cancelCurrentAnalyze() },
                     onRequirementsTxt = {
                         appendLog("\nℹ️ requirements.txt: buka file di editor lalu salin barisnya ke sini.\n")
                     },
@@ -773,7 +807,10 @@ private fun ManualTab(
     packageName: String,
     onPackageNameChange: (String) -> Unit,
     isInstalling: Boolean,
+    isAnalyzing: Boolean,
+    isCancelling: Boolean,
     onInstall: () -> Unit,
+    onCancel: () -> Unit,
     onRequirementsTxt: () -> Unit,
     consoleLines: List<ConsoleLine>,
     consoleScroll: androidx.compose.foundation.ScrollState,
@@ -803,21 +840,28 @@ private fun ManualTab(
                 textStyle = TextStyle(fontSize = 14.sp)
             )
             Button(
-                onClick = onInstall,
-                enabled = packageName.isNotBlank() && !isInstalling,
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                onClick = if (isAnalyzing) onCancel else onInstall,
+                enabled = if (isAnalyzing) !isCancelling else packageName.isNotBlank() && !isInstalling,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isAnalyzing) Color(0xFF8B2E2E)
+                    else MaterialTheme.colorScheme.primary
+                ),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                if (isInstalling) {
-                    Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+                when {
+                    isAnalyzing -> Text(
+                        if (isCancelling) "Membatalkan…" else "Batalkan",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                    isInstalling -> Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             color = MaterialTheme.colorScheme.onPrimary,
                             strokeWidth = 2.dp
                         )
                     }
-                } else {
-                    Text("Install", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary)
+                    else -> Text("Install", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }

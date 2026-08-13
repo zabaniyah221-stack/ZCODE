@@ -5,10 +5,10 @@ Dokumen ini boleh diubah kapan saja: ada permintaan fitur baru, bug, error, atau
 temuan riset yang mematahkan asumsi di sini. Kalau kenyataan bertentangan dengan
 PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
 
-Versi saat ini: `1.0.1` (`gradle.properties` = sumber tunggal)
+Versi saat ini: `1.0.16` (`gradle.properties` = sumber tunggal)
 Terakhir diperbarui: 2026-08-13
-Revisi: 2026-08-13 — §5 Bug K (kelas dependensi-per-versi), §6 Build #6,
-§8 batas jujur pandas ARMv7 (2.1.3 & 1.5.0 tersedia). (PRD = pegangan, bukan acuan terkunci.)
+Revisi: 2026-08-13 — §5 Bug L (timeout layering/orphan resolver), RFC reliability,
+serta hasil verifikasi bionic311 numpy/pandas/matplotlib. (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
@@ -139,6 +139,18 @@ Detail lengkap: `RENCANA_BUILD_2.md`.
 | I | **tidak ada teks yang bisa disalin** | seluruh UI |
 | J | breadcrumb hanya 7 dari 49 file | — |
 | K | deps dibaca dari **versi terbaru**, bukan versi terpilih → `pandas` (pytz), `rich` (typing-extensions) hilang | `resolve.py` (`info.requires_dist`) |
+| L | retry `3×20s` berada di dalam hard timeout total 90s; wrapper berhenti menunggu tetapi worker Python tetap hidup tanpa owner | `resolve.py`, `PyCall.kt` |
+
+> **Bug L — status IMPLEMENTED, menunggu CI + UAT perangkat (v1.0.16):** log
+> perangkat v1.0.15 menunjukkan numpy/matplotlib/pandas berhenti masing-masing
+> tepat ~90 detik. `PyCall` sekarang sinkron pada background caller (tidak membuat
+> thread yatim), timeout hanya milik I/O, retry dibatasi 2 attempt transient,
+> resolve diserialisasi, progress masuk UI/Diagnostics, dan Analyze dapat
+> dibatalkan kooperatif. Rancangan dan sumber pembanding:
+> `RFC_INSTALL_MODULES_RELIABILITY_2026_08_13.md`. Verifikasi `bionic311`
+> (Python 3.11 + bionic, **bukan JVM/HP**): numpy 12.04s/4 paket, pandas
+> 15.64s/9 paket, matplotlib 34.27s/17 paket. Klaim DEVICE VERIFIED belum boleh
+> diberikan sebelum APK diuji di HP ARMv7 user.
 
 > **Catatan (2026-08-13, sifat PRD = pegangan, bukan acuan terkunci):** baris di atas
 > akan terus berubah seiring kenyataan. Kode `main` (d4efbb9) sudah memperbaiki

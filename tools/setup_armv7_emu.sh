@@ -7,7 +7,13 @@ set -euo pipefail
 need_cmd() { command -v "$1" >/dev/null || { echo "butuh $1" >&2; exit 1; }; }
 need_cmd curl
 need_cmd python3
-need_cmd qemu-armhf || { sudo apt-get update -qq && sudo apt-get install -y -qq qemu-user-static; }
+# `need_cmd` memanggil exit, jadi pola lama `need_cmd qemu-armhf || install`
+# tidak pernah mencapai fallback. Periksa tanpa exit dulu, baru validasi.
+if ! command -v qemu-armhf >/dev/null; then
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq qemu-user-static
+fi
+need_cmd qemu-armhf
 need_cmd dpkg-deb
 need_cmd unzip
 command -v debugfs >/dev/null || command -v /usr/sbin/debugfs >/dev/null || sudo apt-get install -y -qq e2fsprogs
@@ -71,6 +77,9 @@ if [[ ! -x /var/tmp/bionic-sys/system/bin/linker ]]; then
   "$DEBUGFS" -R "dump -p usr/share/zoneinfo/tzdata /var/tmp/bionic-sys/usr/share/zoneinfo/tzdata" "$IMG" 2>/dev/null || true
   rm -rf /var/tmp/bionic-img
 fi
+# Extension `binascii` Termux ditautkan ke SONAME libz.so.1, sedangkan image
+# Android API 24 menyediakan nama libz.so. Keduanya ABI library yang sama.
+ln -sfn libz.so /var/tmp/bionic-sys/system/lib/libz.so.1
 
 echo "== B+: Termux python3.11.15 bionic (TUR) =="
 if [[ ! -x /var/tmp/tur311/data/data/com.termux/files/usr/bin/python3.11 ]]; then
@@ -90,6 +99,21 @@ if [[ ! -f /var/tmp/bionic-sys/system/lib/libandroid-support.so ]]; then
   rm -rf /tmp/las /tmp/las.deb
 fi
 cp -a "$USR/lib/"libpython3.11.so* /var/tmp/bionic-sys/system/lib/ 2>/dev/null || true
+
+# `_ssl.cpython-311.so` dari TUR bergantung libssl.so.3 + libcrypto.so.3.
+# Tanpanya urllib diam-diam tidak mendaftarkan HTTPSHandler dan resolver gagal
+# `unknown url type: https`. Pin paket Termux ARM yang diverifikasi 2026-08-13.
+if [[ ! -f /var/tmp/bionic-sys/system/lib/libssl.so.3 ]]; then
+  curl -fL --retry 3 -o /tmp/openssl-arm.deb \
+    'https://packages.termux.dev/apt/termux-main/pool/main/o/openssl/openssl_1%3A3.6.3_arm.deb'
+  rm -rf /tmp/openssl-arm
+  mkdir -p /tmp/openssl-arm
+  dpkg-deb -x /tmp/openssl-arm.deb /tmp/openssl-arm
+  cp -a /tmp/openssl-arm/data/data/com.termux/files/usr/lib/libssl.so* \
+        /tmp/openssl-arm/data/data/com.termux/files/usr/lib/libcrypto.so* \
+        /var/tmp/bionic-sys/system/lib/
+  rm -rf /tmp/openssl-arm /tmp/openssl-arm.deb
+fi
 
 # packaging di 3.11 bionic
 mkdir -p "$USR/lib/python3.11/site-packages"

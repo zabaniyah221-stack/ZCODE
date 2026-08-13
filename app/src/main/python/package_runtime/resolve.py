@@ -13,8 +13,16 @@ Hasil: plan = {packages: [{name, canonical_name, version, source, filename, url,
 sha256, size, requires_dist, extras, priority, compat_reason, reason?}],
 conflicts: [...], unavailable: [...]}
 """
+import contextvars
+import json
 import os
+import random
 import re
+import socket
+import threading
+import time
+import urllib.error
+import urllib.parse
 import urllib.request
 
 from packaging.requirements import Requirement
@@ -28,8 +36,19 @@ from .requirement import RequirementError, parse_requirement
 from .wheelinfo import best_wheel, parse_wheel, wheel_compatible
 
 _NETWORK_TIMEOUT_S = 20
+# v1.0.15 memakai 3 × 20 detik per URL sementara PyCall memotong SELURUH
+# dependency graph pada 90 detik. Dua total attempt cukup untuk satu kegagalan
+# transient tanpa melipatgandakan waktu buta di jaringan seluler.
+_MAX_HTTP_ATTEMPTS = 2
+_RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504, 520, 527})
 _MAX_DEPTH = 20
 _MAX_PACKAGES = 60
+
+# ContextVar mengikat progress/cancel ke satu pemanggilan resolve. Jangan pakai
+# satu bridge global: callback resolver lama dapat menimpa operasi baru.
+_CURRENT_BRIDGE = contextvars.ContextVar("zcode_resolve_bridge", default=None)
+_CURRENT_PACKAGE = contextvars.ContextVar("zcode_resolve_package", default="")
+_RESOLVE_LOCK = threading.Lock()
 
 _SIMPLE_HREF = re.compile(r'href=["\']([^"\']+\.whl)["\']', re.IGNORECASE)
 
@@ -49,21 +68,137 @@ class ResolveError(Exception):
 # HTTP (small, self-contained; urllib bawaan CPython — jalan di Chaquopy)
 # ---------------------------------------------------------------------------
 
+def _source_for_url(url: str) -> str:
+    """Nama sumber aman untuk log — URL penuh sengaja tidak diekspos ke UI."""
+    host = (urllib.parse.urlparse(url).hostname or "").lower()
+    if host == "pypi.org" or host.endswith(".pythonhosted.org"):
+        return "pypi"
+    if host == "chaquo.com" or host.endswith(".chaquo.com"):
+        return "chaquopy"
+    return host or "repository"
+
+
+def _emit_progress(stage: str, source: str = "", attempt: int = 0,
+                   max_attempts: int = 0, detail: str = "") -> None:
+    """Kirim event terstruktur ke Kotlin; kegagalan UI tidak boleh fatal."""
+    bridge = _CURRENT_BRIDGE.get()
+    if bridge is None:
+        return
+    event = {
+        "stage": stage,
+        "package": _CURRENT_PACKAGE.get(),
+        "source": source,
+        "attempt": attempt,
+        "max_attempts": max_attempts,
+        "detail": (detail or "")[:240],
+    }
+    try:
+        bridge.emit(json.dumps(event, ensure_ascii=False))
+    except Exception:
+        pass
+
+
+def _check_cancelled() -> None:
+    bridge = _CURRENT_BRIDGE.get()
+    if bridge is None:
+        return
+    try:
+        cancelled = bool(bridge.isCancelled())
+    except Exception:
+        cancelled = False
+    if cancelled:
+        _emit_progress("cancelled", detail="permintaan pengguna")
+        raise ResolveError(
+            "CANCELLED", "resolve", "Analisis package dibatalkan.",
+            "cooperative cancellation acknowledged",
+        )
+
+
+def _is_certificate_error(error: Exception) -> bool:
+    """Deteksi tanpa import `ssl` eager (penting di probe bionic minimal)."""
+    current = error
+    for _ in range(3):
+        name = type(current).__name__.lower()
+        text = str(current).lower()
+        if "certificateverification" in name or "certificate verify failed" in text:
+            return True
+        nxt = getattr(current, "reason", None)
+        if not isinstance(nxt, BaseException) or nxt is current:
+            break
+        current = nxt
+    return False
+
+
+def _retryable_error(error: Exception) -> bool:
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code in _RETRYABLE_HTTP_STATUS
+    # Sertifikat/hostname salah tidak akan sembuh dengan retry identik.
+    if _is_certificate_error(error):
+        return False
+    if isinstance(error, (socket.timeout, TimeoutError, ConnectionError)):
+        return True
+    if isinstance(error, urllib.error.URLError):
+        return True
+    return False
+
+
+def _retry_wait(attempt: int) -> None:
+    """Backoff pendek + jitter; tidur per 100ms agar Cancel responsif."""
+    remaining = min(1.5, 0.35 * (2 ** max(0, attempt - 1))) + random.uniform(0.0, 0.25)
+    while remaining > 0:
+        _check_cancelled()
+        step = min(0.1, remaining)
+        time.sleep(step)
+        remaining -= step
+
+
 def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    last = None
-    # 4G HP: satu timeout 20s ke chaquo.com membuat host_dep GAGAL
-    # (libgfortran hilang → "kadang 3 kadang 4"). Dua kali ulang.
-    for _percobaan in range(3):
+    source = _source_for_url(url)
+    last_summary = "unknown"
+    attempts_made = 0
+    for attempt in range(1, _MAX_HTTP_ATTEMPTS + 1):
+        attempts_made = attempt
+        _check_cancelled()
+        _emit_progress(
+            "http_begin", source=source, attempt=attempt,
+            max_attempts=_MAX_HTTP_ATTEMPTS, detail="metadata",
+        )
+        started = time.monotonic()
         try:
             with urllib.request.urlopen(req, timeout=_NETWORK_TIMEOUT_S) as resp:
-                return resp.read()
+                body = resp.read()
+            _check_cancelled()
+            _emit_progress(
+                "http_ok", source=source, attempt=attempt,
+                max_attempts=_MAX_HTTP_ATTEMPTS,
+                detail="%d bytes, %.1fs" % (len(body), time.monotonic() - started),
+            )
+            return body
+        except ResolveError:
+            raise
         except Exception as e:
-            last = e
+            retry = _retryable_error(e) and attempt < _MAX_HTTP_ATTEMPTS
+            status = getattr(e, "code", None)
+            detail = "%s%s" % (
+                type(e).__name__, " HTTP %s" % status if status is not None else ""
+            )
+            # Jangan masukkan URL mentah/credential ke Diagnostics.
+            last_summary = detail
+            _emit_progress(
+                "http_retry" if retry else "http_fail",
+                source=source, attempt=attempt,
+                max_attempts=_MAX_HTTP_ATTEMPTS, detail=detail,
+            )
+            if not retry:
+                break
+            _retry_wait(attempt)
     raise ResolveError(
         "NETWORK", "metadata",
         "Tidak bisa menghubungi repository package (network error).",
-        "GET %s → %s" % (url, last),
+        "GET source=%s package=%s attempts=%d → %s" % (
+            source, _CURRENT_PACKAGE.get(), attempts_made, last_summary
+        ),
     )
 
 
@@ -410,7 +545,7 @@ def _local_wheel_candidates(wheels_dir: str, name: str) -> list[dict]:
 # Resolver utama
 # ---------------------------------------------------------------------------
 
-def resolve(
+def _resolve_unlocked(
     requirement_text: str,
     supported_tags=None,
     wheels_dir: str | None = None,
@@ -479,16 +614,30 @@ def resolve(
             return
         seen.add(key)
 
-        # sudah direncanakan dengan versi lain → konflik
+        _check_cancelled()
+
+        # sudah direncanakan dengan versi lain → konflik. Package context hanya
+        # mengurung collect/choose; recursion anak memasang context-nya sendiri.
         existing = plan.get(cname)
-        candidates = _collect(cname, specifier)
-        if not candidates:
-            unavailable.append({
-                "name": name, "canonical_name": cname, "parent": parent,
-                "reason": "Tidak ada wheel kompatibel untuk runtime ZCODE ini.",
-            })
-            return
-        chosen = _choose(candidates, cname)
+        package_token = _CURRENT_PACKAGE.set(cname)
+        try:
+            _emit_progress("package_begin", detail="depth=%d" % depth)
+            candidates = _collect(cname, specifier)
+            if not candidates:
+                unavailable.append({
+                    "name": name, "canonical_name": cname, "parent": parent,
+                    "reason": "Tidak ada wheel kompatibel untuk runtime ZCODE ini.",
+                })
+                _emit_progress("package_unavailable", detail="tidak ada kandidat")
+                return
+            chosen = _choose(candidates, cname)
+            _emit_progress(
+                "package_chosen", source=chosen.get("source", ""),
+                detail="%s==%s" % (cname, chosen.get("version", "?")),
+            )
+        finally:
+            _CURRENT_PACKAGE.reset(package_token)
+        _check_cancelled()
         if existing and existing["version"] != chosen["version"]:
             conflicts.append({
                 "name": cname,
@@ -688,6 +837,17 @@ def resolve(
     }
 
 
+def resolve(*args, **kwargs):
+    """Serialize resolver sessions which share the process metadata cache.
+
+    PackageEngineV2 already enforces one operation, but this lock also protects
+    direct/diagnostic callers. It is deliberately outside `_resolve_unlocked` so
+    one session owns clear/fill/read of both metadata caches atomically.
+    """
+    with _RESOLVE_LOCK:
+        return _resolve_unlocked(*args, **kwargs)
+
+
 def device_supported_tags(abi: str | None = None, device_api: int | None = None):
     """
     Tag runtime untuk pencocokan wheel — Android-aware (build #3).
@@ -737,9 +897,11 @@ def resolve_json(
     tested_versions_json: str | None = None,
     abi: str | None = None,
     device_api: int | None = None,
+    progress_bridge=None,
 ) -> str:
-    """Wrapper JSON-string untuk Kotlin. Error → dict {ok:false, code, stage, ...}."""
-    import json
+    """Wrapper JSON-string untuk Kotlin + progress/cancel bridge opsional."""
+    bridge_token = _CURRENT_BRIDGE.set(progress_bridge)
+    package_token = _CURRENT_PACKAGE.set("")
     try:
         marker_env = json.loads(marker_env_json) if marker_env_json else None
         tested = json.loads(tested_versions_json) if tested_versions_json else None
@@ -762,6 +924,11 @@ def resolve_json(
     except Exception as e:  # noqa: BLE001
         return json.dumps({"ok": False, "code": "RESOLUTION", "stage": "resolve",
                            "human": "Resolusi dependensi gagal.", "technical": str(e)})
+    finally:
+        # Wajib reset walau parse/error/cancel: callback operasi lama tidak boleh
+        # menerima progress resolver berikutnya pada thread yang sama.
+        _CURRENT_PACKAGE.reset(package_token)
+        _CURRENT_BRIDGE.reset(bridge_token)
 
 
 def _platform_machine():

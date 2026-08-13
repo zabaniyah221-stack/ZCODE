@@ -2630,8 +2630,9 @@ class TestDependensiDariWheel:
         """
         src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
         assert "_METADATA_CACHE" in src, "tidak ada singgahan metadata"
-        assert "for _percobaan in range(3)" in src, (
-            "HTTP tanpa ulang — host_dep GAGAL di 4G (kadang 3 kadang 4 paket)"
+        assert "_MAX_HTTP_ATTEMPTS = 2" in src, (
+            "retry HTTP harus punya budget dua total attempt; tiga attempt × 20s "
+            "adalah akar regresi timeout seluruh modul v1.0.15"
         )
         i = src.find("def fetch_pypi_metadata")
         assert i > 0
@@ -2750,6 +2751,75 @@ class TestDependensiDariWheel:
         p = ROOT / "tools/paket_uji_dep.txt"
         assert p.exists(), "daftar bahan uji hilang"
         assert len(read(p).split()) > 250
+
+
+class TestArmv7SetupDapatDiulang:
+    """Infra uji harus benar-benar memasang prasyarat yang diklaimnya."""
+
+    def test_qemu_fallback_tidak_ditelan_exit(self):
+        src = read(ROOT / "tools/setup_armv7_emu.sh")
+        assert not re.search(r"^\s*need_cmd qemu-armhf\s*\|\|", src, re.MULTILINE)
+        assert "if ! command -v qemu-armhf" in src
+        assert "qemu-user-static" in src
+
+    def test_bionic311_memiliki_soname_zlib_dan_https(self):
+        src = read(ROOT / "tools/setup_armv7_emu.sh")
+        assert "libz.so.1" in src and "ln -sfn libz.so" in src
+        assert "openssl_1%3A3.6.3_arm.deb" in src
+        assert "libssl.so*" in src and "libcrypto.so*" in src
+
+
+class TestResolveLifecycleV1015:
+    """Regresi v1.0.15: outer timeout melepas owner, worker Python tetap hidup."""
+
+    def test_pycall_tidak_membuat_worker_yatim(self):
+        raw = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PyCall.kt")
+        # Komentar memang wajib menjelaskan insiden lama; guard harus memeriksa
+        # kode executable, bukan menghukum dokumentasi akar masalah.
+        src = strip_kt_comments(raw)
+        assert "CountDownLatch" not in src
+        assert "latch.await" not in src
+        assert "Thread {" not in src, (
+            "PyCall masih membuat worker internal yang dapat hidup setelah caller timeout"
+        )
+        assert "Looper.myLooper()" in src and "Looper.getMainLooper()" in src, (
+            "setelah call dibuat sinkron, kontrak background-thread wajib dijaga"
+        )
+
+    def test_bridge_progress_dan_cancel_dimiliki_engine(self):
+        bridge = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/ResolveOperationBridge.kt")
+        engine = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        resolver = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/DependencyResolver.kt")
+        assert "operationId" in bridge and "@Volatile" in bridge
+        assert "fun isCancelled" in bridge and "fun emit" in bridge
+        assert 'eventStage != "http_ok"' in bridge, (
+            "progress sukses per-request kembali membanjiri UI/Diagnostics ARMv7"
+        )
+        assert "DIAGNOSTIC_STAGES" in bridge
+        assert "activeResolveBridge" in engine
+        assert "cancelCurrentOperation" in engine
+        assert "finally" in engine and "activeResolveBridge = null" in engine
+        assert '"resolve_json"' in resolver and "progressBridge" in resolver
+
+    def test_ui_punya_cancel_dan_progress_resolve(self):
+        ui = read(ROOT / "app/src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt")
+        engine = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        assert "onCancel" in ui and "Batalkan" in ui
+        assert "cancelCurrentOperation" in ui
+        assert "PKG_RESOLVE_PROGRESS" in engine
+        assert "Step.Log" in engine and "ResolveOperationBridge" in engine
+
+    def test_resolver_progress_terikat_context_bukan_global_bridge(self):
+        src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
+        assert "ContextVar" in src
+        assert "_CURRENT_BRIDGE" in src and "_CURRENT_PACKAGE" in src
+        assert "progress_bridge" in src
+        assert "_RESOLVE_LOCK" in src
+        public_resolve = src[src.find("def resolve(*args"):src.find("def device_supported_tags")]
+        assert "with _RESOLVE_LOCK" in public_resolve, (
+            "lock didefinisikan tetapi tidak memiliki seluruh sesi resolve"
+        )
+        assert "CANCELLED" in src
 
 
 class TestParsingNamaWheelBerhubung:
