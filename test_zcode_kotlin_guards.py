@@ -2769,6 +2769,63 @@ class TestArmv7SetupDapatDiulang:
         assert "libssl.so*" in src and "libcrypto.so*" in src
 
 
+class TestFullArmv7AndroidEmulator:
+    """Full emulator harus reproducible tanpa mengorbankan sandbox."""
+
+    FILES = [
+        "tools/setup_armv7_full_emu.sh",
+        "tools/start_armv7_full_emu.sh",
+        "tools/verify_armv7_full_emu.sh",
+        "tools/stop_armv7_full_emu.sh",
+        "docs/FULL_ARMV7_ANDROID_EMULATOR_2026_08_13.md",
+    ]
+
+    def test_semua_artefak_kecil_ada(self):
+        for rel in self.FILES:
+            p = ROOT / rel
+            assert p.is_file(), f"full ARMv7 emulator artifact hilang: {rel}"
+            assert p.stat().st_size < 100_000, f"{rel} terlalu besar; image bocor ke workspace"
+
+    def test_setup_pinned_official_dan_var_tmp(self):
+        src = read(ROOT / "tools/setup_armv7_full_emu.sh")
+        assert "/var/tmp/zcode-armv7-full" in src
+        assert "emulator-linux-4848055.zip" in src
+        assert "armeabi-v7a-24_r07.zip" in src
+        assert "https://dl.google.com/android/repository/" in src
+        assert "free_mb >= 5500" in src and "mem_mb >= 1800" in src
+        assert 'rm -f "$DOWNLOAD"/*.zip' in src
+        assert "/home/user" not in strip_shell_comments(src), (
+            "image emulator tidak boleh masuk snapshot workspace"
+        )
+
+    def test_start_memiliki_pembatas_resource_dan_webview_gpu(self):
+        src = read(ROOT / "tools/start_armv7_full_emu.sh")
+        code = strip_shell_comments(src)
+        for marker in (
+            "available_mb >= 1200", "-no-window", "-no-audio", "-no-snapshot",
+            "-gpu swiftshader", "-memory 512", "-qemu -m 512",
+        ):
+            assert marker in code, f"guard full emulator hilang: {marker}"
+        assert "-gpu off" not in code, (
+            "GPU off membuat WebView Chromium SIGABRT (EGL pbuffer gagal)"
+        )
+
+    def test_verify_jujur_tentang_minsdk(self):
+        src = read(ROOT / "tools/verify_armv7_full_emu.sh")
+        doc = read(ROOT / "docs/FULL_ARMV7_ANDROID_EMULATOR_2026_08_13.md")
+        assert "armeabi-v7a" in src and "api == 24" in src
+        assert "minSdk26" in src and "emulator-only minSdk24" in src
+        assert "bukan DEVICE VERIFIED" in doc or "bukan" in doc.lower()
+        assert "INSTALL_FAILED_OLDER_SDK" in doc
+
+
+def strip_shell_comments(text: str) -> str:
+    return "\n".join(
+        line for line in text.splitlines()
+        if not line.lstrip().startswith("#")
+    )
+
+
 class TestResolveLifecycleV1015:
     """Regresi v1.0.15: outer timeout melepas owner, worker Python tetap hidup."""
 

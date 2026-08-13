@@ -504,6 +504,65 @@ class TestResolverReliability:
             self._reset_bridge(tokens)
         assert exc.value.code == "CANCELLED"
 
+    def test_cancel_tidak_boleh_ditelan_fallback_source(self, monkeypatch):
+        """Bukti full-emulator ARMv7: event `cancelled` muncul, tetapi catch
+        fallback PyPI/Chaquopy menelannya dan hasil akhir berubah menjadi
+        COMPATIBILITY. Cancel adalah control-flow, bukan source failure.
+        """
+        bridge = _FakeResolveBridge()
+
+        def cancel_during_http(_url):
+            bridge.cancelled = True
+            resolve_mod._check_cancelled()
+
+        monkeypatch.setattr(resolve_mod, "_http_get", cancel_during_http)
+        out = json.loads(resolve_mod.resolve_json("requests", progress_bridge=bridge))
+        assert out["ok"] is False
+        assert out["code"] == "CANCELLED"
+
+    def test_semua_fallback_propagasi_cancel(self):
+        """Jaga kelas bug: source baru di masa depan tidak boleh menelan Cancel."""
+        import ast
+        tree = ast.parse(Path(resolve_mod.__file__).read_text())
+        offenders = []
+        for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+            for handler in [n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler)]:
+                caught = handler.type
+                if not (isinstance(caught, ast.Name) and caught.id == "ResolveError"):
+                    continue
+                # resolve_json memang mengubah ResolveError (termasuk CANCELLED)
+                # ke kontrak JSON. Handler lain harus re-raise langsung atau
+                # memanggil helper sebelum fallback.
+                if fn.name == "resolve_json":
+                    continue
+                direct_reraise = len(handler.body) == 1 and isinstance(handler.body[0], ast.Raise)
+                propagates = any(
+                    isinstance(n, ast.Call)
+                    and isinstance(n.func, ast.Name)
+                    and n.func.id == "_propagate_cancel"
+                    for n in ast.walk(handler)
+                )
+                if not direct_reraise and not propagates:
+                    offenders.append((fn.name, handler.lineno))
+        assert not offenders, "ResolveError fallback menelan CANCELLED: %r" % offenders
+
+    def test_metadata_failure_di_cache_dalam_satu_resolve(self, monkeypatch):
+        calls = []
+
+        def gagal(_url):
+            calls.append(True)
+            raise resolve_mod.ResolveError("NETWORK", "metadata", "gagal", "uji")
+
+        resolve_mod.clear_metadata_cache()
+        monkeypatch.setattr(resolve_mod, "_http_get", gagal)
+        for _ in range(2):
+            with pytest.raises(resolve_mod.ResolveError):
+                resolve_mod.fetch_pypi_metadata("paket-tidak-ada")
+        assert len(calls) == 1, (
+            "source failure yang sama dipanggil berulang; emulator menemukan "
+            "4 request PyPI 404 untuk satu support library"
+        )
+
     def test_resolve_json_selalu_reset_bridge(self, monkeypatch):
         bridge = _FakeResolveBridge()
 

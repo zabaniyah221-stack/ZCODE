@@ -5,10 +5,10 @@ Dokumen ini boleh diubah kapan saja: ada permintaan fitur baru, bug, error, atau
 temuan riset yang mematahkan asumsi di sini. Kalau kenyataan bertentangan dengan
 PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
 
-Versi saat ini: `1.0.16` (`gradle.properties` = sumber tunggal)
+Versi saat ini: `1.0.17` (`gradle.properties` = sumber tunggal)
 Terakhir diperbarui: 2026-08-13
-Revisi: 2026-08-13 — §5 Bug L (timeout layering/orphan resolver), RFC reliability,
-serta hasil verifikasi bionic311 numpy/pandas/matplotlib. (PRD = pegangan, bukan acuan terkunci.)
+Revisi: 2026-08-13 — §5 Bug L/M (timeout lifecycle + cancellation fallback),
+full Android ARMv7 API 24 emulator, dan verifikasi bionic311. (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
@@ -140,8 +140,19 @@ Detail lengkap: `RENCANA_BUILD_2.md`.
 | J | breadcrumb hanya 7 dari 49 file | — |
 | K | deps dibaca dari **versi terbaru**, bukan versi terpilih → `pandas` (pytz), `rich` (typing-extensions) hilang | `resolve.py` (`info.requires_dist`) |
 | L | retry `3×20s` berada di dalam hard timeout total 90s; wrapper berhenti menunggu tetapi worker Python tetap hidup tanpa owner | `resolve.py`, `PyCall.kt` |
+| M | event Cancel ditelan catch fallback PyPI/Chaquopy lalu berubah menjadi `COMPATIBILITY`, bukan `CANCELLED` | `resolve.py` fallback handlers |
 
-> **Bug L — status IMPLEMENTED, menunggu CI + UAT perangkat (v1.0.16):** log
+> **Bug M — status FULL-EMULATOR VERIFIED, menunggu CI + HP nyata (v1.0.17):**
+> emulator Android ARMv7 API 24 membuktikan `cancelled` muncul saat resolve
+> matplotlib, tetapi v1.0.16 menutup operasi sebagai `PKG_ANALYZE_FAIL
+> [COMPATIBILITY]`. Semua fallback sekarang wajib memanggil
+> `_propagate_cancel`; negative metadata failure di-cache per resolve supaya
+> 404 source yang sama tidak diulang. Uji ulang emulator menghasilkan
+> `PKG_ANALYZE_CANCELLED` 1,37 detik setelah request Cancel. Emulator memakai
+> APK test-only minSdk24 karena artifact production minSdk26 secara benar ditolak
+> API24; ini bukti Android/JVM/Chaquopy/ARMv7, **bukan** pengganti UAT HP API26+.
+
+> **Bug L — status IMPLEMENTED + full-emulator exercised, menunggu CI v1.0.17 + HP nyata:** log
 > perangkat v1.0.15 menunjukkan numpy/matplotlib/pandas berhenti masing-masing
 > tepat ~90 detik. `PyCall` sekarang sinkron pada background caller (tidak membuat
 > thread yatim), timeout hanya milik I/O, retry dibatasi 2 attempt transient,

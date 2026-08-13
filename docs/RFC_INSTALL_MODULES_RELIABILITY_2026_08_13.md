@@ -1,7 +1,8 @@
 # RFC — Install Modules Reliability: timeout, retry, ownership, progress
 
-**Status:** IMPLEMENTED + LOCAL/BIONIC VERIFIED; menunggu CI dan UAT perangkat  
-**Target:** v1.0.16  
+**Status:** IMPLEMENTED + LOCAL/BIONIC/FULL-EMULATOR VERIFIED; menunggu CI v1.0.17 dan HP nyata
+
+**Target:** v1.0.17
 **Scope:** Analyze/Resolve di PackageEngineV2, bukan redesign seluruh installer
 
 ## 1. Insiden dan bukti
@@ -240,7 +241,7 @@ kembalikan latch 90 detik harus ditangkap guard.
 
 ## 9. Hasil implementasi sementara
 
-- Test penuh: **411 passed**.
+- Test penuh setelah full-emulator tooling: **418 passed**.
 - `tools/check.sh`: hijau.
 - Kotlin lexical sanity: 53 file hijau.
 - Uji mutasi terbukti merah untuk: retry 2→3, retry HTTP 404, cancellation
@@ -263,8 +264,33 @@ membawa dependency native + Python. Raw progress matplotlib berjumlah 156 event;
 156 coroutine scroll + flush disk di ARMv7. Event begin/retry/fail/chosen/cancel
 tetap terlihat.
 
-**Belum terverifikasi:** kompilasi Kotlin/Chaquopy callback dan UAT HP nyata.
-Status tidak boleh dinaikkan menjadi DEVICE VERIFIED sebelum dua gate itu lulus.
+### Verifikasi full Android ARMv7 (lanjutan v1.0.17)
+
+Emulator klasik Android API 24/armeabi-v7a berhasil boot secara headless di
+sandbox tanpa KVM, dengan QEMU TCG 512 MB + SwiftShader. APK test-only minSdk24
+(dari source yang sama; production tetap minSdk26) berhasil memasang dan
+menjalankan Compose, WebView, Chaquopy Python 3.11.14, dan Install Modules.
+
+Uji pertama menemukan Bug M: Cancel diterima saat resolve matplotlib, tetapi
+`ResolveError(CANCELLED)` ditelan fallback source dan hasil akhir menjadi
+`COMPATIBILITY`. Setelah `_propagate_cancel` diwajibkan di semua catch fallback,
+uji ulang menghasilkan:
+
+```text
+16:05:29.568 PKG_RESOLVE_CANCEL_REQUEST
+16:05:30.800 stage=cancelled package=numpy
+16:05:30.943 PKG_RESOLVE_WORKER_END
+16:05:31.339 PKG_ANALYZE_CANCELLED matplotlib
+```
+
+Negative metadata failure cache juga ditambah. Sebelum fix, PyPI 404 untuk satu
+support library tampil sampai 4 kali; sesudahnya full metadata URL yang sama
+hanya diminta sekali per resolve (endpoint per-versi tetap sumber berbeda).
+
+**Batas bukti:** artifact production minSdk26 tidak dapat dipasang di image
+ARMv7 resmi terakhir (API24/25). Maka status ini FULL-EMULATOR VERIFIED untuk
+Android/JVM/Chaquopy/ARMv7, bukan DEVICE VERIFIED untuk artifact production.
+UAT HP ARMv7 API26+ tetap gate akhir.
 
 ## 10. Rollback
 
