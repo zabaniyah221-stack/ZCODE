@@ -363,6 +363,186 @@ Aturan keras dari eksperimen 2026-08-13:
 - Detail dan angka resource:
   `docs/FULL_ARMV7_ANDROID_EMULATOR_2026_08_13.md`.
 
+##### 5.1 Catatan perjalanan — jangan ulangi kegagalan yang sama
+
+Ini bukan rangkuman kemenangan saja. Urutan kegagalan di bawah WAJIB dibaca
+sebelum agent berikutnya menyentuh emulator, supaya sandbox baru tidak kembali
+ke titik nol.
+
+| Percobaan | Gejala nyata | Akar | Keputusan permanen |
+|---|---|---|---|
+| Menganggap sandbox "tidak bisa full Android" | berhenti di `bionic311` | menyamakan "tidak ada KVM" dengan "tidak ada emulasi" | KVM hanya akselerator; ARM QEMU TCG tetap bisa, walau lambat |
+| Emulator SDK terbaru + guest ARM32 | `PANIC: CPU Architecture 'arm' is not supported by the QEMU2 emulator` | QEMU2 modern mencabut ARM32/classic engine | pin emulator **27.3.8 build 4848055**, jangan auto-update |
+| AVD manual pertama | `Broken AVD system path` | launcher menganggap SDK root rusak bila `platform-tools/` tidak ada; layout image tidak standar | setup wajib menyediakan `sdk/platform-tools` dan `system-images/android-24/default/armeabi-v7a` |
+| Menjalankan engine langsung tanpa AVD | API terbaca 10000/default ABI, ADB tidak stabil, emulator meminta `vendor.img` | metadata AVD/build.prop tidak melalui jalur normal launcher | gunakan AVD terdaftar; direct `emulator64-arm -sysdir` hanya alat diagnosis |
+| RAM default | emulator RSS ±1.55 GB, sandbox tinggal ±8 MB available | `-memory 768` diam-diam dinaikkan menjadi guest 1024 MB oleh profile/emulator | pakai **dua** pembatas: `-memory 512` dan argumen QEMU terakhir `-qemu -m 512` |
+| `-gpu off` untuk hemat RAM | app SIGABRT di WebView: `failed to create a pbuffer surface ... EGL_SUCCESS` | Chromium WebView tetap butuh EGL pbuffer walau headless | SwiftShader wajib untuk test ZCODE; GPU off hanya boleh untuk boot/shell tanpa WebView |
+| SwiftShader tanpa RAM override | UI hidup, tetapi RSS kembali terlalu dekat batas | framebuffer/renderer + guest 1 GB | kombinasikan SwiftShader **dengan** QEMU 512 MB; jangan memilih salah satu saja |
+| Install APK production di API24 | `INSTALL_FAILED_OLDER_SDK: requires #26, current #24` | official ARMv7 system image berhenti sebelum minSdk production ZCODE | jangan menurunkan minSdk produk; build APK **test-only minSdk24** dan labeli jujur |
+| Mencari flag bypass minSdk | `pm` API24 tidak punya `--force-sdk`; bypass target-SDK bukan bypass minSdk | minSdk adalah compatibility contract nyata | berhenti mencari bypass; pakai test variant atau HP API26+ |
+| Build test APK memakai JRE saja | `jlink executable ... does not exist` | AGP membutuhkan full JDK, bukan JRE headless | local build perlu JDK lengkap (`openjdk-21-jdk-headless` di sandbox ini) |
+| Gradle `-Xmx768m` pada satu percobaan | daemon hilang saat dex merge | peak native/metaspace + heap melewati margin sandbox | emulator harus stop; `--max-workers=1`, compiler in-process, heap 640 MB + metaspace cap terbukti lebih stabil |
+| Build dan emulator hampir overlap | available RAM turun <300 MB | dua workload berat bersaing tanpa swap | fase build dan fase runtime HARUS serial; script start menolak MemAvailable <1.2 GB |
+| Drawer swipe via `adb input swipe` | gesture tidak konsisten karena WebView/focus/edge semantics | input sintetis bukan gesture Compose yang andal | untuk UAT target, APK test-only boleh start langsung di route `pip`; pulihkan source setelah build |
+| Cancel v1.0.16 di full emulator | event `cancelled` ada, tetapi akhir `PKG_ANALYZE_FAIL [COMPATIBILITY]` | fallback PyPI/Chaquopy menelan `ResolveError(CANCELLED)` | setiap catch fallback wajib `_propagate_cancel`; AST guard menjaga kelasnya |
+| Metadata support library | PyPI 404 yang sama tampak berulang | kegagalan tidak masuk cache; `_collect` dan `_choose` bertanya lagi | negative metadata cache hidup selama satu resolve, tidak lintas sesi |
+
+Kalau gejala persis di atas muncul lagi, **jangan mulai riset dari nol**. Periksa
+dulu apakah invariant/flag/path yang sudah dibuktikan terhapus.
+
+##### 5.2 Inventaris sandbox sebelum eksperimen
+
+Jangan mengandalkan asumsi dari sesi lama. Jalankan dan catat:
+
+```bash
+uname -a
+uname -m
+nproc
+free -h
+df -h / /var/tmp /home/user
+ls -l /dev/kvm || true
+cat /proc/meminfo | head
+cat /sys/fs/cgroup/memory.max 2>/dev/null || true
+command -v docker adb emulator java gradle || true
+```
+
+Baseline yang menghasilkan profil ini:
+
+```text
+host        x86_64, 2 vCPU
+RAM         1.9 GiB, tanpa swap
+KVM         tidak ada
+Docker      tidak ada
+Disk        ±20 GiB kosong
+workspace   snapshot terbatas; jangan isi image/cache build
+```
+
+Jika baseline berubah, keputusan boleh berubah, tetapi **ukur dulu**. Misalnya,
+kalau `/dev/kvm` suatu hari tersedia, emulator x86_64 API26+ mungkin lebih cepat,
+namun ia tidak otomatis membuktikan ABI ARMv7.
+
+##### 5.3 Tangga pembuktian — pilih alat termurah yang menjawab pertanyaan
+
+Jangan selalu menyalakan full emulator:
+
+| Pertanyaan | Alat minimum |
+|---|---|
+| parser/version/dependency pure logic | pytest host |
+| tag dan resolver pada ISA ARMv7 | `armpy` |
+| import wheel Python 3.11 dengan bionic/linker Android | `bionic311` |
+| callback Kotlin↔Python, PackageManager, Activity, lifecycle, Compose, WebView | full ARMv7 emulator |
+| artifact production minSdk26 + firmware/device nyata | HP user |
+
+Full emulator lambat dan mahal. Ia adalah **gap closer**, bukan pengganti semua
+test yang lebih murah. Sebaliknya, jangan mengklaim callback/lifecycle benar
+hanya karena `bionic311` hijau.
+
+##### 5.4 Prosedur resource-safe yang terbukti
+
+1. **Setup/build phase — emulator mati.**
+   - Download/extract hanya ke `/var/tmp`.
+   - Arsip ZIP langsung dihapus.
+   - Gradle `--max-workers=1`; jangan pakai heap 2 GB dari default project di
+     sandbox 1.9 GB.
+2. **Pastikan source production kembali bersih.**
+   - Perubahan minSdk24/direct route hanya test variant.
+   - Simpan backup di `/var/tmp`, gunakan `trap`/restore, lalu `git status` wajib
+     hanya menampilkan perubahan yang memang hendak di-commit.
+   - Jangan pernah commit APK test-only.
+3. **Runtime phase — Gradle/Java daemon mati.**
+   - Start dengan script, bukan command improvisasi.
+   - Tunggu `sys.boot_completed=1`; status ADB `device` saja belum berarti UI
+     selesai boot.
+4. **Uji paling informatif dulu.**
+   - ABI/API → app process → Chaquopy start → target flow → Diagnostics.
+   - Ambil `uiautomator dump`, `screencap`, `dumpsys meminfo`, dan breadcrumb.
+5. **Stop segera.**
+   - `bash tools/stop_armv7_full_emu.sh`.
+   - Pastikan `pgrep -af emulator64-arm` kosong dan RAM kembali.
+
+Command operasional:
+
+```bash
+bash tools/setup_armv7_full_emu.sh
+# Agent Mode: start_process("bash tools/start_armv7_full_emu.sh")
+bash tools/verify_armv7_full_emu.sh
+# ... UAT ...
+bash tools/stop_armv7_full_emu.sh
+```
+
+##### 5.5 Cara membuat APK test-only tanpa mencemari produk
+
+Karena guest resmi ARMv7 adalah API24 dan production minSdk26, test variant
+boleh mengubah sementara:
+
+```text
+app/build.gradle.kts: minSdk 26 → 24
+MainActivity startDestination: editor → pip   (hanya bila otomasi target perlu)
+```
+
+Kontraknya:
+
+- perubahan hanya di working tree lokal;
+- build dari commit produksi yang sama;
+- APK diberi nama `emulator-only`, tidak diunggah sebagai release;
+- file sumber dipulihkan segera setelah APK disalin ke `/var/tmp`;
+- `git diff` diperiksa sebelum commit/push;
+- laporan selalu menyebut bahwa manifest test berbeda;
+- temuan logic yang valid diperbaiki di source production dan diuji ulang;
+- keberhasilan test variant tidak menaikkan status menjadi DEVICE VERIFIED.
+
+##### 5.6 Observability full emulator — bukti yang harus diambil
+
+```bash
+adb -s emulator-5554 shell getprop ro.product.cpu.abi
+adb -s emulator-5554 shell getprop ro.build.version.sdk
+adb -s emulator-5554 shell getprop sys.boot_completed
+adb -s emulator-5554 shell pidof com.zaba.zcode.debug
+adb -s emulator-5554 shell dumpsys meminfo com.zaba.zcode.debug
+adb -s emulator-5554 exec-out screencap -p > /tmp/zcode.png
+adb -s emulator-5554 shell uiautomator dump /sdcard/window.xml
+adb -s emulator-5554 shell run-as com.zaba.zcode.debug \
+  cat files/logs/diagnostics/breadcrumb.log
+```
+
+`logcat` penting untuk native crash, tetapi breadcrumb tetap penting karena ia
+merepresentasikan kontrak diagnostik yang benar-benar tersedia bagi user tanpa
+PC. Pada eksperimen ini, `logcat` membuktikan GPU-off crash, sedangkan breadcrumb
+membuktikan Cancel berubah salah menjadi COMPATIBILITY.
+
+##### 5.7 Pola umum memaksimalkan sandbox terbatas
+
+Gunakan urutan ini untuk masalah lain, bukan hanya emulator:
+
+1. **Pisahkan kebutuhan dari implementasi populer.** Kebutuhannya "menjalankan
+   Android ARMv7", bukan "Android Studio terbaru + KVM".
+2. **Pecah stack menjadi lapisan.** ISA, libc/linker, Python, JVM, framework,
+   UI, dan artifact adalah pertanyaan berbeda.
+3. **Cari versi alat yang masih memiliki capability yang dibutuhkan.** Terbaru
+   tidak selalu paling kompatibel; di sini versi terbaru justru membuang ARM32.
+4. **Ubah constraint menjadi parameter terukur.** RAM, disk, API, ABI, startup,
+   dan RSS dicatat; jangan pakai kata "berat" tanpa angka.
+5. **Isolasi state besar/ephemeral.** `/var/tmp` untuk image/cache; workspace
+   hanya menyimpan resep, test, dan laporan.
+6. **Eksperimen satu variabel per langkah.** RAM override, GPU mode, AVD layout,
+   dan minSdk dibedakan supaya sebab tidak kabur.
+7. **Setiap kegagalan menghasilkan invariant atau guard.** Kalau hanya
+   diperbaiki di terminal tanpa ditulis ke script/test/SKILLS, siklus belum putus.
+8. **Pertahankan label bukti.** BOOT VERIFIED, FULL-EMULATOR VERIFIED, CI
+   VERIFIED, dan DEVICE VERIFIED bukan sinonim.
+9. **Sediakan setup/start/verify/stop.** Eksperimen yang tidak dapat diulang
+   agent berikutnya belum menjadi kemampuan proyek.
+10. **Jangan romantisasi keberhasilan.** Full emulator berhasil, tetapi API24,
+    software-emulated, lambat, dan bukan artifact production. Batas itu tetap
+    ditulis berdampingan dengan kemenangan.
+
+Inti pelajarannya:
+
+> "Sandbox terbatas" bukan jawaban akhir. Itu daftar constraint. Pecah,
+> ukur, cari kombinasi yang valid, lalu ubah perjalanan tersebut menjadi resep
+> idempotent + guard agar agent berikutnya mulai dari capability baru, bukan dari
+> ketakutan lama.
+
 ---
 
 # 💬 SKILL 6 — Bekerja dengan user ini
