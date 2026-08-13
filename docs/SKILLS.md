@@ -270,13 +270,30 @@ armpy -c "import platform; print(platform.machine())"   # -> armv7l
 - `packaging` pure-Python: download wheel `py3-none-any`, unzip ke `site-packages` ARMv7.
 - Dengan ini, resolver ZCODE bisa diuji di **Python 3.11 ARMv7 persis**, bukan 3.13 host.
 
-#### 3. Nilai & batas emulator ini
-- **BISA:** verifikasi logika & timing resolver di Python 3.11 ARMv7 (persis device).
-  Contoh: resolve matplotlib diukur **23 detik** < batas 90s PyCall → membuktikan
-  optimasi timeout benar.
-- **TIDAK BISA:** menjalankan **wheel native Android** (matplotlib `.so`) karena butuh
-  **bionic libc + Chaquopy runtime** yang hanya ada di APK. Jadi eksekusi `import` penuh
-  tetap hanya di device. Jangan klaim lebih dari itu.
+#### 4. TEROBOSAN: jalankan WHEEL NATIVE Android (bionic) di sandbox
+Setelah ~6 jalur gagal, siklus `coba→search→coba lagi→search lebih dalam→coba
+lagi` MENEMBUS batas. Kunci: interpreter harus **bionic**, bukan glibc.
+
+Cara (yang TERBUKTI berhasil, 2026-08-13):
+1. **qemu-armhf** (user mode).
+2. **Android system image API 24** (ARMv7) → mount `system.img` → ambil
+   **`/system/bin/linker`** + `libc.so, libm.so, libdl.so, liblog.so` (bionic).
+   Linker API < 24 gagal dengan "DT_HASH" (tidak dukung DT_GNU_HASH).
+3. **Termux Python bionic** (`python_3.14.6_arm.deb`) — interpreter dibangun utk
+   bionic, TIDAK butuh glibc. Butuh `libandroid-support.so` (Termux).
+4. Jalankan dgn env: `ANDROID_ROOT`, `ANDROID_DATA`, `TZDIR` (tzdata dari system
+   image di `/usr/share/zoneinfo`), `QEMU_LD_PREFIX=android_sys`.
+5. **Wheel bionic** dari Termux (numpy, pillow) + rantai lib (libjpeg, libpng,
+   freetype, libtiff, libxcb, libzstd...) — unduh tiap `.deb`, ekstrak, salin
+   `.so` ke prefix. Rantai DT_NEEDED persis seperti device.
+6. Hasil: **`import numpy` + `from PIL import Image` + simpan PNG BERJALAN**.
+
+Script: `bash /home/user/bionic_armv7.sh -c "import numpy; print(numpy.__version__)"`
+
+Catatan jujur: matplotlib/pandas TIDAK ada di Termux arm (terlalu berat untuk
+32-bit) — tapi numpy/pillow bionic sudah membuktikan emulator bisa jalankan
+wheel native Android. Ini mengubah verifikasi ZCODE: smoke test terhadap wheel
+native bisa diuji di sandbox, bukan hanya device.
 
 ---
 
