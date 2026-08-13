@@ -64,6 +64,17 @@ class ResolveError(Exception):
         self.technical = technical
 
 
+def _propagate_cancel(error: "ResolveError") -> None:
+    """Cancel adalah control-flow, bukan kegagalan source yang boleh fallback.
+
+    Full Android ARMv7 menemukan event `cancelled` ditelan oleh catch PyPI dan
+    Chaquopy, lalu berubah menjadi COMPATIBILITY. Setiap fallback ResolveError
+    wajib memanggil helper ini sebelum memakai source berikutnya.
+    """
+    if error.code == "CANCELLED":
+        raise error
+
+
 # ---------------------------------------------------------------------------
 # HTTP (small, self-contained; urllib bawaan CPython — jalan di Chaquopy)
 # ---------------------------------------------------------------------------
@@ -217,6 +228,10 @@ def _http_get(url: str) -> bytes:
 # waktu 90 detik di PyCall — persis kegagalan "senyap" yang dilaporkan dari
 # perangkat. Sepertiga dari trafik itu murni terbuang karena duplikat.
 _METADATA_CACHE: dict[str, dict] = {}
+# Negative cache per-resolve. Tanpa ini, satu 404 PyPI support library dibaca
+# berulang oleh _collect + tiga fallback _choose (terlihat 4× di emulator).
+# Simpan data error, bukan object exception/traceback.
+_METADATA_ERROR_CACHE: dict[str, tuple[str, str, str, str]] = {}
 # Singgahan metadata PER-VERSI (BUG K). Kunci: (nama, versi). Dipisah dari
 # cache utama karena meng-hash per rilis, bukan satu dokumen besar.
 _METADATA_VERSION_CACHE: dict[tuple[str, str], dict] = {}
@@ -225,6 +240,7 @@ _METADATA_VERSION_CACHE: dict[tuple[str, str], dict] = {}
 def clear_metadata_cache() -> None:
     """Kosongkan singgahan — dipanggil di awal setiap resolusi baru."""
     _METADATA_CACHE.clear()
+    _METADATA_ERROR_CACHE.clear()
     _METADATA_VERSION_CACHE.clear()
 
 
@@ -232,10 +248,14 @@ def fetch_pypi_metadata(name: str) -> dict:
     kunci = (name or "").strip().lower()
     if kunci in _METADATA_CACHE:
         return _METADATA_CACHE[kunci]
+    cached_error = _METADATA_ERROR_CACHE.get(kunci)
+    if cached_error is not None:
+        raise ResolveError(*cached_error)
     try:
-        import json
         data = json.loads(_http_get(PYPI_JSON_URL.format(name=name)).decode("utf-8"))
-    except ResolveError:
+    except ResolveError as e:
+        _propagate_cancel(e)
+        _METADATA_ERROR_CACHE[kunci] = (e.code, e.stage, e.human, e.technical)
         raise
     except Exception as e:
         raise ResolveError(
@@ -269,9 +289,9 @@ def fetch_pypi_metadata_version(name: str, version: str) -> dict:
         return _METADATA_VERSION_CACHE[kunci]
     url = "https://pypi.org/pypi/%s/%s/json" % (kunci[0], kunci[1])
     try:
-        import json
         data = json.loads(_http_get(url).decode("utf-8"))
-    except ResolveError:
+    except ResolveError as e:
+        _propagate_cancel(e)
         return None
     except Exception:
         return None
@@ -379,7 +399,8 @@ def fetch_chaquopy_wheels(name: str, index_url: str = CHAQUOPY_INDEX_URL) -> lis
     url = index_url.rstrip("/") + "/" + name + "/"
     try:
         html = _http_get(url).decode("utf-8", "replace")
-    except ResolveError:
+    except ResolveError as e:
+        _propagate_cancel(e)
         return []  # package tidak ada di index Chaquopy → bukan error fatal
     out = []
     for href in _SIMPLE_HREF.findall(html):
@@ -691,7 +712,8 @@ def _resolve_unlocked(
         try:
             data = fetch_pypi_metadata(cname)
             pypi = _pypi_candidates(data, {"specifier": specifier})
-        except ResolveError:
+        except ResolveError as e:
+            _propagate_cancel(e)
             pypi = []
         # 3. Chaquopy index (native wheel)
         chaq = fetch_chaquopy_wheels(cname)
@@ -742,7 +764,8 @@ def _resolve_unlocked(
         try:
             _latest_data = fetch_pypi_metadata(cname)
             _latest_info = _latest_data.get("info", {}) or {}
-        except ResolveError:
+        except ResolveError as e:
+            _propagate_cancel(e)
             _latest_data = {}
             _latest_info = {}
         if _latest_info.get("version"):
@@ -814,7 +837,8 @@ def _resolve_unlocked(
             best["summary"] = (info.get("summary") or "")[:200]
             best["license"] = (info.get("license") or "")[:200]
             best["project_url"] = info.get("project_url")
-        except ResolveError:
+        except ResolveError as e:
+            _propagate_cancel(e)
             pass
         return best
 
