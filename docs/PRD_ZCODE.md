@@ -7,6 +7,8 @@ PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
 
 Versi saat ini: `1.0.1` (`gradle.properties` = sumber tunggal)
 Terakhir diperbarui: 2026-08-13
+Revisi: 2026-08-13 — §5 Bug K (kelas dependensi-per-versi), §6 Build #6,
+§8 batas jujur pandas 1.5.0 ARMv7. (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
@@ -136,6 +138,19 @@ Detail lengkap: `RENCANA_BUILD_2.md`.
 | H | WebView cold-start belum dijaga | `EditorScreen.kt` |
 | I | **tidak ada teks yang bisa disalin** | seluruh UI |
 | J | breadcrumb hanya 7 dari 49 file | — |
+| K | deps dibaca dari **versi terbaru**, bukan versi terpilih → `pandas` (pytz), `rich` (typing-extensions) hilang | `resolve.py` (`info.requires_dist`) |
+
+> **Catatan (2026-08-13, sifat PRD = pegangan, bukan acuan terkunci):** baris di atas
+> akan terus berubah seiring kenyataan. Kode `main` (d4efbb9) sudah memperbaiki
+> A–J; baris **K** adalah kelas masalah berikutnya yang masih terbuka. "K" bukan
+> bug per-paket — ia bug **kelas**: resolver membaca `info.requires_dist` dari
+> PyPI yang **selalu milik versi terbaru**, padahal ZCODE memilih versi tertentu
+> (bisa lama). Saat dependensi berbeda antara versi terpilih dan versi terbaru,
+> dependensi jadi salah → `ModuleNotFoundError`. Terbukti nyata: `pandas 2.1.3`
+> butuh `pytz/dateutil/tzdata`, `rich 13.5.3` butuh `typing-extensions` — keduanya
+> hilang saat fallback ke versi terbaru. numpy 1.26.2 tidak punya `Requires-Dist`
+> (0 deps) sehingga tidak kena; numpy/matplotlib di-cover oleh `NATIVE_HOST_DEPS`
+> + DT_NEEDED, jalur yang **tidak boleh disentuh** fix ini.
 
 ---
 
@@ -164,6 +179,36 @@ tombol ZMUX yang butuh PTY baru diaktifkan di sini
 ### Build #5 — Library "perpustakaan mini"
 50 entri bertahap, pola SAMPLES 2 level, prosa ditulis tangan.
 Vonis: 🟢 sudah diuji · 🔵 bisa dipasang · 🟠 eksperimental · 🔴 tidak bisa.
+
+### Build #6 — fix kelas masalah dependensi-per-versi (Bug K)
+**Tujuan (pegangan, bukan kunci):** menyembuhkan `no module named` untuk **semua**
+paket yang dependensinya berubah antar-versi, bukan menambal pandas saja.
+
+**Acuan solusi (dari IDE mobile yang berhasil = pip):**
+- `pip` resolve dependensi **transitive** dengan metadata **per-versi**, bukan
+  `info.requires_dist` versi terbaru. Sumber: https://pip.pypa.io/en/latest/topics/dependency-resolution/
+- **PEP 658** — metadata wheel (`<wheel-url>.metadata`) tersedia terpisah per
+  versi; resolver baca deps **tanpa unduh wheel penuh**, tetap bisa backtrack.
+  Sumber: https://peps.python.org/pep-0658/
+
+**Rencana perubahan `resolve.py` (`_choose`) — sumber `requires_dist` berlapis:**
+1. **PEP 658 metadata per-versi** (`<wheel-url>.metadata`) → paling akurat.
+2. **`deps_from_wheel`** (wheel sudah di cache) → jalur sekarang.
+3. Terakhir **PyPI `info`** → fallback (perilaku sekarang, untuk wheel Chaquopy
+   yang belum teruji TLS).
+
+**Syarat non-regresi (kritikal):**
+- **numpy/matplotlib TIDAK tersentuh** — mereka di-cover `NATIVE_HOST_DEPS` +
+  DT_NEEDED; fix ini hanya menambah sumber di `requires_dist`.
+- Berlapis: kalau PEP 658 gagal → kembali ke perilaku sekarang → tidak mungkin
+  lebih buruk.
+- Perbaiki **kelas**, bukan kejadian: guard membuktikan `pandas` (pytz) DAN
+  `rich` (typing-extensions) → kedua-duanya harus merah-bila-bug, hijau-setelah-fix.
+- Guard + uji mutasi (aturan #2), verifikasi di HP ARMv7 nyata (aturan #1/#9).
+
+**Kenyataan versi yang harus jujur (aturan #1):** untuk ARMv7 Chaquopy, `pandas`
+hanya tersedia **1.5.0**, bukan 2.1.3. Kalau user meminta versi yang tak ada,
+beri pesan benar + saran `1.5.0`, bukan "tidak kompatibel".
 
 ---
 
@@ -194,6 +239,9 @@ Bukan disembunyikan di FAQ:
 3. **Alpine perlu unduh sekali** (100–200 MB)
 4. **PRoot lambat** — `apk add` bisa 20 detik vs <1 detik native
 5. **Wheel bisa lolos tag tapi gagal `import`** — karena itu ada smoke test + rollback
+6. **pandas di ARMv7 Chaquopy hanya ada versi 1.5.0**, bukan 2.x. Minta versi lebih
+   tinggi = jujur bilang tak ada + saran versi yang tersedia (bukan "tidak
+   kompatibel").
 
 ---
 

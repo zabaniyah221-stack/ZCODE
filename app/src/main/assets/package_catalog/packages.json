@@ -29,13 +29,13 @@
   "importName": "catboost",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Gradient boosting (native besar).",
+  "description": "Gradient boosting (native besar). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -197,13 +197,13 @@
   "importName": "lightgbm",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Gradient boosting ringan (native).",
+  "description": "Gradient boosting ringan (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -221,13 +221,13 @@
   "importName": "llama_cpp",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "LLM lokal via llama.cpp (perlu build Android — belum pasti).",
+  "description": "LLM lokal via llama.cpp (perlu build Android — belum pasti). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -245,13 +245,13 @@
   "importName": "onnxruntime",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Inference ONNX (cek wheel Android).",
+  "description": "Inference ONNX (cek wheel Android). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -293,13 +293,13 @@
   "importName": "pycrfsuite",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "CRFsuite binding (native).",
+  "description": "CRFsuite binding (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -317,13 +317,13 @@
   "importName": "safetensors",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Format tensor aman (native).",
+  "description": "Format tensor aman (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -437,13 +437,13 @@
   "importName": "tensorflow",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "TensorFlow desktop tidak untuk Android in-process; pakai tflite-runtime.",
+  "description": "TensorFlow desktop tidak untuk Android in-process; pakai tflite-runtime. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -509,13 +509,13 @@
   "importName": "torch",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "PyTorch butuh wheel Android khusus + bootstrap — STANDALONE REQUIRED.",
+  "description": "PyTorch butuh wheel Android khusus + bootstrap — STANDALONE REQUIRED. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -581,13 +581,13 @@
   "importName": "xgboost",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Gradient boosting (native; wheel Android?).",
+  "description": "Gradient boosting (native; wheel Android?). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1253,13 +1253,13 @@
   "importName": "bottleneck",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Akselerasi fungsi numpy (C extension).",
+  "description": "Akselerasi fungsi numpy (C extension). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1373,13 +1373,13 @@
   "importName": "h5py",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Baca/tulis HDF5 — butuh libhdf5 native.",
+  "description": "Baca/tulis HDF5 — butuh libhdf5 native. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1535,13 +1535,13 @@
   "importName": "netCDF4",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh libnetcdf native; kemungkinan tidak ada wheel Android.",
+  "description": "Butuh libnetcdf native; kemungkinan tidak ada wheel Android. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1607,13 +1607,13 @@
   "importName": "numba",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "JIT compiler — butuh LLVM; berat & belum tentu ada wheel Android.",
+  "description": "JIT compiler — butuh LLVM; berat & belum tentu ada wheel Android. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1631,13 +1631,13 @@
   "importName": "numexpr",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Evaluasi ekspresi array berkinerja tinggi.",
+  "description": "Evaluasi ekspresi array berkinerja tinggi. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1892,13 +1892,13 @@
   "importName": "polars",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "DataFrame Rust berkinerja tinggi — cek ketersediaan wheel Android.",
+  "description": "DataFrame Rust berkinerja tinggi — cek ketersediaan wheel Android. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -1964,13 +1964,13 @@
   "importName": "pyarrow",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Arrow / Parquet — native besar.",
+  "description": "Arrow / Parquet — native besar. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2060,13 +2060,13 @@
   "importName": "skimage",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Pemrosesan citra ilmiah.",
+  "description": "Pemrosesan citra ilmiah. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2084,13 +2084,13 @@
   "importName": "scikit-learn",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Machine learning klasik (regresi, klasifikasi, clustering).",
+  "description": "Machine learning klasik (regresi, klasifikasi, clustering). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2108,7 +2108,7 @@
   "importName": "scipy",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2118,7 +2118,7 @@
    "arm64-v8a",
    "x86_64"
   ],
-  "description": "Algoritma sains: optimasi, integrasi, statistik, sinyal.",
+  "description": "Algoritma sains: optimasi, integrasi, statistik, sinyal. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [
    "optimasi",
    "statistik",
@@ -2220,13 +2220,13 @@
   "importName": "statsmodels",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Model statistik & ekonometrika.",
+  "description": "Model statistik & ekonometrika. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2388,13 +2388,13 @@
   "importName": "blosc",
   "category": "Database / Storage",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Kompresi blosc (native).",
+  "description": "Kompresi blosc (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2724,13 +2724,13 @@
   "importName": "psycopg2",
   "category": "Database / Storage",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "PostgreSQL driver (native — butuh libpq; wheel Android belum tentu ada).",
+  "description": "PostgreSQL driver (native — butuh libpq; wheel Android belum tentu ada). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2748,13 +2748,13 @@
   "importName": "pymongo",
   "category": "Database / Storage",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "MongoDB driver (C extension).",
+  "description": "MongoDB driver (C extension). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -2796,13 +2796,13 @@
   "importName": "snappy",
   "category": "Database / Storage",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Kompresi Snappy (native).",
+  "description": "Kompresi Snappy (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3420,13 +3420,13 @@
   "importName": "magic",
   "category": "Files / Office / Document",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Deteksi tipe file via libmagic (native).",
+  "description": "Deteksi tipe file via libmagic (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3708,13 +3708,13 @@
   "importName": "arcade",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Game framework butuh OpenGL desktop.",
+  "description": "Game framework butuh OpenGL desktop. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3756,13 +3756,13 @@
   "importName": "cocos2d",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Game engine — butuh bootstrap khusus.",
+  "description": "Game engine — butuh bootstrap khusus. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3852,13 +3852,13 @@
   "importName": "kivy",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh bootstrap APK sendiri — STANDALONE REQUIRED.",
+  "description": "Butuh bootstrap APK sendiri — STANDALONE REQUIRED. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3876,13 +3876,13 @@
   "importName": "panda3d",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Game engine C++ — tidak untuk Android in-process.",
+  "description": "Game engine C++ — tidak untuk Android in-process. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3924,13 +3924,13 @@
   "importName": "pyglet",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh windowing desktop.",
+  "description": "Butuh windowing desktop. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3948,13 +3948,13 @@
   "importName": "PyQt5",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh Qt native — STANDALONE REQUIRED.",
+  "description": "Butuh Qt native — STANDALONE REQUIRED. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -3972,13 +3972,13 @@
   "importName": "PySide6",
   "category": "GUI / Games / App Framework",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh Qt6 native — STANDALONE REQUIRED.",
+  "description": "Butuh Qt6 native — STANDALONE REQUIRED. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4068,13 +4068,13 @@
   "importName": "av",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "PyAV — binding FFmpeg (native besar; butuh wheel Android).",
+  "description": "PyAV — binding FFmpeg (native besar; butuh wheel Android). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4164,13 +4164,13 @@
   "importName": "face_recognition",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh dlib — kemungkinan tidak ada wheel Android.",
+  "description": "Butuh dlib — kemungkinan tidak ada wheel Android. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4260,13 +4260,13 @@
   "importName": "imageio_ffmpeg",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "FFmpeg binary plugin — besar, tidak dibundel.",
+  "description": "FFmpeg binary plugin — besar, tidak dibundel. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4332,13 +4332,13 @@
   "importName": "cv2",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Computer vision (native besar; versi headless bisa dicoba).",
+  "description": "Computer vision (native besar; versi headless bisa dicoba). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4420,13 +4420,13 @@
   "importName": "pyaudio",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh PortAudio system — tidak didukung di Chaquopy.",
+  "description": "Butuh PortAudio system — tidak didukung di Chaquopy. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4468,13 +4468,13 @@
   "importName": "pygame",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Butuh SDL — ranah ZPLAY, bukan Chaquopy.",
+  "description": "Butuh SDL — ranah ZPLAY, bukan Chaquopy. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4492,13 +4492,13 @@
   "importName": "pygame",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Community edition — tetap butuh SDL.",
+  "description": "Community edition — tetap butuh SDL. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -4852,13 +4852,13 @@
   "importName": "nacl",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "libsodium binding (native).",
+  "description": "libsodium binding (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -5044,13 +5044,13 @@
   "importName": "coverage",
   "category": "Testing / Quality / Debugging",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Cek cakupan kode (C extension — cek wheel).",
+  "description": "Cek cakupan kode (C extension — cek wheel). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -5212,13 +5212,13 @@
   "importName": "line_profiler",
   "category": "Testing / Quality / Debugging",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Profil per baris (C extension).",
+  "description": "Profil per baris (C extension). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -5332,13 +5332,13 @@
   "importName": "py_spy",
   "category": "Testing / Quality / Debugging",
   "type": "native",
-  "status": "INCOMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Sampling profiler — butuh PTY/kernel — out of scope.",
+  "description": "Sampling profiler — butuh PTY/kernel — out of scope. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -5524,13 +5524,13 @@
   "importName": "ruff",
   "category": "Testing / Quality / Debugging",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Linter Rust super cepat (binary wheel — cek).",
+  "description": "Linter Rust super cepat (binary wheel — cek). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
   "doesNotWork": [],
@@ -7437,6 +7437,1072 @@
   "license": "",
   "publisher": "",
   "source": "https://pypi.org/project/yt_dlp/",
+  "sha256": null
+ },
+ {
+  "name": "argon2-cffi-bindings",
+  "displayName": "argon2-cffi-bindings",
+  "importName": "argon2-cffi-bindings",
+  "category": "Security / Cryptography",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "21.2.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/argon2-cffi-bindings/",
+  "sha256": null
+ },
+ {
+  "name": "astropy",
+  "displayName": "astropy",
+  "importName": "astropy",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "6.0.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/astropy/",
+  "sha256": null
+ },
+ {
+  "name": "aubio",
+  "displayName": "aubio",
+  "importName": "aubio",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.4.9",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/aubio/",
+  "sha256": null
+ },
+ {
+  "name": "bitarray",
+  "displayName": "bitarray",
+  "importName": "bitarray",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "2.8.2",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/bitarray/",
+  "sha256": null
+ },
+ {
+  "name": "brotli",
+  "displayName": "brotli",
+  "importName": "brotli",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.0.7",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/brotli/",
+  "sha256": null
+ },
+ {
+  "name": "cffi",
+  "displayName": "cffi",
+  "importName": "cffi",
+  "category": "Security / Cryptography",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.17.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/cffi/",
+  "sha256": null
+ },
+ {
+  "name": "contourpy",
+  "displayName": "contourpy",
+  "importName": "contourpy",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.0.5",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/contourpy/",
+  "sha256": null
+ },
+ {
+  "name": "cymem",
+  "displayName": "cymem",
+  "importName": "cymem",
+  "category": "AI / ML / NLP",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "2.0.6",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/cymem/",
+  "sha256": null
+ },
+ {
+  "name": "cytoolz",
+  "displayName": "cytoolz",
+  "importName": "cytoolz",
+  "category": "Utilities / CLI / Terminal",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.12.2",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/cytoolz/",
+  "sha256": null
+ },
+ {
+  "name": "depthai",
+  "displayName": "depthai",
+  "importName": "depthai",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "2.24.0.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/depthai/",
+  "sha256": null
+ },
+ {
+  "name": "editdistance",
+  "displayName": "editdistance",
+  "importName": "editdistance",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.6.2",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/editdistance/",
+  "sha256": null
+ },
+ {
+  "name": "ephem",
+  "displayName": "ephem",
+  "importName": "ephem",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "3.7.7.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/ephem/",
+  "sha256": null
+ },
+ {
+  "name": "frozenlist",
+  "displayName": "frozenlist",
+  "importName": "frozenlist",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.4.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/frozenlist/",
+  "sha256": null
+ },
+ {
+  "name": "google-crc32c",
+  "displayName": "google-crc32c",
+  "importName": "google-crc32c",
+  "category": "Utilities / CLI / Terminal",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.7.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/google-crc32c/",
+  "sha256": null
+ },
+ {
+  "name": "greenlet",
+  "displayName": "greenlet",
+  "importName": "greenlet",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "3.0.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/greenlet/",
+  "sha256": null
+ },
+ {
+  "name": "grpcio",
+  "displayName": "grpcio",
+  "importName": "grpcio",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.59.3",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/grpcio/",
+  "sha256": null
+ },
+ {
+  "name": "jpegio",
+  "displayName": "jpegio",
+  "importName": "jpegio",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.2.8",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/jpegio/",
+  "sha256": null
+ },
+ {
+  "name": "kiwisolver",
+  "displayName": "kiwisolver",
+  "importName": "kiwisolver",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.4.5",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/kiwisolver/",
+  "sha256": null
+ },
+ {
+  "name": "lameenc",
+  "displayName": "lameenc",
+  "importName": "lameenc",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.7.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/lameenc/",
+  "sha256": null
+ },
+ {
+  "name": "lru-dict",
+  "displayName": "lru-dict",
+  "importName": "lru-dict",
+  "category": "Utilities / CLI / Terminal",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.1.8",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/lru-dict/",
+  "sha256": null
+ },
+ {
+  "name": "markupsafe",
+  "displayName": "markupsafe",
+  "importName": "markupsafe",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "3.0.3",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/markupsafe/",
+  "sha256": null
+ },
+ {
+  "name": "miniaudio",
+  "displayName": "miniaudio",
+  "importName": "miniaudio",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.59",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/miniaudio/",
+  "sha256": null
+ },
+ {
+  "name": "multidict",
+  "displayName": "multidict",
+  "importName": "multidict",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "5.1.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/multidict/",
+  "sha256": null
+ },
+ {
+  "name": "murmurhash",
+  "displayName": "murmurhash",
+  "importName": "murmurhash",
+  "category": "AI / ML / NLP",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.0.10",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/murmurhash/",
+  "sha256": null
+ },
+ {
+  "name": "netifaces",
+  "displayName": "netifaces",
+  "importName": "netifaces",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.10.9",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/netifaces/",
+  "sha256": null
+ },
+ {
+  "name": "preshed",
+  "displayName": "preshed",
+  "importName": "preshed",
+  "category": "AI / ML / NLP",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "3.0.9",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/preshed/",
+  "sha256": null
+ },
+ {
+  "name": "pycocotools",
+  "displayName": "pycocotools",
+  "importName": "pycocotools",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "2.0.7",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pycocotools/",
+  "sha256": null
+ },
+ {
+  "name": "pycryptodomex",
+  "displayName": "pycryptodomex",
+  "importName": "pycryptodomex",
+  "category": "Security / Cryptography",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "3.21.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pycryptodomex/",
+  "sha256": null
+ },
+ {
+  "name": "pycurl",
+  "displayName": "pycurl",
+  "importName": "pycurl",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "7.45.2",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pycurl/",
+  "sha256": null
+ },
+ {
+  "name": "pyerfa",
+  "displayName": "pyerfa",
+  "importName": "pyerfa",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "2.0.1.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pyerfa/",
+  "sha256": null
+ },
+ {
+  "name": "pynacl",
+  "displayName": "pynacl",
+  "importName": "pynacl",
+  "category": "Security / Cryptography",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.5.0",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pynacl/",
+  "sha256": null
+ },
+ {
+  "name": "pyproj",
+  "displayName": "pyproj",
+  "importName": "pyproj",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "3.6.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pyproj/",
+  "sha256": null
+ },
+ {
+  "name": "pywavelets",
+  "displayName": "pywavelets",
+  "importName": "pywavelets",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.4.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/pywavelets/",
+  "sha256": null
+ },
+ {
+  "name": "ruamel-yaml-clib",
+  "displayName": "ruamel-yaml-clib",
+  "importName": "ruamel-yaml-clib",
+  "category": "Utilities / CLI / Terminal",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.2.8",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/ruamel-yaml-clib/",
+  "sha256": null
+ },
+ {
+  "name": "soxr",
+  "displayName": "soxr",
+  "importName": "soxr",
+  "category": "Image / Audio / Media",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "0.3.7",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/soxr/",
+  "sha256": null
+ },
+ {
+  "name": "srsly",
+  "displayName": "srsly",
+  "importName": "srsly",
+  "category": "AI / ML / NLP",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "2.4.8",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/srsly/",
+  "sha256": null
+ },
+ {
+  "name": "tgcrypto",
+  "displayName": "tgcrypto",
+  "importName": "tgcrypto",
+  "category": "Security / Cryptography",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.2.5",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/tgcrypto/",
+  "sha256": null
+ },
+ {
+  "name": "typed-ast",
+  "displayName": "typed-ast",
+  "importName": "typed-ast",
+  "category": "Utilities / CLI / Terminal",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.5.4",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/typed-ast/",
+  "sha256": null
+ },
+ {
+  "name": "wordcloud",
+  "displayName": "wordcloud",
+  "importName": "wordcloud",
+  "category": "Data / Math / Science",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.9.2",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/wordcloud/",
+  "sha256": null
+ },
+ {
+  "name": "yarl",
+  "displayName": "yarl",
+  "importName": "yarl",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "1.9.3",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/yarl/",
+  "sha256": null
+ },
+ {
+  "name": "zope-interface",
+  "displayName": "zope-interface",
+  "importName": "zope-interface",
+  "category": "Web / API / Networking",
+  "type": "native",
+  "status": "COMPATIBLE",
+  "testedVersion": "6.1",
+  "python": [
+   "3.11"
+  ],
+  "abis": [
+   "armeabi-v7a"
+  ],
+  "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
+  "useCases": [],
+  "works": [],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "",
+  "publisher": "",
+  "source": "https://pypi.org/project/zope-interface/",
   "sha256": null
  }
 ]
