@@ -581,6 +581,15 @@ def resolve(
         # (TLS ke chaquo.com ditutup), jadi lapis ini WAJIB tetap ada.
         best.setdefault("requires_dist", [])
         best.setdefault("deps_source", "")
+        # Ambil info/version terbaru SEKALI (di-cache di _collect → 0 HTTP baru).
+        # Dipakai untuk optimasi: hanya panggil per-versi bila versi terpilih ≠ terbaru.
+        _latest_info = {}
+        try:
+            _latest_info = fetch_pypi_metadata(cname).get("info", {})
+        except ResolveError:
+            _latest_info = {}
+        if _latest_info.get("version"):
+            best["latest_version"] = _latest_info["version"]
         try:
             from .wheeldeps import deps_from_wheel
             berkas = best.get("local_path") or ""
@@ -606,7 +615,15 @@ def resolve(
             pass
 
         # BUG K — lapis 2: requires_dist per-versi bila wheel belum ada di cache.
-        if not best.get("requires_dist") and best.get("version"):
+        #
+        # OPTIMASI (2026-08-13, mencegah timeout matplotlib v1.0.14 regresi):
+        # HANYA panggil endpoint per-versi bila versi TERPILIH ≠ versi TERBARU.
+        # Untuk paket yang memilih versi terbaru, `info.requires_dist` (dari
+        # fetch_pypi_metadata yang sudah di-cache di _collect) sudah benar dan
+        # TIDAK butuh HTTP tambahan. Ini memotong panggilan HTTP per-versi utk
+        # matplotlib (banyak deps versi terbaru) yang dulu membuatnya timeout.
+        if (not best.get("requires_dist") and best.get("version")
+                and best.get("version") != best.get("latest_version")):
             pv_req = requires_dist_for_version(cname, best["version"])
             if pv_req:
                 best["requires_dist"] = pv_req
