@@ -2684,10 +2684,24 @@ class TestDependensiDariWheel:
         self._wheel(t, "aplikasi", "1.0", ["pustaka>=1"])
         self._wheel(t, "pustaka", "1.0", ["pustaka-dalam"])
         self._wheel(t, "pustaka-dalam", "1.0", [])
+        # BUG DI TEST INI SENDIRI, tertangkap CI 2026-08-13 (run 31665998441).
+        # Versi pertama mencari wheel dengan `basename.split("-")[0]`, padahal
+        # nama paket boleh mengandung tanda hubung: `pustaka-dalam-1.0-...whl`
+        # ikut terpotong menjadi `pustaka`. Dua paket berbeda jadi berebut
+        # kunci yang sama, dan yang menang ditentukan urutan `glob` — yaitu
+        # urutan filesystem, yang berbeda antara sandbox dan runner CI.
+        # Lulus di sini, merah di sana.
+        #
+        # Kode produksi TIDAK punya cacat ini: ia memakai `parse_wheel()` yang
+        # membelah nama wheel sesuai PEP 427. Cara yang sama dipakai di bawah.
         import glob as _g, os as _os
         def cari(n):
-            for f in _g.glob(_os.path.join(t, "*.whl")):
-                if wd.normalisasi(_os.path.basename(f).split("-")[0]) == wd.normalisasi(n):
+            for f in sorted(_g.glob(_os.path.join(t, "*.whl"))):
+                batang = _os.path.basename(f)[:-len(".whl")]
+                # PEP 427: nama-versi-[build-]pytag-abitag-plattag
+                bagian = batang.split("-")
+                nama_paket = "-".join(bagian[:-4]) if len(bagian) > 4 else bagian[0]
+                if wd.normalisasi(nama_paket) == wd.normalisasi(n):
                     return f
             return None
         lihat, antre = set(), ["aplikasi"]
@@ -2710,3 +2724,80 @@ class TestDependensiDariWheel:
         p = ROOT / "tools/paket_uji_dep.txt"
         assert p.exists(), "daftar bahan uji hilang"
         assert len(read(p).split()) > 250
+
+
+class TestParsingNamaWheelBerhubung:
+    """Guard untuk kelas bug: nama paket ber-tanda-hubung dipotong salah.
+
+    INSIDEN CI 2026-08-13 (run 31665998441). Sebuah helper di berkas uji ini
+    mencari wheel dengan `basename.split("-")[0]`. Nama paket boleh memuat
+    tanda hubung, sehingga `pustaka-dalam-1.0-py3-none-any.whl` terpotong
+    menjadi `pustaka` dan dua paket berbeda berebut kunci yang sama. Yang
+    menang ditentukan urutan `glob`, yaitu urutan filesystem — berbeda antara
+    sandbox dan runner CI. Lulus lokal, merah di CI.
+
+    Kelas bug ini nyata di dunia paket Python: `python-dateutil`,
+    `scikit-learn`, `argon2-cffi-bindings`, `charset-normalizer`, dan
+    `google-crc32c` semuanya akan salah dibaca.
+    """
+
+    def test_kode_produksi_tidak_memotong_nama_dengan_split_hubung(self):
+        """Yang paling penting: cacat itu TIDAK boleh ada di kode produksi."""
+        import glob as _g
+        tersangka = []
+        for pola in ("app/src/main/python/package_runtime/*.py",
+                     "app/src/main/java/com/zaba/zcode/core/packageengine/*.kt"):
+            for f in _g.glob(str(ROOT / pola)):
+                isi = read(Path(f))
+                for baris in isi.splitlines():
+                    telanjang = baris.strip()
+                    if telanjang.startswith("#") or telanjang.startswith("//"):
+                        continue
+                    if 'split("-")[0]' in telanjang and ".whl" not in telanjang:
+                        # hanya masalah bila dipakai pada nama berkas wheel
+                        if any(k in telanjang for k in ("filename", "basename", "name")):
+                            tersangka.append(
+                                "%s: %s" % (Path(f).name, telanjang[:70]))
+        assert not tersangka, (
+            "nama wheel dipotong dengan split('-')[0]; paket seperti "
+            "python-dateutil akan salah dikenali:\n  " + "\n  ".join(tersangka)
+        )
+
+    def test_parse_wheel_resmi_menangani_nama_berhubung(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.wheelinfo import parse_wheel
+        for berkas, harusnya in [
+            ("python_dateutil-2.9.0-py3-none-any.whl", "python-dateutil"),
+            ("charset_normalizer-3.3.2-py3-none-any.whl", "charset-normalizer"),
+            ("argon2_cffi_bindings-21.2.0-py3-none-any.whl", "argon2-cffi-bindings"),
+        ]:
+            hasil = parse_wheel(berkas)["name"]
+            assert hasil.replace("_", "-").lower() == harusnya, (
+                "%s terbaca sebagai %r, seharusnya %r" % (berkas, hasil, harusnya)
+            )
+
+    def test_helper_uji_tahan_urutan_filesystem(self):
+        """Helper di berkas uji ini pun harus benar — kalau tidak, CI merah
+        secara acak dan waktu habis untuk mengejar hantu."""
+        src = read(ROOT / "test_zcode_kotlin_guards.py")
+        i = src.find("def test_penelusuran_rekursif_terhadap_paket_nyata")
+        assert i > 0
+        blok = src[i:i + 2600]
+        # Hanya periksa baris KODE; komentar di blok ini memang menyebut pola
+        # lamanya untuk menjelaskan sejarahnya, dan itu tidak boleh dihitung.
+        kode = "\n".join(
+            b for b in blok.splitlines() if not b.strip().startswith("#")
+        )
+        assert 'basename(f).split("-")[0]' not in kode, (
+            "helper pencari wheel kembali memotong nama dengan split('-')[0]"
+        )
+        # BOCOR SAAT UJI MUTASI (N2): mencari "sorted(" di mana pun dalam blok
+        # tetap lulus walau glob-nya sendiri tidak diurutkan, karena kata itu
+        # muncul juga di assert penutup. Yang harus dipastikan: pemanggilan
+        # glob ITU SENDIRI dibungkus sorted().
+        assert re.search(r"sorted\(\s*_g\.glob\(", kode), (
+            "glob tidak diurutkan — hasil bergantung urutan filesystem, "
+            "yang berbeda antara sandbox dan runner CI (insiden run "
+            "31665998441)"
+        )
