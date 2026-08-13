@@ -35,6 +35,9 @@ class SmokeTestRunner(private val context: Context) {
     data class MissingLibs(
         val packages: List<String>,
         val unknown: List<String>,
+        /** Pustaka dikenal tapi tanpa wheel (mis. libssl) — beri penjelasan. */
+        val noPackage: List<String>,
+        val notes: List<String>,
         val sources: Map<String, String>,
         val scanned: Int,
         val error: String
@@ -48,7 +51,9 @@ class SmokeTestRunner(private val context: Context) {
      * sebelumnya — pemindai ini menambah kemampuan, tidak boleh mengurangi.
      */
     fun scanMissingLibs(dirs: List<String>, api: Int): MissingLibs {
-        val kosong = MissingLibs(emptyList(), emptyList(), emptyMap(), 0, "")
+        val kosong = MissingLibs(
+            emptyList(), emptyList(), emptyList(), emptyList(), emptyMap(), 0, ""
+        )
         if (dirs.isEmpty()) return kosong
         val dirsJson = JSONArray().apply { dirs.forEach { put(it) } }.toString()
         val json = try {
@@ -75,6 +80,8 @@ class SmokeTestRunner(private val context: Context) {
             MissingLibs(
                 packages = arr("packages"),
                 unknown = arr("unknown"),
+                noPackage = arr("no_package"),
+                notes = arr("notes"),
                 sources = src,
                 scanned = o.optInt("scanned", 0),
                 error = o.optString("error", "")

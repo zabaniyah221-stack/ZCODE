@@ -457,6 +457,10 @@ def run_smoke(
         native_info["preload_log"].append(
             "pustaka TIDAK DIKENAL: %s" % ", ".join(kurang["unknown"])
         )
+    # Pustaka yang dikenal tetapi memang tidak punya wheel (mis. libssl).
+    # Tanpa baris ini pemakai hanya melihat impor gagal tanpa sebab.
+    for nota in kurang.get("notes", [])[:5]:
+        native_info["preload_log"].append(nota)
 
     try:
         test_list = tests or [{"name": "import", "type": "IMPORT", "target": import_name}]

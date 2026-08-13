@@ -208,11 +208,56 @@ LIB_TO_PACKAGE: dict[str, tuple[str, str]] = {
     "libta-lib.so": ("chaquopy-ta-lib", DUGAAN),
     "libzbar.so": ("chaquopy-zbar", DUGAAN),
 
-    # openssl TIDAK berawalan `chaquopy-` di indeks — dibuktikan oleh
-    # meta.yaml cryptography yang menulis `openssl` polos. Penyaring
-    # startsWith("chaquopy-") di tempat lain tidak akan menangkapnya.
-    "libssl.so": ("openssl", DUGAAN),
-    "libcrypto.so": ("openssl", DUGAAN),
+    # Varian nama untuk paket yang MEMANG ADA di indeks. Ditambahkan setelah
+    # tinjauan luar 2026-08-13 menyebutkan ejaan-ejaan ini; hanya yang paketnya
+    # terverifikasi ada di indeks yang dimasukkan. Saran lain dalam tinjauan
+    # yang sama (chaquopy-zlib, -sqlite, -protobuf, -brotli, -gsl, -openssl,
+    # -postgresql, -gettext, -libwebp, -lcms2, -openjpeg, -libexif,
+    # -libsodium, -libcurl, -jpeg) SEMUANYA ditolak: tidak satu pun ada di
+    # https://chaquo.com/pypi-13.1/ (diperiksa langsung, 31 paket chaquopy-*).
+    "libiomp5.so": ("chaquopy-libomp", DUGAAN),
+    "libopenblasp.so": ("chaquopy-openblas", DUGAAN),
+    "libcurl.so.4": ("chaquopy-curl", DUGAAN),
+
+    # CATATAN: libssl / libcrypto SENGAJA TIDAK ADA DI PETA INI.
+    # Lihat OPENSSL_TIDAK_DI_INDEKS di bawah — keduanya tidak bisa diunduh
+    # dari indeks mana pun, jadi mencantumkannya di sini justru menghasilkan
+    # kegagalan unduh 404 alih-alih pesan yang menjelaskan.
+}
+
+# ---------------------------------------------------------------------------
+# 2b. PUSTAKA YANG TIDAK PUNYA PAKET UNTUK DIUNDUH
+# ---------------------------------------------------------------------------
+# KESALAHAN YANG DIPERBAIKI (2026-08-13, v1.0.12). Versi pertama peta ini
+# memetakan `libssl.so` dan `libcrypto.so` ke paket bernama `openssl`, dengan
+# alasan meta.yaml cryptography menulis `openssl` polos tanpa awalan
+# `chaquopy-`. Alasannya benar, kesimpulannya salah.
+#
+# Pemeriksaan langsung ke indeks membuktikan keduanya TIDAK ADA:
+#     https://chaquo.com/pypi-13.1/openssl/          -> HTTP 404
+#     https://chaquo.com/pypi-13.1/chaquopy-openssl/ -> HTTP 404
+# (diperiksa 2026-08-13; daftar lengkap indeks memuat 31 paket `chaquopy-*`
+# dan tidak satu pun bernama openssl)
+#
+# `openssl` di meta.yaml adalah dependensi WAKTU BANGUN yang hidup di dalam
+# lingkungan build Chaquopy, bukan wheel yang bisa dipasang pemakai. Pustaka
+# hasilnya ikut ke dalam APK dengan nama bersufiks — `libssl_chaquopy.so`,
+# `libcrypto_chaquopy.so` — persis seperti yang dilakukan `patchelf
+# --set-soname` di build-wheel.py.
+#
+# Kalau entri lama dibiarkan, ZCODE akan mencoba mengunduh paket yang tidak
+# pernah ada dan gagal dengan 404 — kelas kegagalan yang sama seperti
+# `chaquopy-libc`, hanya berpindah nama.
+OPENSSL_TIDAK_DI_INDEKS: dict[str, str] = {
+    "libssl.so": (
+        "libssl disediakan oleh runtime Chaquopy dengan nama "
+        "libssl_chaquopy.so, bukan paket terpisah. Bila sebuah wheel meminta "
+        "libssl.so polos, wheel itu dibangun untuk platform lain."
+    ),
+    "libcrypto.so": (
+        "libcrypto disediakan oleh runtime Chaquopy dengan nama "
+        "libcrypto_chaquopy.so, bukan paket terpisah."
+    ),
 }
 
 
@@ -281,7 +326,11 @@ def resolve_needed(
 
     Mengembalikan:
         packages  : paket yang perlu diunduh, urut, tanpa duplikat
-        unknown   : pustaka yang tidak dikenal siapa pun — HARUS dilaporkan
+        unknown    : pustaka yang tidak dikenal siapa pun — HARUS dilaporkan
+        no_package : pustaka yang DIKENAL tetapi tidak punya wheel untuk
+                     diunduh (mis. libssl). Mencoba mengunduhnya hanya
+                     menghasilkan 404; pemakai berhak tahu sebabnya.
+        notes      : penjelasan untuk setiap entri no_package
         system    : pustaka sistem yang diabaikan (untuk diagnostik)
         satisfied : pustaka yang sudah tersedia
         sources   : {paket: dasar_pengetahuan} untuk pelaporan jujur
@@ -289,6 +338,8 @@ def resolve_needed(
     hasil = {
         "packages": [],
         "unknown": [],
+        "no_package": [],
+        "notes": [],
         "system": [],
         "satisfied": [],
         "sources": {},
@@ -316,6 +367,16 @@ def resolve_needed(
             continue
         cocok = package_for_lib(nama)
         if cocok is None:
+            # Pustaka yang dikenal TAPI tidak punya paket untuk diunduh.
+            # Dibedakan dari "tidak dikenal sama sekali" supaya pemakai
+            # menerima penjelasan, bukan sekadar nama berkas.
+            kanonik = normalize_soname(nama)
+            alasan = OPENSSL_TIDAK_DI_INDEKS.get(nama) or OPENSSL_TIDAK_DI_INDEKS.get(kanonik)
+            if alasan:
+                if nama not in hasil["no_package"]:
+                    hasil["no_package"].append(nama)
+                    hasil["notes"].append("%s: %s" % (nama, alasan))
+                continue
             if nama not in hasil["unknown"]:
                 hasil["unknown"].append(nama)
             continue

@@ -254,6 +254,10 @@ class PackageEngineV2(private val context: Context) {
                     onStep(Step.Log("     (pemasangan dilanjutkan; laporkan nama di atas bila impor gagal)"))
                     Breadcrumb.log("PKG_LIB_UNKNOWN", kurang.unknown.joinToString(","))
                 }
+                // Pustaka yang dikenal tetapi tidak punya wheel untuk diunduh
+                // (libssl/libcrypto). Mencoba mengunduhnya hanya menghasilkan
+                // 404, jadi yang diberikan adalah penjelasannya.
+                kurang.notes.take(5).forEach { onStep(Step.Log("  ℹ️ $it")) }
                 val perlu = kurang.packages.filter { it !in sudahDiambil }
                 if (perlu.isEmpty()) {
                     if (putaran == 1) {

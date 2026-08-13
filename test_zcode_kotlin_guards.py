@@ -2091,10 +2091,62 @@ class TestPetaPustakaNative:
             "entri yang belum diverifikasi ditandai seolah terbukti"
         )
 
-    def test_openssl_tanpa_awalan_chaquopy(self):
-        """meta.yaml cryptography menulis `openssl` polos, bukan chaquopy-*."""
+    def test_openssl_tidak_dipetakan_ke_paket_hantu(self):
+        """KOREKSI 2026-08-13 (v1.0.12) — guard ini DIBALIK dari versi lama.
+
+        Versi pertama menuntut `libssl.so` memetakan ke paket bernama
+        `openssl`, dengan alasan meta.yaml cryptography menulis nama itu
+        polos. Pemeriksaan langsung ke indeks membuktikan paketnya TIDAK ADA:
+        chaquo.com/pypi-13.1/openssl/ dan .../chaquopy-openssl/ sama-sama
+        HTTP 404. Guard lama mengunci bug: ZCODE akan mengunduh paket hantu.
+
+        Sekarang yang dijaga adalah kebalikannya — libssl harus menghasilkan
+        PENJELASAN, bukan percobaan unduh.
+        """
         nm = self._nm()
-        assert nm.package_for_lib("libssl.so")[0] == "openssl"
+        assert nm.package_for_lib("libssl.so") is None, (
+            "libssl.so dipetakan ke sebuah paket; tidak ada wheel openssl di "
+            "indeks Chaquopy, jadi unduhannya pasti 404"
+        )
+        for paket, _dasar in nm.LIB_TO_PACKAGE.values():
+            assert "openssl" not in paket or paket.endswith("-openssl-3"), (
+                "paket %r tidak ada di indeks" % paket
+            )
+        r = nm.resolve_needed(["libssl.so"], api=34)
+        assert r["no_package"] == ["libssl.so"]
+        assert not r["packages"], "masih mencoba mengunduh sesuatu untuk libssl"
+        assert r["notes"] and "libssl_chaquopy" in r["notes"][0], (
+            "tidak menjelaskan nama sebenarnya — pemakai hanya lihat kegagalan"
+        )
+
+    def test_setiap_paket_ada_di_indeks_sungguhan(self):
+        """Daftar indeks diverifikasi langsung dari chaquo.com/pypi-13.1/
+        pada 2026-08-13. Nama yang tidak ada di sini = unduhan 404.
+
+        Guard ini lahir setelah saran dari luar mengusulkan 16 paket
+        (chaquopy-openssl, -zlib, -sqlite, -protobuf, -brotli, -gsl, ...) yang
+        SATU PUN tidak ada di indeks. Peta hanya boleh memuat nama nyata.
+        """
+        nm = self._nm()
+        indeks_nyata = {
+            "chaquopy-crc32c", "chaquopy-curl-openssl-3", "chaquopy-curl",
+            "chaquopy-flac", "chaquopy-freetype", "chaquopy-geos",
+            "chaquopy-hdf5", "chaquopy-lame", "chaquopy-libcxx",
+            "chaquopy-libffi", "chaquopy-libgfortran", "chaquopy-libiconv",
+            "chaquopy-libjpeg", "chaquopy-libogg", "chaquopy-libomp",
+            "chaquopy-libpng", "chaquopy-libraw", "chaquopy-libsndfile",
+            "chaquopy-libtiff", "chaquopy-libvorbis", "chaquopy-libxml2",
+            "chaquopy-libxslt", "chaquopy-libyaml", "chaquopy-libzmq",
+            "chaquopy-llvm", "chaquopy-openblas", "chaquopy-proj-openssl-3",
+            "chaquopy-proj", "chaquopy-secp256k1", "chaquopy-ta-lib",
+            "chaquopy-zbar",
+        }
+        assert len(indeks_nyata) == 31
+        hantu = set(nm.daftar_paket_pendukung()) - indeks_nyata
+        assert not hantu, (
+            "paket berikut TIDAK ADA di indeks Chaquopy, unduhannya akan "
+            "404: %s" % sorted(hantu)
+        )
 
     def test_resolve_needed_menyaring_sistem_dan_yang_sudah_ada(self):
         nm = self._nm()
