@@ -8,7 +8,7 @@ PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
 Versi saat ini: `1.0.1` (`gradle.properties` = sumber tunggal)
 Terakhir diperbarui: 2026-08-13
 Revisi: 2026-08-13 — §5 Bug K (kelas dependensi-per-versi), §6 Build #6,
-§8 batas jujur pandas 1.5.0 ARMv7. (PRD = pegangan, bukan acuan terkunci.)
+§8 batas jujur pandas ARMv7 (2.1.3 & 1.5.0 tersedia). (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
@@ -90,8 +90,8 @@ Bukti survei (2026-08-13, dari <https://chaquo.com/pypi-13.1/>):
 | Paket | Versi cp311 ARMv7 |
 |---|---|
 | numpy | 1.26.2 |
-| pandas | 1.5.0 |
-| pillow | 9.2.0 |
+| pandas | 1.5.0, 2.1.3 |
+| pillow | 9.2.0, 11.0.0 |
 | matplotlib | 3.6.0 |
 | lxml | 5.3.0 |
 | cryptography | 42.0.8 |
@@ -207,8 +207,8 @@ paket yang dependensinya berubah antar-versi, bukan menambal pandas saja.
 - Guard + uji mutasi (aturan #2), verifikasi di HP ARMv7 nyata (aturan #1/#9).
 
 **Kenyataan versi yang harus jujur (aturan #1):** untuk ARMv7 Chaquopy, `pandas`
-hanya tersedia **1.5.0**, bukan 2.1.3. Kalau user meminta versi yang tak ada,
-beri pesan benar + saran `1.5.0`, bukan "tidak kompatibel".
+untuk ARMv7 Chaquopy: **pandas 2.1.3 dan 1.5.0 tersedia**. Bila user meminta
+versi yang tak ada, beri pesan benar + versi yang tersedia, bukan "tidak kompatibel".
 
 ---
 
@@ -239,9 +239,8 @@ Bukan disembunyikan di FAQ:
 3. **Alpine perlu unduh sekali** (100–200 MB)
 4. **PRoot lambat** — `apk add` bisa 20 detik vs <1 detik native
 5. **Wheel bisa lolos tag tapi gagal `import`** — karena itu ada smoke test + rollback
-6. **pandas di ARMv7 Chaquopy hanya ada versi 1.5.0**, bukan 2.x. Minta versi lebih
-   tinggi = jujur bilang tak ada + saran versi yang tersedia (bukan "tidak
-   kompatibel").
+6. **pandas di ARMv7 Chaquopy tersedia 2.1.3 dan 1.5.0**. Minta versi yang tak
+   ada = jujur bilang tak ada + saran versi tersedia (bukan "tidak kompatibel").
 
 ---
 

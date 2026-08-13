@@ -38,8 +38,8 @@ Bisa dipasang di HP ARMv7 user **setelah** perbaikan pencocokan tag Android.
 | Paket | Versi | Tag | Ukuran |
 |---|---|---|---|
 | **numpy** | 1.26.2 | `cp311-android_21_armeabi_v7a` | ~5 MB |
-| **pandas** | 1.5.0 | `cp311-android_21_armeabi_v7a` | ~10 MB |
-| **pillow** | 9.2.0 | `cp311-android_21_armeabi_v7a` | 481 KB |
+| **pandas** | 1.5.0, 2.1.3 | `cp311-android_21_armeabi_v7a` (1.5.0) / `android_24_armeabi_v7a` (2.1.3) | ~10 MB |
+| **pillow** | 9.2.0, 11.0.0 | `cp311-android_21_armeabi_v7a` (9.2.0) / `android_24_armeabi_v7a` (11.0.0) | 481 KB |
 | **matplotlib** | 3.6.0 | `cp311-android_21_armeabi_v7a` | ~7 MB |
 | **lxml** | 5.3.0 | `cp311-android_24_armeabi_v7a` | 1.3 MB |
 | **cryptography** | 42.0.8 | `cp311-android_24_armeabi_v7a` | 1.1 MB |
