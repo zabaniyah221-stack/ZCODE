@@ -443,6 +443,557 @@ gh api repos/<owner>/<repo>/actions/runs/<id>/jobs   # pantau sampai completed
 
 ---
 
+# 🧭 SKILL 10 — Operating model: dari laporan sampai rilis
+
+Bagian ini memberi agent **keleluasaan yang bertanggung jawab**. Tujuannya bukan
+menambah birokrasi, tetapi mencegah dua ekstrem yang sama-sama buruk:
+
+- langsung mengubah kode dari satu gejala;
+- terus meneliti/berdiskusi sampai tidak ada hasil yang bisa diuji.
+
+## 10.1 Lima mode kerja
+
+Setiap tugas berada pada salah satu mode berikut. Sebutkan perpindahan mode bila
+pekerjaannya berisiko atau berlangsung lintas sesi.
+
+| Mode | Pertanyaan utama | Keluaran minimum |
+|---|---|---|
+| **TRIAGE** | Apa yang benar-benar terjadi? | fakta, timeline, area terdampak, bukti yang kurang |
+| **DISCOVERY** | Bagaimana sistem serupa menanganinya? | pembanding + sumber + batas relevansi |
+| **DESIGN** | Kontrak perilaku apa yang akan diubah? | state/flow, failure modes, acceptance criteria |
+| **IMPLEMENT** | Perubahan terkecil apa yang menyelesaikan kelas bug? | kode + guard + migrasi bila ada |
+| **VERIFY/RELEASE** | Apa buktinya dan bagaimana pulih bila salah? | test, CI, artifact, UAT, rollback |
+
+Tidak semua tugas perlu lima mode secara formal:
+
+- typo/dokumen kecil → langsung IMPLEMENT;
+- bug lokal dengan reproduksi deterministik → TRIAGE singkat lalu IMPLEMENT;
+- concurrency, installer, filesystem, security, migrasi data, atau runtime
+  Python → TRIAGE → DISCOVERY/DESIGN → minta ACC → IMPLEMENT;
+- insiden yang bisa merusak workspace user → hentikan perubahan destruktif,
+  kumpulkan bukti, lalu diskusi.
+
+## 10.2 Matriks otonomi: kapan jalan, kapan bertanya
+
+Agent **boleh langsung bertindak** jika semuanya benar:
+
+1. intent user jelas;
+2. perubahan mudah dibalik;
+3. tidak menyentuh data pengguna, format persistensi, keamanan, ABI, atau
+   lifecycle worker;
+4. test yang relevan tersedia;
+5. scope tidak membesar dari permintaan.
+
+Agent **wajib diskusi dulu** jika salah satu benar:
+
+- ada ≥2 desain yang mengubah UX/kontrak secara bermakna;
+- bukti menunjuk beberapa akar yang sama kuat;
+- perubahan menghapus data, mengubah format, dependency, permission, atau ABI;
+- satu build UAT mahal dan keputusan bisa digabung secara lebih aman;
+- solusi mengubah prinsip PRD atau membatalkan keputusan lama;
+- agent hendak memakai workaround yang menyembunyikan akar masalah.
+
+Agent **wajib berhenti dan eskalasi** jika:
+
+- bukti yang ada bertentangan dan eksperimen aman tidak dapat membedakannya;
+- perubahan berisiko membuat data user tidak dapat dipulihkan;
+- hasil test tidak konsisten/tidak deterministik;
+- disk/snapshot/credential boundary akan dilanggar;
+- solusi membutuhkan klaim yang belum bisa diverifikasi tetapi akan dipasarkan
+  sebagai fakta.
+
+## 10.3 RFC dan ADR: proporsional, bukan ritual
+
+Tulis RFC singkat sebelum implementasi bila perubahan menyentuh ≥2 dari:
+
+- lebih dari satu layer (Compose/Kotlin/Python/network/storage);
+- concurrency, cancellation, retry, timeout, transaction, atau recovery;
+- kontrak publik/format JSON/state machine;
+- kompatibilitas ARMv7/ABI;
+- perubahan yang memerlukan UAT perangkat nyata;
+- perkiraan diff produksi >3 file atau acceptance criteria >5 butir.
+
+RFC yang baik cukup menjawab:
+
+1. masalah dan bukti;
+2. non-goals;
+3. desain dan invariant;
+4. alternatif yang ditolak beserta alasan;
+5. failure modes;
+6. observability;
+7. test/mutasi/UAT;
+8. rollback.
+
+ADR dipakai untuk keputusan yang ingin dipertahankan lintas fitur, misalnya
+“timeout hanya per I/O, bukan umur total resolve”. RFC boleh berubah selama
+implementasi; perubahan asumsi wajib dicatat, bukan disembunyikan.
+
+---
+
+# 🔎 SKILL 11 — Riset pembanding sebelum memilih arsitektur
+
+Riset eksternal bukan dekorasi jawaban. Ia dipakai untuk menghindari menemukan
+ulang kegagalan yang sudah dibayar proyek lain. Namun **popularitas bukan bukti
+bahwa desainnya cocok untuk ZCODE**.
+
+## 11.1 Trigger riset wajib
+
+Lakukan pencarian sebelum mengunci desain jika tugas melibatkan:
+
+- package manager/dependency resolver;
+- retry, timeout, cancellation, resume, cache, dan background work;
+- Android lifecycle, permission, SAF, WebView, atau process death;
+- ABI/native wheel/runtime Python;
+- security/crypto/TLS;
+- format/standar yang punya implementasi rujukan;
+- klaim “IDE lain melakukan X”.
+
+Tidak perlu searching untuk kesalahan sintaks lokal yang sudah terbukti dan
+punya dokumentasi API di repo.
+
+## 11.2 Urutan kualitas sumber
+
+Gunakan urutan berikut, lalu nyatakan bila terpaksa turun tingkat:
+
+1. **source code + test upstream**;
+2. **dokumentasi resmi/standard/PEP/RFC**;
+3. **issue tracker dengan log dan reproduksi**;
+4. dokumentasi produk/store listing untuk fakta fitur;
+5. laporan pengguna/forum untuk menemukan gejala;
+6. blog agregator hanya sebagai petunjuk pencarian, bukan fondasi keputusan.
+
+Untuk proyek closed-source seperti Pydroid, boleh menyimpulkan fitur publik,
+tetapi jangan mengarang mekanisme internal. Tulis: “implementasi internal tidak
+terverifikasi”.
+
+## 11.3 Matriks pembanding wajib
+
+Untuk setiap pembanding, catat minimal:
+
+| Aspek | Pertanyaan |
+|---|---|
+| Platform | Android bionic atau Linux/glibc/desktop? |
+| Runtime | in-process, subprocess, service, PRoot, atau remote? |
+| Package source | PyPI, indeks custom, bundled, source build? |
+| Ownership | siapa memiliki worker dan kapan dianggap selesai? |
+| Failure | timeout per I/O atau seluruh operasi? retry di layer mana? |
+| Cancellation | membatalkan tunggu saja atau pekerjaan nyata? |
+| Progress | apa yang terlihat user selama operasi panjang? |
+| Recovery | cache/resume/transaction/rollback tersedia? |
+| Relevansi | bagian mana yang bisa/tidak bisa diadopsi ZCODE? |
+
+Contoh: Termux memberi pelajaran bagus tentang subprocess, streaming, dan
+Ctrl+C; tetapi tidak membuktikan wheel glibc cocok untuk Chaquopy Android.
+Pydroid membuktikan nilai curated native repository; ia tidak membuktikan cara
+resolver internalnya karena closed-source.
+
+## 11.4 Protokol riset
+
+1. Tulis pertanyaan yang hendak diputuskan, bukan query acak.
+2. Cari minimal satu implementasi langsung dan satu sumber prinsip/standar.
+3. Cari juga **failure report**, bukan hanya halaman pemasaran.
+4. Uji klaim penting dengan data/endpoint/source bila mungkin.
+5. Catat kontradiksi dan pilih berdasarkan bukti terkuat.
+6. Hentikan riset saat bukti sudah cukup membedakan alternatif; jangan mengejar
+   kepastian 100% yang mustahil.
+7. Tautkan URL langsung dalam RFC/SKILLS untuk keputusan eksternal.
+
+## 11.5 Output riset harus mengubah keputusan atau dinyatakan netral
+
+Setelah riset, tulis salah satu:
+
+- **menguatkan** desain awal;
+- **mengubah** desain awal (jelaskan apa yang diralat);
+- **tidak relevan** karena platform/kontrak berbeda;
+- **belum cukup bukti** sehingga perlu eksperimen.
+
+Riset yang tidak memengaruhi keputusan dan tidak memperkecil ketidakpastian
+adalah aktivitas, bukan kemajuan.
+
+---
+
+# ⏱️ SKILL 12 — Operasi panjang: timeout, retry, cancel, dan ownership
+
+Pelajaran v1.0.15: menaikkan satu HTTP request dari `1 × 20s` menjadi
+`3 × 20s`, sementara wrapper memberi seluruh resolver 90s, membuat semua paket
+menabrak timeout. Lebih parah: wrapper berhenti menunggu tetapi worker Python
+masih hidup. Ini **kelas bug lifecycle**, bukan bug numpy/matplotlib/pandas.
+
+## 12.1 Taksonomi waktu — jangan campur
+
+Setiap operasi jaringan/paket harus membedakan:
+
+| Batas | Makna |
+|---|---|
+| **connect timeout** | waktu membuka koneksi/DNS/TLS |
+| **read inactivity timeout** | tidak ada byte/progress selama interval |
+| **per-attempt timeout** | umur satu percobaan request |
+| **retry budget** | jumlah/waktu tambahan seluruh retry |
+| **operation deadline** | batas bisnis opsional untuk seluruh workflow |
+| **watchdog** | mendeteksi worker macet/bug internal, bukan jalur normal |
+| **user patience** | kapan UI memberi progress/cancel, bukan kapan worker dibunuh |
+
+Aturan:
+
+- timeout I/O **bukan** batas total resolve/install;
+- operasi yang masih menunjukkan progress tidak boleh dianggap hang hanya
+  karena durasinya panjang;
+- jika ada outer deadline, jumlah timeout + backoff seluruh inner attempt wajib
+  muat di dalamnya, atau inner call menerima **remaining budget**;
+- watchdog harus lebih panjang dari skenario normal terburuk dan menghasilkan
+  diagnostik state terakhir;
+- menaikkan retry/timeout di satu layer mewajibkan audit semua outer layer.
+
+## 12.2 Retry hanya sekali di layer yang memiliki konteks
+
+Retry dapat memperbesar kegagalan. Terapkan:
+
+1. klasifikasikan retriable: timeout sementara, connection reset, HTTP 408/429
+   (hormati `Retry-After`), dan 5xx tertentu;
+2. jangan retry validation error, parsing deterministic, hash mismatch, 4xx
+   permanen, wheel incompatible, atau storage penuh;
+3. retry pada **satu layer**, jangan Python + Kotlin + UI sama-sama mengulang;
+4. batasi attempt dan total retry budget;
+5. gunakan capped backoff + jitter untuk menghindari retry serentak;
+6. GET metadata boleh diulang; operasi berefek samping hanya boleh diulang bila
+   idempotent atau punya transaction/request ID;
+7. catat attempt, alasan, host/source, durasi, dan hasil.
+
+Sumber prinsip: AWS Builders’ Library
+<https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/>
+dan Google SRE
+<https://sre.google/sre-book/addressing-cascading-failures/>.
+
+## 12.3 Timeout menunggu ≠ membatalkan pekerjaan
+
+Invariant wajib:
+
+> Owner tidak boleh mengumumkan `IDLE`, melepas mutex, menghapus state/cache,
+> atau menerima kerja baru sampai worker sebelumnya benar-benar mencapai state
+> terminal.
+
+`latch.await(90s) == false` hanya berarti **caller berhenti menunggu**. Itu tidak
+membuktikan thread berhenti. Begitu pula `Job.cancel()` bersifat kooperatif:
+worker harus mencapai suspension point atau memeriksa token/isActive.
+
+Rujukan resmi Kotlin:
+<https://kotlinlang.org/docs/cancellation-and-timeouts.html>.
+
+Untuk bridge Chaquopy/blocking code:
+
+- simpan `operationId`, handle worker, cancel token, dan last progress;
+- periksa cancel sebelum/selesai I/O, sebelum retry, dan setiap loop dependency;
+- tutup stream/socket yang dimiliki bila API mendukung;
+- `cancel` mengubah state ke `CANCELLING`, bukan langsung `CANCELLED`;
+- `CANCELLED` baru terminal setelah cleanup/finally selesai;
+- hasil worker lama wajib diabaikan bila `operationId` tidak lagi aktif;
+- jangan mengandalkan `Thread.interrupt()` untuk menghentikan CPython
+  in-process tanpa bukti bahwa API blocking tersebut interruptible.
+
+## 12.4 Model state eksplisit
+
+Operasi panjang minimal memakai state machine:
+
+```text
+IDLE
+  → STARTING
+  → RUNNING(stage, item, attempt, progressAt)
+  → RETRY_WAIT(nextAttemptAt)
+  → CANCELLING
+  → SUCCEEDED | FAILED | CANCELLED
+```
+
+Transition ilegal harus ditolak/test:
+
+- `RUNNING → IDLE` tanpa terminal result;
+- start baru saat `CANCELLING`;
+- progress dari operation lama menimpa operation baru;
+- `FAILED` tetapi transaction/cache lock belum dilepas;
+- UI hilang lalu worker menjadi tanpa owner.
+
+Compose mengikuti UDF: state turun, event (`Start`, `Cancel`, `Retry`) naik ke
+state holder. Jangan jadikan boolean terpisah (`isInstalling`, `busyFlag`,
+`pending...`) sebagai beberapa sumber kebenaran yang bisa bertentangan.
+Rujukan: <https://developer.android.com/develop/ui/compose/architecture>.
+
+## 12.5 Progress adalah bagian dari correctness
+
+Operasi >2 detik wajib memberi tanda hidup yang bermakna. Minimal event:
+
+```text
+operation_id, elapsed_ms, stage, source, package, attempt,
+bytes_read/total (jika diketahui), cache_hit, message_code
+```
+
+Aturan observability:
+
+- log event terstruktur; teks UI boleh diterjemahkan dari `message_code`;
+- jangan log token, query credential, isi script, atau path sensitif;
+- throttle event hot path agar Compose/log file tidak banjir;
+- heartbeat hanya bila tidak ada progress alamiah;
+- simpan last-known stage agar watchdog menjelaskan worker macet di mana;
+- Diagnostics harus dapat disalin dan tetap berguna tanpa logcat;
+- error user-facing ringkas, detail teknis tersedia terpisah.
+
+## 12.6 Cache memiliki scope dan freshness
+
+- cache per-operation: aman untuk dedup selama satu resolve;
+- cache process-wide: wajib thread-safe dan tidak boleh dibersihkan sepihak;
+- cache persisted: wajib punya schema/version, ABI, Python version, source, dan
+  freshness/revalidation;
+- negative cache harus pendek dan membedakan 404 permanen dari network timeout;
+- cache wheel tetap dipisah ABI dan hash diverifikasi;
+- jangan menonaktifkan cache untuk “memperbaiki” bug tanpa bukti—pip sendiri
+  memperingatkan itu menambah network dan memperlambat operasi:
+  <https://pip.pypa.io/en/stable/topics/caching/>.
+
+## 12.7 Android lifecycle dan kerja penting bagi user
+
+Navigasi/rotasi tidak boleh otomatis berarti pekerjaan selesai. Tentukan umur
+worker secara sadar:
+
+- screen scope bila hasil hanya berguna selama layar hidup;
+- ViewModel/app scope bila harus bertahan rotasi/navigasi;
+- foreground/user-initiated/WorkManager hanya jika benar-benar perlu bertahan
+  background/process constraints—jangan cargo-cult karena installer Chaquopy
+  in-process punya kebutuhan khusus.
+
+Untuk kerja panjang yang memang harus bertahan background, Android menekankan
+progress terlihat, cancellation, unique work, dan cooperative cleanup:
+<https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running>
+dan
+<https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work>.
+
+---
+
+# 🧪 SKILL 13 — Verifikasi profesional: model, fault injection, dan perangkat
+
+398 test hijau tidak membantah bug yang tidak dimodelkan. Test suite harus
+mengukur kontrak, bukan hanya kemunculan string.
+
+## 13.1 Piramida bukti ZCODE
+
+1. **unit pure logic** — parser, tag, version, dependency metadata;
+2. **contract test** — JSON Kotlin↔Python, optional/null, error code;
+3. **state-machine test** — transition, ownership, stale result;
+4. **fault-injection test** — timeout/reset/404/429/503/partial read/cancel;
+5. **integration host** — endpoint nyata dan wheel nyata;
+6. **ARMv7 glibc probe** — resolver/tag, bukan import Android;
+7. **bionic311** — Python 3.11 + bionic/native wheel;
+8. **CI APK** — compiler/packaging/manifest;
+9. **UAT HP nyata** — Android/JVM/Chaquopy/UI/lifecycle.
+
+Jangan melompati layer dan menganggap layer 5 menggantikan 9. Sebaliknya,
+jangan membebankan semua diagnosis kepada user bila layer 1–8 bisa dikerjakan
+agent.
+
+## 13.2 Transport harus dapat dipalsukan
+
+Kode network baru sebaiknya menerima abstraksi transport/clock/sleeper agar
+test deterministik dapat mensimulasikan:
+
+- sukses attempt pertama;
+- timeout lalu sukses;
+- semua attempt timeout;
+- partial body lalu reset;
+- 404 tanpa retry;
+- 429 + `Retry-After`;
+- 503 + backoff;
+- cancel ketika socket aktif dan ketika menunggu retry;
+- deadline hampir habis;
+- cache hit/miss/stale.
+
+Test tidak boleh benar-benar menunggu 20/60/90 detik. Pakai fake clock atau
+nilai timeout kecil yang diinjeksi. Network nyata dipakai sebagai integration
+probe terpisah, bukan unit test CI yang flaky.
+
+## 13.3 Test concurrency dan stale work
+
+Wajib ada test untuk:
+
+- dua tap Start hampir bersamaan → hanya satu worker;
+- timeout caller tidak melepas owner;
+- cancel lalu start cepat → start kedua menunggu terminal state;
+- worker lama selesai terlambat → hasilnya tidak menimpa state baru;
+- rotasi/navigasi → observer berganti, worker tidak dobel;
+- exception di cleanup → lock tetap dilepas tepat sekali;
+- cache sesi A tidak dihapus sesi B;
+- callback progress setelah terminal state diabaikan.
+
+Gunakan barrier/latch/fake worker, bukan `sleep()` tebak-tebakan.
+
+## 13.4 Uji mutasi tetap wajib, tetapi sesuai kontrak
+
+Mutasi untuk bug timeout/retry misalnya:
+
+- ubah max attempts 2 → 3 hingga budget terlampaui;
+- lepaskan busy di timeout caller;
+- hapus check cancellation di loop dependency;
+- izinkan HTTP 404 diretry;
+- pakai cache global lalu clear pada start;
+- hilangkan operationId check pada callback.
+
+Setiap mutasi harus membuat test yang dituju merah. Setelah dipulihkan, seluruh
+suite hijau.
+
+## 13.5 Acceptance criteria harus bisa diamati
+
+Buruk:
+
+> “Installer lebih stabil.”
+
+Baik:
+
+- selama analyze, stage baru terlihat maksimal setiap N detik saat ada kerja;
+- timeout satu host menyebut source/attempt/durasi;
+- Cancel berpindah `RUNNING → CANCELLING → CANCELLED` tanpa menerima start baru;
+- setelah terminal state, analyze berikutnya bisa berjalan;
+- numpy/pandas/matplotlib mempertahankan dependency yang benar;
+- tidak ada thread resolver yatim menurut instrumentasi operation registry.
+
+---
+
+# 📐 SKILL 14 — Governance dokumen dan keputusan
+
+Dokumen punya fungsi berbeda. Jangan menaruh semua hal ke PRD atau membiarkan
+SKILLS menjadi changelog.
+
+| Dokumen | Fungsi | Jangan diisi |
+|---|---|---|
+| **PRD** | tujuan produk, pengguna, batas, roadmap, active known issues | detail implementasi sementara |
+| **RFC** | desain satu perubahan sebelum coding | klaim sukses sebelum verifikasi |
+| **ADR** | keputusan arsitektur yang ingin dipertahankan | timeline debugging harian |
+| **SKILLS** | cara kerja/pelajaran lintas fitur | patch khusus satu baris tanpa prinsip umum |
+| **UJI/LAPORAN** | bukti build, device, versi, hasil nyata | aspirasi roadmap |
+| **SESSION SUMMARY** | handoff fakta dan next step | mengganti source of truth |
+
+## 14.1 Kapan SKILLS di-upgrade
+
+Tambahkan aturan jika pelajarannya:
+
+- sudah menyebabkan atau hampir menyebabkan regresi nyata;
+- berlaku lintas file/fitur;
+- tidak cukup ditahan oleh satu test;
+- membantu agent berikutnya memilih proses/desain yang benar.
+
+Setiap tambahan harus memuat: trigger, aturan, contoh ZCODE, dan bila eksternal
+mencantumkan sumber. Bila bukti baru membantahnya, edit/hapus—SKILLS bukan kitab
+suci.
+
+## 14.2 Traceability ringan
+
+Untuk perubahan berisiko, jaga rantai:
+
+```text
+log/gejala → bug ID → RFC decision → code diff → guard/mutasi
+→ CI artifact → UAT device/version → PRD status
+```
+
+Tidak perlu tool enterprise. Nama dokumen, commit, dan breadcrumb yang konsisten
+sudah cukup. Tujuannya agar enam bulan kemudian kita tahu **mengapa**, bukan
+hanya **apa**.
+
+## 14.3 Definition of Done bertingkat
+
+Gunakan bahasa status yang jujur:
+
+- **DESIGNED** — rancangan disetujui, belum diimplementasikan;
+- **IMPLEMENTED** — kode dan test lokal selesai;
+- **CI VERIFIED** — APK dibangun dan checks hijau;
+- **DEVICE VERIFIED** — skenario UAT lulus pada device/ABI/API tertentu;
+- **RELEASED** — artifact yang diverifikasi tersedia sebagai rilis;
+- **REGRESSION FOUND** — bukti baru membuka kembali isu.
+
+Jangan menulis “fixed di ARMv7” saat baru lolos host/qemu. Tulis perangkat,
+Android API, ABI, versi app, requirement, network condition, dan hasil.
+
+## 14.4 Rollback dan blast radius
+
+Sebelum push perubahan berisiko, jawab:
+
+- bisakah commit direvert tanpa migrasi balik?
+- data/cache versi baru aman dibaca versi lama?
+- feature flag/fallback diperlukan atau justru menambah mode yang sulit dites?
+- apa gejala pertama jika salah?
+- bagaimana user tunggal memulihkan tanpa PC?
+
+Prioritaskan perubahan yang atomik, dapat direvert, dan punya failure message.
+Jangan menggabungkan refactor kosmetik dengan fix reliability yang perlu
+dibisect.
+
+---
+
+# 🤝 SKILL 15 — Komunikasi engineering dan handoff
+
+## 15.1 Format laporan keputusan
+
+Untuk bug penting, komunikasi minimum:
+
+1. **Fakta** — apa yang terlihat di log/test;
+2. **Interpretasi** — dugaan akar + confidence;
+3. **Yang belum diketahui**;
+4. **Pembanding** — apa yang dipelajari dan batas relevansinya;
+5. **Rencana + non-goals**;
+6. **Bukti yang akan dibuat**;
+7. **keputusan yang diminta dari user**, bila ada.
+
+Hindari kalimat absolut jika hanya inferensi. Gunakan confidence yang masuk akal,
+bukan presisi palsu (`~80%`, bukan `83.47%`).
+
+## 15.2 Satu build UAT harus memaksimalkan informasi
+
+Karena user tidak punya PC dan satu siklus mahal:
+
+- gabungkan instrumentasi yang membedakan seluruh hipotesis utama;
+- beri langkah uji singkat dan urut;
+- pastikan semua output bisa disalin;
+- sertakan expected result per langkah;
+- jangan minta user mengulang paket besar bila paket kecil dapat membedakan
+  akar yang sama;
+- setelah UAT, simpan hasil ke laporan dengan versi/device/timestamp.
+
+## 15.3 Handoff harus executable
+
+Session summary yang baik menyebut:
+
+- branch/commit/status workspace;
+- perubahan yang sudah dilakukan;
+- command test dan hasil;
+- asumsi yang masih terbuka;
+- file utama dan invariant;
+- next command/next decision;
+- hal yang dilarang diulang beserta alasan.
+
+Agent berikutnya harus bisa melanjutkan tanpa membaca seluruh chat, tetapi tetap
+wajib membaca PRD/SKILLS yang ditunjuk.
+
+---
+
+# 📚 Referensi engineering untuk bagian baru
+
+- pip CLI — timeout/retries:
+  <https://pip.pypa.io/en/latest/cli/pip/>
+- pip dependency resolution:
+  <https://pip.pypa.io/en/latest/topics/more-dependency-resolution/>
+- pip caching:
+  <https://pip.pypa.io/en/stable/topics/caching/>
+- AWS — timeouts, retries, backoff, jitter:
+  <https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/>
+- AWS — retry dan idempotency:
+  <https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/>
+- Google SRE — cascading failures, retry budget, cancellation propagation:
+  <https://sre.google/sre-book/addressing-cascading-failures/>
+- Kotlin — cooperative cancellation dan structured concurrency:
+  <https://kotlinlang.org/docs/cancellation-and-timeouts.html>
+- Android — Compose UDF/state holder:
+  <https://developer.android.com/develop/ui/compose/architecture>
+- Android — long-running work, progress, dan cancel:
+  <https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running>
+- Android — unique work dan cooperative stop:
+  <https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/manage-work>
+
+---
+
 # 🎯 Penutup
 
 Kalau ragu antara **cepat** dan **jujur** — pilih jujur.
