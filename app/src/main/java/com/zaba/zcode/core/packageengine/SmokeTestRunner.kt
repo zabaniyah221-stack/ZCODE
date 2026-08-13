@@ -24,6 +24,67 @@ class SmokeTestRunner(private val context: Context) {
     )
 
     /**
+     * Hasil pemindaian pustaka native yang belum terpenuhi.
+     *
+     * @param packages paket yang perlu diunduh supaya .so bisa dimuat
+     * @param unknown  pustaka yang tidak dikenal peta — WAJIB dilaporkan ke
+     *                 pemakai, bukan didiamkan (pelajaran v1.0.8-v1.0.10:
+     *                 kegagalan diam-diam menghabiskan tiga siklus rilis)
+     * @param sources  {paket: RESMI|PERANGKAT|DUGAAN} — dasar pengetahuan
+     */
+    data class MissingLibs(
+        val packages: List<String>,
+        val unknown: List<String>,
+        val sources: Map<String, String>,
+        val scanned: Int,
+        val error: String
+    )
+
+    /**
+     * Pindai .so di direktori yang diberikan, kembalikan paket yang kurang.
+     *
+     * Best-effort: bila runtime Python tidak tersedia atau pemindaian gagal,
+     * mengembalikan hasil kosong. Instalasi harus tetap berjalan seperti
+     * sebelumnya — pemindai ini menambah kemampuan, tidak boleh mengurangi.
+     */
+    fun scanMissingLibs(dirs: List<String>, api: Int): MissingLibs {
+        val kosong = MissingLibs(emptyList(), emptyList(), emptyMap(), 0, "")
+        if (dirs.isEmpty()) return kosong
+        val dirsJson = JSONArray().apply { dirs.forEach { put(it) } }.toString()
+        val json = try {
+            PyCall.callJson(
+                context,
+                "package_runtime.smoke",
+                "scan_missing_libs_json",
+                dirsJson,
+                api
+            )
+        } catch (e: Exception) {
+            return kosong.copy(error = e.message ?: e.toString())
+        } ?: return kosong
+        return try {
+            val o = JSONObject(json)
+            fun arr(key: String): List<String> {
+                val a = o.optJSONArray(key) ?: return emptyList()
+                return (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() }
+            }
+            val src = mutableMapOf<String, String>()
+            o.optJSONObject("sources")?.let { s ->
+                s.keys().forEach { k -> src[k] = s.optString(k, "?") }
+            }
+            MissingLibs(
+                packages = arr("packages"),
+                unknown = arr("unknown"),
+                sources = src,
+                scanned = o.optInt("scanned", 0),
+                error = o.optString("error", "")
+            )
+        } catch (e: Exception) {
+            kosong.copy(error = "hasil pindai tidak valid: ${e.message}")
+        }
+    }
+
+    /**
      * @param siblingDirs direktori staging paket LAIN dalam transaksi yang sama.
      *
      * FIX 2026-08-13: tanpa ini smoke test hanya melihat satu paket, sehingga

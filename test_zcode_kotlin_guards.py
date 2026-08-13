@@ -1983,3 +1983,239 @@ class TestRantaiPustakaNative:
             "entri dari bukti runtime tidak ditandai di tempatnya — pembaca "
             "berikutnya akan mengira dasarnya meta.yaml"
         )
+
+
+class TestPetaPustakaNative:
+    """Guard untuk peta pustaka->paket (nativemap.py, v1.0.11).
+
+    Kelas bug yang dijaga di sini semuanya DITEMUKAN SAAT PENGUJIAN, bukan
+    dibayangkan:
+
+      1. `libxml2.so` dinormalisasi menjadi `libxml.so`, sehingga menunjuk ke
+         paket `chaquopy-libxml` yang tidak ada. Angka 2 adalah bagian dari
+         nama, bukan versi.
+      2. `libc.so.6` (bentuk glibc) tidak dikenali sebagai pustaka sistem,
+         sehingga dilaporkan sebagai pustaka yang hilang.
+      3. `libc10.so` milik PyTorch dinormalisasi menjadi `libc.so` lalu
+         DIABAIKAN sebagai pustaka sistem — kebalikannya, dan lebih berbahaya
+         karena gagal secara diam-diam.
+    """
+
+    def _nm(self):
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        import package_runtime.nativemap as m
+        return m
+
+    def test_modul_peta_ada(self):
+        p = ROOT / "app/src/main/python/package_runtime/nativemap.py"
+        assert p.exists(), (
+            "nativemap.py hilang — tanpa peta, pustaka pendukung kembali "
+            "ditambal satu per satu tiap rilis"
+        )
+
+    def test_libxml2_tidak_terpotong_jadi_libxml(self):
+        """BOCOR SAAT UJI MUTASI (M1, 2026-08-13): versi pertama guard ini
+        hanya memeriksa hasil akhir `package_for_lib`, sehingga menghapus
+        entri `libxml2.so` dari peta TETAP lulus — jaring normalisasi
+        kebetulan menutupinya lewat ejaan `libxml.so`. Ketergantungan pada
+        kebetulan itu rapuh, jadi kedua ejaan diperiksa langsung di peta.
+        """
+        nm = self._nm()
+        assert "libxml2.so" in nm.LIB_TO_PACKAGE, (
+            "ejaan asli libxml2.so hilang dari peta — hanya selamat selama "
+            "aturan normalisasi kebetulan mendarat di entri lain"
+        )
+        assert nm.normalize_soname("libxml2.so") == "libxml.so", (
+            "asumsi berubah: normalisasi resmi Chaquopy tidak lagi memotong "
+            "angka; komentar di nativemap.py harus ikut diperbarui"
+        )
+        for ejaan in ("libxml2.so", "libxml.so"):
+            hasil = nm.package_for_lib(ejaan)
+            assert hasil is not None, "%s tidak dikenal — lxml akan gagal" % ejaan
+            assert hasil[0] == "chaquopy-libxml2", (
+                "%s menunjuk ke %r; angka 2 bagian dari NAMA, bukan versi"
+                % (ejaan, hasil[0])
+            )
+
+    def test_pustaka_sistem_glibc_dikenali(self):
+        """Wheel dari Linux desktop memakai nama bersufiks versi glibc."""
+        nm = self._nm()
+        for nama in ["libc.so.6", "libm.so.6", "libdl.so.2", "libpthread.so.0"]:
+            assert nm.is_system_lib(nama, 34), (
+                "%s tidak dikenali sebagai pustaka sistem — ZCODE akan "
+                "mencoba mengunduh paket yang tidak pernah ada" % nama
+            )
+
+    def test_libc10_pytorch_bukan_libc(self):
+        """Tabrakan yang Chaquopy peringatkan sendiri di build-wheel.py."""
+        nm = self._nm()
+        assert not nm.is_system_lib("libc10.so", 34), (
+            "libc10.so (PyTorch) dikira libc sistem lalu diabaikan — "
+            "kegagalan diam-diam, kelas bug terburuk"
+        )
+
+    def test_pustaka_sistem_menghormati_level_api(self):
+        nm = self._nm()
+        assert not nm.is_system_lib("libvulkan.so", 16), (
+            "libvulkan.so (API 24) dianggap ada di perangkat API 16"
+        )
+        assert nm.is_system_lib("libvulkan.so", 24)
+
+    def test_peta_menutup_seluruh_indeks(self):
+        """Bukan 'beberapa paket' — seluruh isi indeks Chaquopy.
+
+        Kalau peta hanya memuat pustaka yang kebetulan dipakai numpy, pemakai
+        pertama yang memasang lxml/pillow/h5py akan menabrak dinding yang sama.
+        """
+        nm = self._nm()
+        indeks = {
+            "crc32c", "curl", "flac", "freetype", "geos", "hdf5", "lame",
+            "libcxx", "libffi", "libgfortran", "libiconv", "libjpeg",
+            "libogg", "libomp", "libpng", "libraw", "libsndfile", "libtiff",
+            "libvorbis", "libxml2", "libxslt", "libyaml", "libzmq", "llvm",
+            "openblas", "proj", "secp256k1", "ta-lib", "zbar",
+        }
+        dipetakan = {
+            p.replace("chaquopy-", "") for p in nm.daftar_paket_pendukung()
+        }
+        kurang = indeks - dipetakan
+        assert not kurang, "paket indeks belum dipetakan: %s" % sorted(kurang)
+
+    def test_entri_dugaan_ditandai_berbeda(self):
+        """Peraturan jujur: dugaan tidak boleh menyamar sebagai fakta."""
+        nm = self._nm()
+        assert nm.package_for_lib("libc++_shared.so")[1] == "RESMI"
+        assert nm.package_for_lib("libgfortran.so.3")[1] == "PERANGKAT"
+        assert nm.package_for_lib("libyaml.so")[1] == "DUGAAN", (
+            "entri yang belum diverifikasi ditandai seolah terbukti"
+        )
+
+    def test_openssl_tanpa_awalan_chaquopy(self):
+        """meta.yaml cryptography menulis `openssl` polos, bukan chaquopy-*."""
+        nm = self._nm()
+        assert nm.package_for_lib("libssl.so")[0] == "openssl"
+
+    def test_resolve_needed_menyaring_sistem_dan_yang_sudah_ada(self):
+        nm = self._nm()
+        r = nm.resolve_needed(
+            ["libc.so", "liblog.so", "libopenblas.so", "libc++_shared.so"],
+            tersedia={"libopenblas.so"},
+            api=34,
+        )
+        assert "chaquopy-libcxx" in r["packages"]
+        assert "chaquopy-openblas" not in r["packages"], "sudah ada, jangan diunduh ulang"
+        assert not r["unknown"]
+        assert "libc.so" in r["system"]
+
+    def test_pustaka_tak_dikenal_dilaporkan_bukan_didiamkan(self):
+        nm = self._nm()
+        r = nm.resolve_needed(["libentahapa.so"], api=34)
+        assert r["unknown"] == ["libentahapa.so"]
+        pesan = nm.jelaskan_tak_dikenal(r["unknown"])
+        assert "libentahapa.so" in pesan, (
+            "nama pustaka tidak disebut — pemakai tak bisa melaporkan apa pun"
+        )
+
+    def test_pemindai_membaca_rantai_dari_elf_nyata(self):
+        """Uji ujung-ke-ujung dengan .so sungguhan, bukan mock.
+
+        CATATAN CACAT EKSPERIMEN yang pernah terjadi: tanpa
+        `-Wl,--no-as-needed`, linker MEMBUANG entri DT_NEEDED yang simbolnya
+        tidak terpakai, sehingga uji lulus tanpa menguji apa pun.
+        """
+        import shutil, subprocess, tempfile, os as _os
+        if not shutil.which("gcc"):
+            import pytest
+            pytest.skip("gcc tidak tersedia")
+        import sys as _s
+        _s.path.insert(0, str(ROOT / "app/src/main/python"))
+        from package_runtime.smoke import scan_missing_libs
+
+        d = tempfile.mkdtemp()
+        gudang, paket = _os.path.join(d, "g"), _os.path.join(d, "p")
+        _os.makedirs(gudang); _os.makedirs(paket)
+        with open(_os.path.join(d, "s.c"), "w") as f:
+            f.write("int x(void){return 1;}\n")
+        c = _os.path.join(d, "s.c")
+
+        def bangun(out, soname=None, tautan=()):
+            cmd = ["gcc", "-shared", "-fPIC", "-o", out, c]
+            if soname:
+                cmd += ["-Wl,-soname," + soname]
+            if tautan:
+                cmd += ["-Wl,--no-as-needed"]
+                for direktori, lib in tautan:
+                    cmd += ["-L" + direktori, "-l:" + lib]
+            subprocess.run(cmd, check=True, capture_output=True)
+
+        bangun(_os.path.join(gudang, "libgfortran.so.3"), "libgfortran.so.3")
+        bangun(_os.path.join(gudang, "libc++_shared.so"), "libc++_shared.so")
+        bangun(_os.path.join(paket, "libopenblas.so"), "libopenblas.so",
+               [(gudang, "libgfortran.so.3")])
+        bangun(_os.path.join(paket, "_multiarray_umath.so"), None,
+               [(paket, "libopenblas.so"), (gudang, "libc++_shared.so")])
+
+        r = scan_missing_libs([paket], api=34)
+        assert "chaquopy-libcxx" in r["packages"], (
+            "libc++_shared.so tidak terdeteksi — ini kegagalan v1.0.10 yang "
+            "sesungguhnya"
+        )
+        assert "chaquopy-libgfortran" in r["packages"], (
+            "rantai tingkat kedua terlewat — pemindaian hanya sedalam satu lapis"
+        )
+        assert not r["unknown"], "libc palsu bocor sebagai tak dikenal: %s" % r["unknown"]
+
+    def test_engine_mengunduh_pustaka_kurang_secara_berulang(self):
+        """Satu putaran tidak cukup: pustaka baru membawa kebutuhan baru."""
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        assert "scanMissingLibs" in src, "engine tidak pernah memindai"
+        assert re.search(r"while\s*\(\s*putaran\s*<\s*MAX_SUPPORT_ROUNDS", src), (
+            "pemindaian tidak diulang — rantai bertingkat akan berhenti di "
+            "lapis pertama, persis kegagalan v1.0.9"
+        )
+        assert "MAX_SUPPORT_ROUNDS" in src, "tidak ada batas putaran — risiko loop tak henti"
+
+    def test_pustaka_tak_dikenal_sampai_ke_layar(self):
+        """User tidak punya logcat; diam = siklus uji berikutnya buta."""
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        i = src.find("kurang.unknown.isNotEmpty()")
+        assert i > 0, "hasil 'tidak dikenal' tidak pernah diperiksa"
+        jendela = src[i:i + 500]
+        assert "onStep(" in jendela, "tidak dilaporkan ke layar"
+        # BOCOR SAAT UJI MUTASI (M9): mencari "joinToString" saja tidak cukup —
+        # ada pemanggilan LAIN milik Breadcrumb beberapa baris di bawahnya,
+        # sehingga menghapus nama pustaka dari pesan layar tetap lulus.
+        # Yang harus dipastikan: isi `kurang.unknown` benar-benar dirangkai
+        # ke dalam teks yang dikirim ke onStep.
+        assert re.search(
+            r"onStep\([^\n]*kurang\.unknown\.joinToString", jendela
+        ), (
+            "nama pustakanya sendiri tidak sampai ke layar — pemakai tidak "
+            "punya logcat dan tak bisa melaporkan apa pun"
+        )
+
+    def test_smoke_memanggil_pemindai_sungguhan(self):
+        """BOCOR SAAT UJI MUTASI (M10): mengganti pemanggilan pemindai dengan
+        dict kosong tetap lulus, karena tidak satu pun guard memeriksa bahwa
+        run_smoke benar-benar memindai. Hasil pindai adalah satu-satunya jalan
+        nama pustaka yang kurang sampai ke layar HP.
+        """
+        src = read(ROOT / "app/src/main/python/package_runtime/smoke.py")
+        assert re.search(
+            r"kurang\s*=\s*scan_missing_libs\(", src
+        ), "run_smoke tidak memanggil scan_missing_libs — hasilnya dipalsukan"
+        assert "native_info[\"missing_libs\"]" in src, (
+            "hasil pindai tidak dilampirkan ke native_info — Kotlin tidak "
+            "akan pernah melihatnya"
+        )
+
+    def test_pemindaian_gagal_tidak_membatalkan_instalasi(self):
+        """Pemindai menambah kemampuan; ia tidak boleh mengurangi."""
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/core/packageengine/PackageEngineV2.kt")
+        i = src.find("kurang.error.isNotBlank()")
+        assert i > 0, "kegagalan pemindaian tidak ditangani"
+        jendela = src[i:i + 400]
+        assert "return fail(" not in jendela, (
+            "pemindaian yang gagal membatalkan instalasi — regresi perilaku"
+        )

@@ -297,6 +297,81 @@ def _reimport(target: str) -> None:
     importlib.import_module(target)
 
 
+def scan_missing_libs(dirs: list[str] | None, api: int = 16) -> dict:
+    """Pindai semua .so di `dirs`, cari kebutuhan yang belum terpenuhi.
+
+    KENAPA ADA (2026-08-13). Sampai v1.0.10, pustaka pendukung yang hilang
+    hanya ketahuan SETELAH impor gagal di perangkat pemakai — satu lapis per
+    rilis. Fungsi ini memindahkan penemuan itu ke saat instalasi, sebelum
+    apa pun diaktifkan, dan menemukan SEMUA lapis sekaligus.
+
+    Caranya membaca DT_NEEDED setiap berkas .so (termasuk modul Python seperti
+    `_multiarray_umath.so`, yang justru paling sering menautkan pustaka luar),
+    lalu mengurangi apa yang sudah tersedia di direktori itu sendiri.
+
+    Sisa yang belum terpenuhi diterjemahkan menjadi nama paket lewat
+    package_runtime.nativemap. Pustaka sistem Android (libc, libm, liblog, ...)
+    disaring lebih dulu — tanpa itu ZCODE akan mencoba mengunduh paket yang
+    tidak pernah ada.
+
+    TIDAK PERNAH melempar: kegagalan pemindaian harus melemahkan diagnosa,
+    bukan membatalkan instalasi yang sebenarnya baik-baik saja.
+    """
+    hasil = {
+        "packages": [], "unknown": [], "system": [],
+        "satisfied": [], "sources": {}, "scanned": 0, "error": "",
+    }
+    try:
+        from . import nativemap
+    except Exception as e:  # noqa: BLE001
+        hasil["error"] = "nativemap tidak tersedia: %s" % e
+        return hasil
+
+    try:
+        tersedia: set[str] = set()
+        semua_so: list[str] = []
+        for d in (dirs or []):
+            if not d or not os.path.isdir(d):
+                continue
+            for root, _dirs, files in os.walk(d):
+                for fn in files:
+                    if ".so" not in fn:
+                        continue
+                    semua_so.append(os.path.join(root, fn))
+                    tersedia.add(fn)
+
+        butuh: list[str] = []
+        for so in semua_so:
+            for n in elf_needed(so):
+                if n not in butuh:
+                    butuh.append(n)
+
+        hasil["scanned"] = len(semua_so)
+        rencana = nativemap.resolve_needed(butuh, tersedia, api)
+        hasil.update(rencana)
+    except Exception as e:  # noqa: BLE001 — pemindai tidak boleh jadi sumber crash
+        hasil["error"] = str(e)
+    return hasil
+
+
+def scan_missing_libs_json(dirs_json: str, api: int = 16) -> str:
+    """Pembungkus JSON untuk dipanggil dari Kotlin (PyCall.callJson)."""
+    import json
+    try:
+        dirs = json.loads(dirs_json) if dirs_json else []
+        if not isinstance(dirs, list):
+            dirs = []
+    except Exception:  # noqa: BLE001
+        dirs = []
+    try:
+        return json.dumps(scan_missing_libs([str(d) for d in dirs], int(api or 16)))
+    except Exception as e:  # noqa: BLE001
+        return json.dumps({
+            "packages": [], "unknown": [], "system": [], "satisfied": [],
+            "sources": {}, "scanned": 0, "error": str(e),
+        })
+
+
 def run_smoke(
     import_name: str,
     staging_dir: str,
@@ -364,6 +439,24 @@ def run_smoke(
         native_info["preload_log"] = [
             "tidak ada lib*.so di %d direktori yang diberikan" % native_info["preload_dirs"]
         ]
+
+    # Pindai kebutuhan yang BELUM terpenuhi dan sebutkan nama paketnya.
+    # Sebelum ini, satu-satunya cara mengetahui pustaka apa yang kurang adalah
+    # membaca pesan dlopen setelah impor gagal — dan pesan itu hanya menyebut
+    # SATU nama, yang pertama gagal. Pemindaian menyebut semuanya sekaligus.
+    kurang = scan_missing_libs([staging_dir] + list(sibling_dirs or []))
+    native_info["missing_libs"] = kurang
+    if kurang.get("packages"):
+        native_info["preload_log"].append(
+            "pustaka kurang -> paket: %s" % ", ".join(
+                "%s [%s]" % (p, kurang["sources"].get(p, "?"))
+                for p in kurang["packages"]
+            )
+        )
+    if kurang.get("unknown"):
+        native_info["preload_log"].append(
+            "pustaka TIDAK DIKENAL: %s" % ", ".join(kurang["unknown"])
+        )
 
     try:
         test_list = tests or [{"name": "import", "type": "IMPORT", "target": import_name}]

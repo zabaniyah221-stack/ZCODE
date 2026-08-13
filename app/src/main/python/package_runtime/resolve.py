@@ -110,7 +110,12 @@ def fetch_pypi_metadata(name: str) -> dict:
 # hubungan ini mustahil diketahui dari dokumen. Sumbernya = bukti runtime.
 # Entri semacam itu ditandai "[dari perangkat]" supaya jelas dasarnya berbeda.
 NATIVE_HOST_DEPS: dict[str, list[str]] = {
-    "numpy": ["chaquopy-openblas"],
+    # [dari perangkat] log v1.0.10: _multiarray_umath.so menautkan
+    # libc++_shared.so. Peta ini hanya jaring PERTAMA — jaring sesungguhnya
+    # adalah pemindaian DT_NEEDED di nativemap.py, yang menemukan kebutuhan
+    # ini tanpa perlu ditulis lebih dulu. Entri di sini menghemat satu putaran
+    # unduh untuk paket yang sudah kita ketahui polanya.
+    "numpy": ["chaquopy-openblas", "chaquopy-libcxx"],
     # [dari perangkat] libopenblas.so menautkan libgfortran.so.3
     "chaquopy-openblas": ["chaquopy-libgfortran"],
     # [dari meta.yaml] libxslt menautkan libxml2

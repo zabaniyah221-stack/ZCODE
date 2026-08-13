@@ -57,6 +57,11 @@ class PackageEngineV2(private val context: Context) {
         // Storage margin (keputusan forum): max(1.5 × estimasi, 100 MB)
         private const val MIN_SAFETY_MARGIN_BYTES = 100L * 1024 * 1024
         private const val ESTIMATE_FACTOR = 1.5
+        // Batas putaran pencarian pustaka pendukung. Rantai terdalam yang
+        // pernah teramati = 3 tingkat (numpy -> openblas -> libgfortran);
+        // 6 memberi ruang lebih dari dua kali lipat sambil tetap menjamin
+        // perulangan ini berhenti bila peta suatu saat saling menunjuk.
+        private const val MAX_SUPPORT_ROUNDS = 6
     }
 
     // ------------------------------------------------------------------
@@ -210,6 +215,121 @@ class PackageEngineV2(private val context: Context) {
                 onStep(Step.Log("  ${p.canonicalName}: metadata OK (${meta?.name} ${meta?.version})"))
             }
             onStep(Step.Finish("Extract", true))
+
+            // 6b. PUSTAKA PENDUKUNG YANG BELUM TERPENUHI
+            //
+            // KENAPA LANGKAH INI ADA (2026-08-13). Peta dependensi statis
+            // (NATIVE_HOST_DEPS di resolve.py) SELALU ketinggalan: meta.yaml
+            // chaquopy-openblas tidak menyebut libgfortran sama sekali, tetapi
+            // perangkat membuktikan ia membutuhkannya. Tiga rilis berturut-turut
+            // (v1.0.8, v1.0.9, v1.0.10) habis untuk menambal satu lapis per
+            // rilis, dan itu hanya menyembuhkan numpy — pemakai lxml, pillow,
+            // atau h5py akan menabrak dinding yang sama.
+            //
+            // Di sini kebenarannya dibaca dari berkas .so itu sendiri
+            // (DT_NEEDED), diterjemahkan ke nama paket lewat nativemap, lalu
+            // diunduh. Diulang sampai tidak ada lagi yang kurang, karena
+            // pustaka yang baru diunduh bisa membawa kebutuhan barunya sendiri
+            // (numpy -> openblas -> libgfortran, tiga tingkat).
+            val apiLevel = android.os.Build.VERSION.SDK_INT
+            val sudahDiambil = planPackages.map { it.canonicalName }.toMutableSet()
+            var putaran = 0
+            while (putaran < MAX_SUPPORT_ROUNDS) {
+                putaran++
+                val dirsSekarang = planPackages.map {
+                    File(tx.stagingSitePackages, "${it.canonicalName}/${it.version}").absolutePath
+                } + activeSitePackagePaths()
+                val kurang = smokeRunner.scanMissingLibs(dirsSekarang, apiLevel)
+                if (kurang.error.isNotBlank()) {
+                    // Pemindaian gagal bukan alasan membatalkan instalasi:
+                    // sebelum fitur ini ada pun instalasi tetap dicoba. Catat
+                    // apa adanya lalu lanjutkan ke smoke test.
+                    onStep(Step.Log("  ⚠️ pindai pustaka gagal: ${kurang.error}"))
+                    break
+                }
+                // Pustaka di luar peta: sebutkan namanya. Diam di sini berarti
+                // mengulang kegagalan v1.0.8 — gagal tanpa satu pun petunjuk.
+                if (kurang.unknown.isNotEmpty()) {
+                    onStep(Step.Log("  ⚠️ pustaka tidak dikenal: ${kurang.unknown.joinToString(", ")}"))
+                    onStep(Step.Log("     (pemasangan dilanjutkan; laporkan nama di atas bila impor gagal)"))
+                    Breadcrumb.log("PKG_LIB_UNKNOWN", kurang.unknown.joinToString(","))
+                }
+                val perlu = kurang.packages.filter { it !in sudahDiambil }
+                if (perlu.isEmpty()) {
+                    if (putaran == 1) {
+                        onStep(Step.Log("  pustaka native: lengkap (${kurang.scanned} .so dipindai)"))
+                    }
+                    break
+                }
+                onStep(Step.Begin("Pustaka pendukung (putaran $putaran)"))
+                for (namaPaket in perlu) {
+                    val dasar = kurang.sources[namaPaket] ?: "?"
+                    onStep(Step.Log("  butuh $namaPaket [$dasar]"))
+                    val sub = try {
+                        resolver.resolve(namaPaket)
+                    } catch (e: Exception) {
+                        onStep(Step.Log("  ⚠️ $namaPaket: resolve gagal (${e.message})"))
+                        sudahDiambil.add(namaPaket)
+                        continue
+                    }
+                    if (!sub.ok || sub.packages.isEmpty()) {
+                        onStep(Step.Log("  ⚠️ $namaPaket: tidak ada wheel yang cocok untuk perangkat ini"))
+                        sudahDiambil.add(namaPaket)
+                        continue
+                    }
+                    for (sp in sub.packages) {
+                        if (sp.canonicalName in sudahDiambil) continue
+                        val wheelFile = File(Paths.pythonWheels(context), sp.filename)
+                        var sha = sp.sha256
+                        if (sp.localPath != null) {
+                            val local = File(sp.localPath)
+                            if (!wheelFile.exists()) local.copyTo(wheelFile, overwrite = true)
+                            sha = Verifier.sha256(wheelFile)
+                        } else {
+                            val url = sp.url
+                            if (url == null) {
+                                onStep(Step.Log("  ⚠️ ${sp.canonicalName}: URL wheel kosong"))
+                                continue
+                            }
+                            val dl = download(url, wheelFile, sha) { m ->
+                                onStep(Step.Log("  ${sp.canonicalName}: $m"))
+                            }
+                            if (!dl.first) {
+                                return fail("DOWNLOAD", "download",
+                                    "Gagal mengunduh pustaka pendukung ${sp.canonicalName}: ${dl.second}", null)
+                            }
+                            sha = sha ?: dl.second
+                        }
+                        val staging = File(tx.stagingSitePackages, "${sp.canonicalName}/${sp.version}")
+                        val res = Verifier.extractWheel(wheelFile, staging) { }
+                        if (!res.ok) {
+                            return fail("EXTRACT", "extract",
+                                "Gagal mengekstrak ${sp.canonicalName}: ${res.error}", null)
+                        }
+                        planPackages.add(
+                            TransactionManager.PlanPackage(
+                                canonicalName = sp.canonicalName,
+                                version = sp.version,
+                                source = sp.source,
+                                sha256 = sha,
+                                wheelUrl = sp.url,
+                                wheelLocalPath = sp.localPath,
+                                filename = sp.filename,
+                                supportLibrary = sp.supportLibrary
+                            )
+                        )
+                        sudahDiambil.add(sp.canonicalName)
+                        onStep(Step.Log("  + ${sp.canonicalName}==${sp.version} terpasang ke staging"))
+                    }
+                    sudahDiambil.add(namaPaket)
+                }
+                onStep(Step.Finish("Pustaka pendukung (putaran $putaran)", true))
+            }
+            if (putaran >= MAX_SUPPORT_ROUNDS) {
+                // Batas ini melindungi dari peta yang saling menunjuk. Bukan
+                // kegagalan: smoke test di bawah tetap menjadi hakim terakhir.
+                onStep(Step.Log("  ⚠️ batas $MAX_SUPPORT_ROUNDS putaran pustaka tercapai"))
+            }
 
             // 7. Smoke test terhadap staging
             //
