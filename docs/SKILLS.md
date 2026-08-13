@@ -333,6 +333,36 @@ Host deps `.so` Chaquopy (`chaquopy-openblas`, `chaquopy-libcxx`,
 - Bukan pengganti UAT Infinix. User tetap uji APK; laporan UAT + senjata ini
   dipakai bersama.
 
+#### 5. Full Android ARMv7 — layer C (API24, QEMU klasik)
+
+Kalau bug menyentuh Kotlin↔Python callback, Activity, Compose, WebView,
+PackageManager, atau lifecycle yang tidak dapat dibuktikan `bionic311`, gunakan:
+
+```bash
+bash tools/setup_armv7_full_emu.sh
+bash tools/start_armv7_full_emu.sh       # long-running; Agent pakai start_process
+bash tools/verify_armv7_full_emu.sh
+bash tools/stop_armv7_full_emu.sh
+```
+
+Aturan keras dari eksperimen 2026-08-13:
+
+- `/dev/kvm` tidak ada; gunakan emulator klasik 27.3.8 + guest API24 ARMv7.
+- Semua image/AVD/Gradle eksperimental di `/var/tmp`, tidak di workspace.
+- `-memory 512 -qemu -m 512` keduanya wajib; tanpa override RSS mencapai
+  ±1.55 GB pada sandbox 1.9 GB.
+- SwiftShader wajib untuk ZCODE: `-gpu off` membuat WebView Chromium SIGABRT
+  karena EGL pbuffer tidak tersedia.
+- Jangan jalankan Gradle dan emulator bersamaan.
+- Production minSdk26 tidak dapat dipasang ke official ARMv7 image API24/25.
+  APK test-only minSdk24 boleh dipakai untuk membuktikan Android/JVM/Chaquopy,
+  tetapi **tidak** boleh dirilis atau disebut DEVICE VERIFIED.
+- Full emulator menemukan bug yang lolos 411 test + bionic311: Cancel ditelan
+  fallback source lalu berubah menjadi COMPATIBILITY. Karena itu emulator ini
+  bukan kosmetik; ia gate untuk perubahan lifecycle/bridge.
+- Detail dan angka resource:
+  `docs/FULL_ARMV7_ANDROID_EMULATOR_2026_08_13.md`.
+
 ---
 
 # 💬 SKILL 6 — Bekerja dengan user ini

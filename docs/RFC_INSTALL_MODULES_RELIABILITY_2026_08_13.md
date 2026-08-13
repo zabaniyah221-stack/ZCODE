@@ -241,7 +241,7 @@ kembalikan latch 90 detik harus ditangkap guard.
 
 ## 9. Hasil implementasi sementara
 
-- Test penuh: **414 passed**.
+- Test penuh setelah full-emulator tooling: **418 passed**.
 - `tools/check.sh`: hijau.
 - Kotlin lexical sanity: 53 file hijau.
 - Uji mutasi terbukti merah untuk: retry 2→3, retry HTTP 404, cancellation
