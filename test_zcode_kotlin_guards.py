@@ -2954,3 +2954,51 @@ class TestParsingNamaWheelBerhubung:
             "yang berbeda antara sandbox dan runner CI (insiden run "
             "31665998441)"
         )
+
+
+class TestInstallCancelV1018:
+    """Bug 'sepupu M' (v1.0.18): Cancel harus menjangkau fase Download/Extract.
+
+    Log device 2026-08-14: download numpy+openblas ±2 menit di jaringan
+    lambat — selama itu tombol hanya spinner tanpa jalan keluar. Kelas
+    kesalahan yang dijaga: (1) loop download tidak memeriksa flag cancel,
+    (2) file parsial tidak dihapus, (3) UI kembali menyembunyikan tombol
+    Batalkan saat isInstalling. Uji mutasi: hapus cek flag di download()
+    atau kembalikan spinner-only → merah.
+    """
+
+    def test_engine_punya_request_install_cancel(self):
+        src = read(APP / "core/packageengine/PackageEngineV2.kt")
+        assert "fun requestInstallCancel" in src
+        assert "installCancelRequested = false" in src, (
+            "flag harus di-reset di awal installBody — tanpa ini install "
+            "kedua langsung batal sendiri"
+        )
+
+    def test_download_memeriksa_cancel_per_chunk(self):
+        src = read(APP / "core/packageengine/PackageEngineV2.kt")
+        i = src.find("private fun download(")
+        assert i > 0
+        blok = src[i:i + 3000]
+        assert "installCancelRequested" in blok, (
+            "loop download tidak memeriksa flag cancel — kembali ke era "
+            "spinner tanpa jalan keluar"
+        )
+        assert "dest.delete()" in blok, "file parsial wajib dihapus saat cancel"
+        assert '"CANCELLED"' in blok
+
+    def test_download_emit_progress_bytes(self):
+        src = read(APP / "core/packageengine/PackageEngineV2.kt")
+        i = src.find("private fun download(")
+        blok = src[i:i + 3000]
+        assert "contentLengthLong" in blok, "progress butuh total bytes bila ada"
+        assert "256 * 1024" in blok, (
+            "emisi progress wajib di-throttle (pelajaran http_ok/ARMv7)"
+        )
+
+    def test_ui_tombol_batalkan_saat_installing(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "isAnalyzing || isInstalling" in src, (
+            "tombol Batalkan harus hidup juga selama fase install"
+        )
+        assert "requestInstallCancel" in src

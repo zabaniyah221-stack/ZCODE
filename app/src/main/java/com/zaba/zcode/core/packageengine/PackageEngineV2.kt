@@ -97,6 +97,29 @@ class PackageEngineV2(private val context: Context) {
         return true
     }
 
+    // ------------------------------------------------------------------
+    // CANCEL FASE DOWNLOAD/EXTRACT (v1.0.18, sepupu Bug M).
+    //
+    // Sebelum ini Cancel hanya hidup di fase Analyze/Resolve. Begitu masuk
+    // Download, tombol berubah jadi spinner tanpa jalan keluar — padahal
+    // log device 2026-08-14 menunjukkan download numpy+openblas makan ±2
+    // menit di jaringan lambat. Model yang dipakai KOOPERATIF per-chunk,
+    // BUKAN force-kill: loop download memeriksa flag tiap chunk (64KB),
+    // file parsial dihapus, transaction di-abort lewat jalur fail() yang
+    // sudah teruji. Fase Activate SENGAJA tidak memeriksa flag — ia atomic
+    // dan harus selesai (rollback-nya punya jalur sendiri).
+    // ------------------------------------------------------------------
+    @Volatile
+    private var installCancelRequested = false
+
+    /** Minta instalasi aktif berhenti di checkpoint berikutnya (download/extract). */
+    fun requestInstallCancel(): Boolean {
+        if (!isBusy()) return false
+        installCancelRequested = true
+        Breadcrumb.log("PKG_INSTALL_CANCEL_REQUEST", "")
+        return true
+    }
+
     private fun resolveWithProgress(
         requirementText: String,
         onStep: (Step) -> Unit
@@ -151,6 +174,7 @@ class PackageEngineV2(private val context: Context) {
         onStep: (Step) -> Unit
     ): InstallResult {
         TelemetryStore.increment("install_attempts")
+        installCancelRequested = false
         var tx: TransactionManager.Transaction? = null
         var rollbackPerformed = false
         var pkgName = requirementText.trim()
@@ -250,6 +274,10 @@ class PackageEngineV2(private val context: Context) {
             onStep(Step.Begin("Download"))
             val planPackages = mutableListOf<TransactionManager.PlanPackage>()
             for (p in plan.packages) {
+                if (installCancelRequested) {
+                    return fail("CANCELLED", "download",
+                        "Instalasi dibatalkan. Tidak ada package yang diubah.", null)
+                }
                 val wheelFile = File(Paths.pythonWheels(context), p.filename)
                 var sha = p.sha256
                 if (p.localPath != null) {
@@ -264,7 +292,14 @@ class PackageEngineV2(private val context: Context) {
                     Breadcrumb.log("PKG_DOWNLOAD", "${p.canonicalName} ${p.filename}")
                     onStep(Step.Log("  ${p.canonicalName}: mengunduh ${p.filename}…"))
                     val dl = download(url, wheelFile, sha) { msg -> onStep(Step.Log("  ${p.canonicalName}: $msg")) }
-                    if (!dl.first) return fail("DOWNLOAD", "download", dl.second, null)
+                    if (!dl.first) {
+                        return if (dl.second == "CANCELLED") {
+                            fail("CANCELLED", "download",
+                                "Instalasi dibatalkan. Tidak ada package yang diubah.", null)
+                        } else {
+                            fail("DOWNLOAD", "download", dl.second, null)
+                        }
+                    }
                     sha = sha ?: dl.second
                 }
                 planPackages.add(
@@ -285,6 +320,10 @@ class PackageEngineV2(private val context: Context) {
             // 6. Extract (path-safe) + validasi metadata
             onStep(Step.Begin("Extract"))
             for (p in planPackages) {
+                if (installCancelRequested) {
+                    return fail("CANCELLED", "extract",
+                        "Instalasi dibatalkan. Tidak ada package yang diubah.", null)
+                }
                 val wheelFile = File(Paths.pythonWheels(context), p.filename ?: wheelFilename(p))
                 val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
                 val res = Verifier.extractWheel(wheelFile, staging) { n -> onStep(Step.Log("  ${p.canonicalName}: $n files...")) }
@@ -598,15 +637,36 @@ class PackageEngineV2(private val context: Context) {
             }
             val digest = MessageDigest.getInstance("SHA-256")
             var written = 0L
+            // v1.0.18: progress bytes + cancel per-chunk. Log device 08-14
+            // menunjukkan 47 detik SENYAP saat mengunduh openblas — user tidak
+            // bisa membedakan "jalan" dari "hang" (trauma era black-box 90s).
+            // Progress di-throttle >=256KB per emisi agar tidak membanjiri
+            // Compose di ARMv7 (pelajaran http_ok yang 156 event).
+            val totalBytes = conn.contentLengthLong // -1 bila server tak memberi
+            var lastEmit = 0L
             conn.inputStream.use { input ->
                 dest.outputStream().use { out ->
                     val buf = ByteArray(64 * 1024)
                     while (true) {
+                        if (installCancelRequested) {
+                            conn.disconnect()
+                            dest.delete() // file parsial jangan meracuni cache
+                            return false to "CANCELLED"
+                        }
                         val n = input.read(buf)
                         if (n < 0) break
                         out.write(buf, 0, n)
                         digest.update(buf, 0, n)
                         written += n
+                        if (written - lastEmit >= 256 * 1024) {
+                            lastEmit = written
+                            val progress = if (totalBytes > 0) {
+                                "${written / 1024 / 1024}MB/${(totalBytes + 512 * 1024) / 1024 / 1024}MB"
+                            } else {
+                                "${written / 1024 / 1024}MB"
+                            }
+                            onLog("unduh $progress…")
+                        }
                     }
                 }
             }

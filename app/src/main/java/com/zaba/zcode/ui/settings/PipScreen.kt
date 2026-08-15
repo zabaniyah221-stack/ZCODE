@@ -190,6 +190,7 @@ fun PipScreen(
             }
             withContext(Dispatchers.Main) {
                 isInstalling = false
+                isCancelling = false // v1.0.18: install cancellable — reset state tombol
                 if (result.ok) {
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
@@ -223,13 +224,22 @@ fun PipScreen(
     }
 
     fun cancelCurrentAnalyze() {
-        if (!isAnalyzing || isCancelling) return
-        if (engine.cancelCurrentOperation()) {
-            isCancelling = true
-            appendLog("\n⏳ Membatalkan analisis setelah operasi jaringan aktif selesai…\n")
-            com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCEL_REQUEST", packageName.trim())
-        } else {
-            appendLog("\nℹ️ Analisis sudah selesai atau sedang berpindah tahap.\n")
+        if (isCancelling) return
+        // v1.0.18: Cancel kini menjangkau SEMUA fase yang aman dibatalkan.
+        // Resolve -> cooperative via bridge (Bug M); Download/Extract ->
+        // cooperative via flag engine (dicek per-chunk 64KB / antar-paket).
+        // Activate tetap tidak bisa dibatalkan (atomic).
+        when {
+            isAnalyzing && engine.cancelCurrentOperation() -> {
+                isCancelling = true
+                appendLog("\n⏳ Membatalkan analisis setelah operasi jaringan aktif selesai…\n")
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCEL_REQUEST", packageName.trim())
+            }
+            isInstalling && engine.requestInstallCancel() -> {
+                isCancelling = true
+                appendLog("\n⏳ Membatalkan instalasi di checkpoint berikutnya…\n")
+            }
+            else -> appendLog("\nℹ️ Operasi sudah selesai atau di tahap yang tidak bisa dibatalkan.\n")
         }
     }
 
@@ -840,9 +850,10 @@ private fun ManualTab(
                 keyboardActions = KeyboardActions(onGo = { onInstall() }),
                 textStyle = TextStyle(fontSize = 14.sp)
             )
+            val cancellable = isAnalyzing || isInstalling
             Button(
-                onClick = if (isAnalyzing) onCancel else onInstall,
-                enabled = if (isAnalyzing) !isCancelling else packageName.isNotBlank() && !isInstalling,
+                onClick = if (cancellable) onCancel else onInstall,
+                enabled = if (cancellable) !isCancelling else packageName.isNotBlank(),
                 // v1.0.18: JANGAN hardcode warna teks ke onPrimary — saat
                 // disabled Compose mengganti container jadi kelabu dan
                 // onPrimary di atasnya nyaris tak terbaca (laporan user,
@@ -850,7 +861,7 @@ private fun ManualTab(
                 // buttonColors dengan disabled* eksplisit; label 14sp
                 // (Material: label tombol >= 14sp).
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isAnalyzing) Color(0xFF8B2E2E)
+                    containerColor = if (cancellable) Color(0xFF8B2E2E)
                     else MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
                     disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
@@ -859,17 +870,12 @@ private fun ManualTab(
                 shape = RoundedCornerShape(8.dp)
             ) {
                 when {
-                    isAnalyzing -> Text(
+                    // v1.0.18: fase install juga bisa dibatalkan (download/
+                    // extract cooperative) — spinner-tanpa-jalan-keluar pensiun.
+                    cancellable -> Text(
                         if (isCancelling) "Membatalkan…" else "Batalkan",
                         fontSize = 14.sp
                     )
-                    isInstalling -> Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
-                    }
                     else -> Text("Install", fontSize = 14.sp)
                 }
             }
