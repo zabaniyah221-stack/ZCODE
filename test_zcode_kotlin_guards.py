@@ -3119,3 +3119,46 @@ class TestKurasiKontenV1018:
             "bs4 harus pakai parser bawaan, bukan lxml (native, terpisah)")
         assert "timeout" in c["requests"]["example"], (
             "requests tanpa timeout menggantung di jaringan HP lambat")
+
+
+class TestKelengkapanKatalogV1018:
+    """② gelombang 2 (2026-08-16): kelengkapan kartu katalog dijaga.
+
+    Tiga tier konten: kurasi tangan (TESTED+batu sandungan), auto-fill
+    PyPI (ditandai 'auto' di curatedAt), dan sisa minor. Guard menjaga
+    angka kelengkapan tidak MUNDUR saat katalog diregenerasi.
+    """
+
+    def _cat(self):
+        import json
+        return json.loads(read(ROOT / "app/src/main/assets/package_catalog/packages.json"))
+
+    def test_kelengkapan_minimum(self):
+        d = self._cat()
+        assert sum(1 for p in d if p.get("longDescription")) >= 330
+        assert sum(1 for p in d if p.get("sources")) >= 335
+        assert sum(1 for p in d if p.get("curatedAt")) >= 335
+
+    def test_semua_tested_punya_kartu_penuh(self):
+        d = self._cat()
+        for p in d:
+            if p["status"] != "TESTED":
+                continue
+            for f in ("longDescription", "whoMadeIt", "sources", "curatedAt"):
+                assert p.get(f), "%s TESTED tapi %s kosong" % (p["name"], f)
+
+    def test_batu_sandungan_punya_alternatif(self):
+        d = self._cat()
+        byname = {p["name"]: p for p in d}
+        for n in ("scipy", "tensorflow", "konlpy", "transformers", "lameenc"):
+            p = byname.get(n)
+            if not p:
+                continue
+            assert any("ALTERNATIF:" in w for w in p.get("works", [])), (
+                "%s mustahil di ARMv7 tapi tidak menawarkan alternatif" % n)
+            assert p.get("doesNotWork"), "%s tanpa alasan kenapa tidak bisa" % n
+
+    def test_auto_fill_ditandai_jujur(self):
+        d = self._cat()
+        auto = [p for p in d if "auto" in (p.get("curatedAt") or "")]
+        assert len(auto) >= 250, "penanda auto-fill hilang — konten PyPI menyaru kurasi tangan"
