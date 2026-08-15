@@ -5,7 +5,7 @@ Dokumen ini boleh diubah kapan saja: ada permintaan fitur baru, bug, error, atau
 temuan riset yang mematahkan asumsi di sini. Kalau kenyataan bertentangan dengan
 PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
 
-Versi saat ini: `1.0.17` (`gradle.properties` = sumber tunggal)
+Versi saat ini: `1.0.18` (`gradle.properties` = sumber tunggal)
 Terakhir diperbarui: 2026-08-13
 Revisi: 2026-08-13 — §5 Bug L/M (timeout lifecycle + cancellation fallback),
 full Android ARMv7 API 24 emulator, dan verifikasi bionic311. (PRD = pegangan, bukan acuan terkunci.)
@@ -141,8 +141,28 @@ Detail lengkap: `RENCANA_BUILD_2.md`.
 | K | deps dibaca dari **versi terbaru**, bukan versi terpilih → `pandas` (pytz), `rich` (typing-extensions) hilang | `resolve.py` (`info.requires_dist`) |
 | L | retry `3×20s` berada di dalam hard timeout total 90s; wrapper berhenti menunggu tetapi worker Python tetap hidup tanpa owner | `resolve.py`, `PyCall.kt` |
 | M | event Cancel ditelan catch fallback PyPI/Chaquopy lalu berubah menjadi `COMPATIBILITY`, bukan `CANCELLED` | `resolve.py` fallback handlers |
+| N | paket native gagal import setelah APP restart (`dlopen failed: libopenblas.so not found`) — `envpaths.activate()` hanya menyuntik sys.path, tidak mem-preload `lib*.so`; sesi install "kebetulan" sukses karena smoke test sudah memuatnya di proses yang sama | `envpaths.py` (fix v1.0.18) |
 
-> **Bug M — status FULL-EMULATOR VERIFIED, menunggu CI + HP nyata (v1.0.17):**
+> **Bug L & M — status DEVICE VERIFIED (2026-08-15, Infinix ARMv7, v1.0.17):**
+> breadcrumb HP 08-14 23:29–23:43 membuktikan numpy (resolve 2m44s — dulu mati
+> di 90s), matplotlib, pandas, pillow semua `PKG_INSTALL_OK`; `http_retry`
+> TimeoutError pulih; fallback 404 PyPI↔Chaquopy dua arah bekerja; numpy
+> dieksekusi `code=0`. Bug K juga terbukti sembuh di jalur yang sama
+> (`PKG_RESOLVE_NOTES: deps pandas dari PyPI per-versi 2.1.3` → pytz/tzdata
+> terpasang).
+>
+> **Bug N — status FIXED v1.0.18, menunggu UAT HP:** run yang sama GAGAL
+> setelah APP restart (08-15 17:43, `code=1`, `dlopen failed: library
+> 'libopenblas.so' not found`) padahal file paket utuh di disk. Akar:
+> `envpaths.activate()` hanya menyuntik sys.path — dynamic linker OS tidak
+> melihat sys.path; di sesi install pustaka native "kebetulan" sudah dimuat
+> smoke test di proses yang sama. Fix: `activate()` kini memanggil
+> `smoke.preload_native_libs()` (loader fixpoint yang sudah DEVICE VERIFIED
+> sejak v1.0.10) sebelum menyuntik sys.path. Guard 3 test + uji mutasi
+> terbukti merah bila blok preload dihapus. UAT: cukup run `numpy_stats.py`
+> setelah update APK — tanpa install ulang.
+
+> **Bug M — riwayat verifikasi emulator (v1.0.17):**
 > emulator Android ARMv7 API 24 membuktikan `cancelled` muncul saat resolve
 > matplotlib, tetapi v1.0.16 menutup operasi sebagai `PKG_ANALYZE_FAIL
 > [COMPATIBILITY]`. Semua fallback sekarang wajib memanggil
