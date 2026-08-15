@@ -674,6 +674,93 @@ class TestEnvPaths:
         finally:
             sys.path[:] = before
 
+    # ------------------------------------------------------------------
+    # BUG N (2026-08-15, DEVICE VERIFIED). Setelah APP restart, numpy yang
+    # sudah terpasang gagal: "dlopen failed: library 'libopenblas.so' not
+    # found". Akar: activate() lama hanya menyuntik sys.path; pustaka
+    # pendukung native tidak pernah dimuat di proses baru (yang memuatnya
+    # di sesi install adalah smoke test — kebetulan proses yang sama).
+    # Guard: activate() WAJIB memanggil preload_native_libs dengan daftar
+    # direktori paket aktif, SEBELUM menyentuh sys.path. Uji mutasi:
+    # hapus blok preload di activate() → kedua test ini merah.
+    # ------------------------------------------------------------------
+    def _env_numpy_like(self, tmp_path):
+        """Environment mini meniru instalasi numpy + chaquopy-openblas."""
+        state = tmp_path / "python-env" / "state"
+        state.mkdir(parents=True)
+        np_dir = tmp_path / "python-env" / "site-packages" / "numpy" / "1.26.2"
+        (np_dir / "numpy").mkdir(parents=True)
+        (np_dir / "numpy" / "__init__.py").write_text("FAKE_NUMPY = True\n")
+        blas_dir = (tmp_path / "python-env" / "site-packages" /
+                    "chaquopy-openblas" / "0.2.20")
+        blas_dir.mkdir(parents=True)
+        # lib*.so palsu — cukup untuk membuktikan ia DIBERIKAN ke preloader
+        (blas_dir / "libopenblas.so").write_bytes(b"\x7fELF-fake")
+        (state / "installed.json").write_text(json.dumps({
+            "numpy": {"version": "1.26.2",
+                      "path": "site-packages/numpy/1.26.2",
+                      "installed_at": 1, "source": "chaquopy"},
+            "chaquopy-openblas": {"version": "0.2.20",
+                                  "path": "site-packages/chaquopy-openblas/0.2.20",
+                                  "installed_at": 1, "source": "chaquopy"},
+        }))
+        return np_dir, blas_dir
+
+    def test_activate_mem_preload_native_libs(self, tmp_path, monkeypatch):
+        """activate() harus menyerahkan SEMUA dir paket aktif ke preloader."""
+        np_dir, blas_dir = self._env_numpy_like(tmp_path)
+        from package_runtime import smoke as smoke_mod
+        dipanggil = []
+        monkeypatch.setattr(
+            smoke_mod, "preload_native_libs",
+            lambda dirs: (dipanggil.extend(dirs or []), (0, []))[1])
+        before = list(sys.path)
+        try:
+            env_mod.activate(str(tmp_path))
+            assert dipanggil, (
+                "Bug N kembali: activate() tidak memanggil preload_native_libs "
+                "— paket native akan gagal import setelah app restart.")
+            assert str(blas_dir) in dipanggil
+            assert str(np_dir) in dipanggil
+        finally:
+            sys.path[:] = before
+
+    def test_activate_preload_sebelum_sys_path(self, tmp_path, monkeypatch):
+        """Preload harus terjadi SEBELUM path masuk sys.path (urutan Bug N)."""
+        _np_dir, blas_dir = self._env_numpy_like(tmp_path)
+        from package_runtime import smoke as smoke_mod
+        path_saat_preload = []
+        monkeypatch.setattr(
+            smoke_mod, "preload_native_libs",
+            lambda dirs: (path_saat_preload.extend(
+                p for p in sys.path if str(tmp_path) in p), (0, []))[1])
+        before = list(sys.path)
+        try:
+            env_mod.activate(str(tmp_path))
+            assert path_saat_preload == [], (
+                "Urutan terbalik: sys.path diisi sebelum preload — import "
+                "yang berlomba dengan preload bisa gagal dlopen.")
+            assert str(blas_dir) in sys.path
+        finally:
+            sys.path[:] = before
+
+    def test_activate_tahan_preloader_error(self, tmp_path, monkeypatch):
+        """Kontrak: kegagalan preload = diagnosa, bukan crash aktivasi."""
+        self._env_numpy_like(tmp_path)
+        from package_runtime import smoke as smoke_mod
+
+        def meledak(dirs):
+            raise RuntimeError("simulasi loader rusak")
+        monkeypatch.setattr(smoke_mod, "preload_native_libs", meledak)
+        before = list(sys.path)
+        try:
+            paths = env_mod.activate(str(tmp_path))  # tidak boleh melempar
+            assert len(paths) == 2
+            for p in paths:
+                assert p in sys.path
+        finally:
+            sys.path[:] = before
+
 
 class TestEnvPathsEntryPoints:
     """Langkah 3 (2026-08-13): layout ZCODE `<norm>/<version>/` di sys.path
