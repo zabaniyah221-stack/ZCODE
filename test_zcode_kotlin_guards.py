@@ -3162,3 +3162,28 @@ class TestKelengkapanKatalogV1018:
         d = self._cat()
         auto = [p for p in d if "auto" in (p.get("curatedAt") or "")]
         assert len(auto) >= 250, "penanda auto-fill hilang — konten PyPI menyaru kurasi tangan"
+
+
+class TestSettingsV1018:
+    """Settings expand ala Library + versi dari packageManager.
+
+    Dua laporan user 2026-08-16: (1) 'satu ZCODE dua versi' — Settings
+    hardcode v1.0.0 sementara About jujur dari packageManager; (2) saran
+    seksi expand agar layar lega. Uji mutasi: kembalikan hardcode versi
+    atau hapus toggle -> merah.
+    """
+
+    def test_versi_dari_package_manager(self):
+        src = read(UI / "settings/SettingsScreen.kt")
+        assert 'value = "v1.0.0"' not in src, (
+            "versi hardcode kembali — Settings akan berbohong lagi"
+        )
+        assert "packageManager.getPackageInfo" in src
+
+    def test_seksi_expandable(self):
+        src = read(UI / "settings/SettingsScreen.kt")
+        assert "openSections" in src
+        assert 'in openSections) item {' in src, "konten seksi tidak lagi kondisional"
+        i = src.find("fun SettingsGroupHeader")
+        blok = src[i:i + 900]
+        assert "onToggle" in blok and "clickable" in blok, "header tidak tap-able"
