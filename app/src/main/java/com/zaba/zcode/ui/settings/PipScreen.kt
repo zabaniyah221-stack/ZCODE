@@ -62,6 +62,7 @@ import com.zaba.zcode.core.packageengine.PackageEngineV2
 import com.zaba.zcode.core.packageengine.PackageRepository
 import com.zaba.zcode.core.packageengine.PackageStatus
 import com.zaba.zcode.core.packageengine.RuntimeProbe
+import com.zaba.zcode.core.packageengine.SourceRef
 import com.zaba.zcode.core.packageengine.TelemetryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -757,11 +758,6 @@ private fun statusIcon(status: PackageStatus, installed: Boolean): String = when
     else -> "❔"
 }
 
-// =====================================================================
-// Package Details dialog (SPEC §11 — urutan wajib)
-// =====================================================================
-
-@Composable
 // =====================================================================
 // PACKAGE DETAIL — halaman penuh "kartu perpustakaan" (v1.0.18, ②).
 // Menggantikan AlertDialog lama: field bernomor bolong (1,6,7,9-10,14…)
