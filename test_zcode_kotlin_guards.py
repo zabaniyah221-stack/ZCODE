@@ -3069,3 +3069,53 @@ class TestPackageDetailScreenV1018:
         assert "remember { repository.loadCatalog() }" in src, (
             "loadCatalog kembali dipanggil per recomposition (ARMv7)"
         )
+
+
+class TestKurasiKontenV1018:
+    """② Batch B: 11 paket TESTED wajib kartu kurasi lengkap di katalog.
+
+    Sumber: docs/LIBRARY_KURASI_KONTEN_2026_08_15.md. Kelas kesalahan:
+    konten kurasi terhapus saat regenerasi katalog, example membusuk jadi
+    tidak valid Python, sources kehilangan url.
+    """
+
+    TESTED_11 = ["requests", "numpy", "pandas", "matplotlib", "rich", "tqdm",
+                 "flask", "httpx", "beautifulsoup4", "openpyxl", "pillow"]
+
+    def _catalog(self):
+        import json
+        return {p["name"].lower(): p for p in json.loads(
+            read(ROOT / "app/src/main/assets/package_catalog/packages.json"))}
+
+    def test_semua_tested_terkurasi(self):
+        c = self._catalog()
+        for n in self.TESTED_11:
+            p = c[n]
+            for f in ("longDescription", "whyUse", "example", "whoMadeIt", "curatedAt"):
+                assert p.get(f), "%s: field kurasi %s kosong" % (n, f)
+            assert p.get("sources"), "%s: sources[] kosong" % n
+            for s in p["sources"]:
+                assert s.get("url", "").startswith("http"), (
+                    "%s: source tanpa url valid: %r" % (n, s))
+
+    def test_example_valid_python(self):
+        import py_compile, tempfile, os
+        c = self._catalog()
+        for n in self.TESTED_11:
+            with tempfile.NamedTemporaryFile(
+                    "w", suffix=".py", delete=False) as f:
+                f.write(c[n]["example"]); fp = f.name
+            try:
+                py_compile.compile(fp, doraise=True)
+            finally:
+                os.unlink(fp)
+
+    def test_example_sadar_zcode(self):
+        """Pola khusus lingkungan ZCODE tidak boleh hilang dari example."""
+        c = self._catalog()
+        assert 'use("Agg")' in c["matplotlib"]["example"], (
+            "matplotlib tanpa backend Agg = crash pasti di ZCODE")
+        assert "html.parser" in c["beautifulsoup4"]["example"], (
+            "bs4 harus pakai parser bawaan, bukan lxml (native, terpisah)")
+        assert "timeout" in c["requests"]["example"], (
+            "requests tanpa timeout menggantung di jaringan HP lambat")
