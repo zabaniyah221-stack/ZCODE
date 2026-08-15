@@ -58,7 +58,10 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     private var saveJob: Job? = null
     private var pendingSave = false
 
-    var themeType by mutableStateOf(ZcodeThemeType.RETRO)
+    // v1.0.18: default GITHUB_DARK (keputusan user 2026-08-15) — RETRO tetap
+    // tersedia di cycle; pilihan tersimpan user lama tetap dihormati (baris
+    // restore di bawah hanya fallback saat preferensi kosong/tak dikenal).
+    var themeType by mutableStateOf(ZcodeThemeType.GITHUB_DARK)
     val openedFiles = mutableStateListOf<String>()
     var activeFile by mutableStateOf<String?>(null)
     var activeCode by mutableStateOf("")
@@ -297,7 +300,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         appFontFamily = prefs.getString("editor_font_family", "Monospace") ?: "Monospace"
         // F1.5: Load tema yang dipersist (default RETRO jika belum ada)
         prefs.getString("theme_type", null)?.let { saved ->
-            themeType = ZcodeThemeType.values().firstOrNull { it.name == saved } ?: ZcodeThemeType.RETRO
+            themeType = ZcodeThemeType.values().firstOrNull { it.name == saved } ?: ZcodeThemeType.GITHUB_DARK
         }
         validateSyntaxDebounced(activeCode)
         persistWorkspaceState()
