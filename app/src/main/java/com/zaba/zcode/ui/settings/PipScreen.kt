@@ -54,7 +54,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.packageengine.CompatibilityEngine
 import com.zaba.zcode.core.packageengine.DependencyResolver
 import com.zaba.zcode.core.packageengine.PackageDetails
@@ -99,18 +98,20 @@ fun PipScreen(
 
     // Manual install
     var packageName by remember { mutableStateOf("") }
-    var logText by remember { mutableStateOf(initialLog()) }
     var isInstalling by remember { mutableStateOf(false) }
     // Analyze punya cooperative Cancel. Download/install belum boleh mengklaim
     // bisa dibatalkan karena transaction stage-nya berbeda.
     var isAnalyzing by remember { mutableStateOf(false) }
     var isCancelling by remember { mutableStateOf(false) }
-    var consoleLines by remember { mutableStateOf(listOf<ConsoleLine>()) }
+    // v1.0.18: Console dan Log DIGABUNG jadi satu terminal (keputusan user,
+    // 2026-08-15). Panel Log lama 80% menceritakan hal yang sama dengan
+    // Console dalam kotak kedua yang merebut setengah layar; jejak forensik
+    // permanen sudah menjadi tugas Diagnostics (breadcrumb PKG_*).
+    var consoleLines by remember { mutableStateOf(initialConsole()) }
     var pendingRiskyReq by remember { mutableStateOf<String?>(null) }
     var pendingRiskyReason by remember { mutableStateOf("") }
     var pendingRiskyPlan by remember { mutableStateOf<DependencyResolver.ResolvePlan?>(null) }
 
-    val scrollState = rememberScrollState()
     val consoleScroll = rememberScrollState()
 
     fun refreshInstalled() {
@@ -123,20 +124,24 @@ fun PipScreen(
             .mapValues { it.value.version }
     }
 
-    fun appendLog(text: String) {
-        val combined = logText + text
-        // cap in-memory (S-18 legacy guard); full detail ada di state/transactions.json
-        logText = if (combined.length > ExecutionEngine.MAX_OUTPUT_CHARS) {
-            combined.takeLast(ExecutionEngine.MAX_OUTPUT_CHARS)
-        } else {
-            combined
-        }
-        scope.launch { scrollState.scrollTo(scrollState.maxValue) }
-    }
-
     fun addConsole(line: ConsoleLine) {
         consoleLines = (consoleLines + line).takeLast(400)
         scope.launch { consoleScroll.scrollTo(consoleScroll.maxValue) }
+    }
+
+    // Kompat penggabungan Console+Log: pemanggil appendLog lama menulis ke
+    // Console. Jenis baris ditebak dari isi pesan supaya warna bermakna
+    // (\u2705 -> OK hijau, \u274c/\ud83d\uded1 -> FAIL merah, "> " -> STEP).
+    fun appendLog(text: String) {
+        text.lines().filter { it.isNotBlank() }.forEach { baris ->
+            val kind = when {
+                baris.contains("\u2705") -> ConsoleKind.OK
+                baris.contains("\u274c") || baris.contains("\ud83d\uded1") -> ConsoleKind.FAIL
+                baris.startsWith("> ") -> ConsoleKind.STEP
+                else -> ConsoleKind.LOG
+            }
+            addConsole(ConsoleLine(baris, kind))
+        }
     }
 
     fun handleEngineStep(step: PackageEngineV2.Step) {
@@ -429,9 +434,7 @@ fun PipScreen(
                         appendLog("\nℹ️ requirements.txt: buka file di editor lalu salin barisnya ke sini.\n")
                     },
                     consoleLines = consoleLines,
-                    consoleScroll = consoleScroll,
-                    logText = logText,
-                    logScroll = scrollState
+                    consoleScroll = consoleScroll
                 )
             }
         }
@@ -813,9 +816,7 @@ private fun ManualTab(
     onCancel: () -> Unit,
     onRequirementsTxt: () -> Unit,
     consoleLines: List<ConsoleLine>,
-    consoleScroll: androidx.compose.foundation.ScrollState,
-    logText: String,
-    logScroll: androidx.compose.foundation.ScrollState
+    consoleScroll: androidx.compose.foundation.ScrollState
 ) {
     Column(
         modifier = Modifier
@@ -842,17 +843,25 @@ private fun ManualTab(
             Button(
                 onClick = if (isAnalyzing) onCancel else onInstall,
                 enabled = if (isAnalyzing) !isCancelling else packageName.isNotBlank() && !isInstalling,
+                // v1.0.18: JANGAN hardcode warna teks ke onPrimary — saat
+                // disabled Compose mengganti container jadi kelabu dan
+                // onPrimary di atasnya nyaris tak terbaca (laporan user,
+                // screenshot 2026-08-15). Serahkan kontras per-state ke
+                // buttonColors dengan disabled* eksplisit; label 14sp
+                // (Material: label tombol >= 14sp).
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isAnalyzing) Color(0xFF8B2E2E)
-                    else MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
                 when {
                     isAnalyzing -> Text(
                         if (isCancelling) "Membatalkan…" else "Batalkan",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onPrimary
+                        fontSize = 14.sp
                     )
                     isInstalling -> Box(Modifier.size(18.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(
@@ -861,7 +870,7 @@ private fun ManualTab(
                             strokeWidth = 2.dp
                         )
                     }
-                    else -> Text("Install", fontSize = 12.sp, color = MaterialTheme.colorScheme.onPrimary)
+                    else -> Text("Install", fontSize = 14.sp)
                 }
             }
         }
@@ -915,14 +924,17 @@ private fun ManualTab(
 
         Spacer(modifier = Modifier.height(12.dp))
         Text(
-            "INSTALLATION CONSOLE:",
+            "CONSOLE:",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(6.dp))
+        // v1.0.18: satu terminal penuh (Console+Log digabung). Latar tetap
+        // hitam pekat di semua tema — panel terminal adalah pengecualian OLED
+        // yang disengaja, bukan layar navigasi.
         Box(
             modifier = Modifier
-                .weight(0.45f)
+                .weight(1f)
                 .fillMaxWidth()
                 .background(Color(0xFF050806), shape = RoundedCornerShape(8.dp))
                 .padding(12.dp)
@@ -931,14 +943,6 @@ private fun ManualTab(
             // BUG I: console harus bisa diseleksi & disalin (user melapor tanpa logcat).
             SelectionContainer {
             Column {
-                if (consoleLines.isEmpty()) {
-                    Text(
-                        "Menunggu instalasi…\nFlow: Parse → Resolve → Download → Verify → Extract → Smoke → Activate",
-                        color = Color(0xFF39FF14),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp
-                    )
-                }
                 consoleLines.forEach { line ->
                     val color = when (line.kind) {
                         ConsoleKind.STEP -> Color(0xFF8A9BB0)
@@ -957,36 +961,12 @@ private fun ManualTab(
             }
             } // SelectionContainer (BUG I)
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            "INSTALLATION LOG:",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Box(
-            modifier = Modifier
-                .weight(0.55f)
-                .fillMaxWidth()
-                .background(Color(0xFF050806), shape = RoundedCornerShape(8.dp))
-                .padding(12.dp)
-                .verticalScroll(logScroll)
-        ) {
-            SelectionContainer {
-            Text(
-                text = logText,
-                color = Color(0xFF39FF14),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                lineHeight = 16.sp
-            )
-            } // SelectionContainer (BUG I)
-        }
     }
 }
 
-private fun initialLog(): String =
-    "ZCODE Package Engine V2 — Chaquopy 3.11\n" +
-        "-".repeat(45) + "\n" +
-        "Masukkan requirement (bukan perintah shell), lalu tap Install.\n" +
-        "Instalasi transaksional: verifikasi + smoke test + rollback otomatis.\n"
+private fun initialConsole(): List<ConsoleLine> = listOf(
+    ConsoleLine("ZCODE Package Engine V2 — Chaquopy 3.11", ConsoleKind.STEP),
+    ConsoleLine("Masukkan requirement (bukan perintah shell), lalu tap Install.", ConsoleKind.LOG),
+    ConsoleLine("Instalasi transaksional: verifikasi + smoke test + rollback otomatis.", ConsoleKind.LOG),
+    ConsoleLine("Flow: Parse → Resolve → Download → Verify → Extract → Smoke → Activate", ConsoleKind.LOG),
+)
