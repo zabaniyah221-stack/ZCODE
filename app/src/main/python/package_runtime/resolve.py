@@ -371,6 +371,14 @@ NATIVE_HOST_DEPS: dict[str, list[str]] = {
     "pyzmq": ["chaquopy-libzmq"],
     "shapely": ["chaquopy-geos"],
     "argon2-cffi-bindings": ["cffi"],
+    # [dari perangkat] BUG P (2026-08-16, breadcrumb Infinix): percobaan
+    # argon2-cffi PERTAMA gagal smoke test "libffi.so not found: needed by
+    # _cffi_backend.so" — wheel cffi belum di cache sehingga jaring METADATA
+    # wheel belum bisa membaca kebutuhan chaquopy-libffi (resolve berjalan
+    # SEBELUM download). Percobaan jwt berikutnya sukses karena wheel cffi
+    # sudah di cache dari transaksi yang di-rollback. Entri ini menutup
+    # celah instal-pertama; METADATA wheel tetap jaring kedua.
+    "cffi": ["chaquopy-libffi"],
 }
 
 

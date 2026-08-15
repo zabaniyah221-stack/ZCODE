@@ -24,7 +24,10 @@ import java.util.Locale
  * Lokasi: <filesDir>/logs/diagnostics/breadcrumb.log
  */
 object Breadcrumb {
-    private const val MAX_BYTES = 128 * 1024 // 128KB — cukup untuk ratusan sesi
+    // v1.0.18: 128KB->512KB. Sesi UAT maraton user 2026-08-16 (13 install
+    // beruntun) memotong riwayat via rotasi — user mengira tombol Salin bocor.
+    // 512KB masih receh untuk storage 64GB dan memuat ±4x lebih banyak sesi.
+    private const val MAX_BYTES = 512 * 1024
     private val lock = Any()
     private val tsFormat = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
 

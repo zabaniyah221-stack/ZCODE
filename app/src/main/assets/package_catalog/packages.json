@@ -88,7 +88,9 @@
   "works": [],
   "doesNotWork": [],
   "dependencies": [],
-  "risks": [],
+  "risks": [
+   "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
+  ],
   "smokeTest": null,
   "license": "",
   "publisher": "",
@@ -112,7 +114,9 @@
   "works": [],
   "doesNotWork": [],
   "dependencies": [],
-  "risks": [],
+  "risks": [
+   "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
+  ],
   "smokeTest": null,
   "license": "",
   "publisher": "",
@@ -605,7 +609,7 @@
   "importName": "ansible",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -613,7 +617,9 @@
   "abis": [],
   "description": "Automation config (berat, butuh SSH).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -637,7 +643,9 @@
   "abis": [],
   "description": "Scheduler advanced.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -661,7 +669,9 @@
   "abis": [],
   "description": "Hapus import tidak terpakai.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -685,7 +695,9 @@
   "abis": [],
   "description": "Perbaiki gaya PEP8 otomatis.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -709,7 +721,9 @@
   "abis": [],
   "description": "Python code formatter.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -749,15 +763,18 @@
   "importName": "cookiecutter",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.7.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Scaffold project dari template.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v2.7.1"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -784,7 +801,9 @@
   "works": [],
   "doesNotWork": [],
   "dependencies": [],
-  "risks": [],
+  "risks": [
+   "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
+  ],
   "smokeTest": null,
   "license": "",
   "publisher": "",
@@ -853,7 +872,9 @@
   "abis": [],
   "description": "Git via Python (butuh binary git).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -877,7 +898,9 @@
   "abis": [],
   "description": "Task runner Pythonic.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -901,7 +924,9 @@
   "abis": [],
   "description": "Import sorter.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -973,7 +998,9 @@
   "abis": [],
   "description": "Template engine Mako.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -997,7 +1024,9 @@
   "abis": [],
   "description": "Automation test environments.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1021,7 +1050,9 @@
   "abis": [],
   "description": "Git hooks manager.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1093,7 +1124,9 @@
   "abis": [],
   "description": "Mustache template.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1117,7 +1150,9 @@
   "abis": [],
   "description": "Alias crontab.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1141,7 +1176,9 @@
   "abis": [],
   "description": "YAML round-trip (dep banyak tool).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1157,7 +1194,7 @@
   "importName": "watchfiles",
   "category": "Automation / Scripting",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1165,7 +1202,9 @@
   "abis": [],
   "description": "File watcher native (rust).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1189,7 +1228,9 @@
   "abis": [],
   "description": "Formatter ala Google.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1229,7 +1270,7 @@
   "importName": "bokeh",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1237,7 +1278,9 @@
   "abis": [],
   "description": "Visualisasi interaktif berbasis browser.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1325,15 +1368,18 @@
   "importName": "emcee",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.1.6",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "MCMC ensemble sampler.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.1.6"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1488,7 +1534,8 @@
   "works": [
    "backend Agg",
    "savefig('out.png')",
-   "plot/scatter/bar"
+   "plot/scatter/bar",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "GUI window interaktif",
@@ -1541,7 +1588,9 @@
   "abis": [],
   "description": "Aritmetika presisi sewenang-wenang.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1605,15 +1654,17 @@
   "importName": "nltk",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.10.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Natural language toolkit (data model terpisah).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.10.3"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1696,7 +1747,8 @@
   "works": [
    "np.arange/array",
    "operasi vektor",
-   "np.linalg"
+   "np.linalg",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "BLAS/LAPACK berkinerja penuh (wheel Chaquopy tersedia tapi terbatas)"
@@ -1841,7 +1893,8 @@
   "works": [
    "pd.read_csv",
    "groupby",
-   "to_excel"
+   "to_excel",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "dataset sangat besar di RAM kecil"
@@ -1921,7 +1974,9 @@
   "abis": [],
   "description": "Data tabel periodik.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1945,7 +2000,9 @@
   "abis": [],
   "description": "Unit conversion Python.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2017,7 +2074,9 @@
   "abis": [],
   "description": "Tabel ASCII sederhana.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2041,7 +2100,9 @@
   "abis": [],
   "description": "Linear programming (solver default bawaan).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2137,7 +2198,9 @@
   "abis": [],
   "description": "Unit & dimensi fisika.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2249,7 +2312,9 @@
   "abis": [],
   "description": "Visualisasi statistik di atas matplotlib.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2417,7 +2482,9 @@
   "abis": [],
   "description": "Angka dengan ketidakpastian (error propagation).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2537,7 +2604,9 @@
   "abis": [],
   "description": "Pickle untuk fungsi/closure.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2561,7 +2630,9 @@
   "abis": [],
   "description": "Database untuk manusia (di atas SQLAlchemy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2585,7 +2656,9 @@
   "abis": [],
   "description": "Pickle extended.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2657,7 +2730,9 @@
   "abis": [],
   "description": "Persistensi objek + parallel (dep scikit-learn).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2673,7 +2748,7 @@
   "importName": "lz4",
   "category": "Database / Storage",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2681,7 +2756,9 @@
   "abis": [],
   "description": "Kompresi LZ4 (C extension).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2777,7 +2854,9 @@
   "abis": [],
   "description": "ORM kecil.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2873,7 +2952,9 @@
   "abis": [],
   "description": "MySQL driver murni-Python.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2921,7 +3002,9 @@
   "abis": [],
   "description": "Redis client (butuh server Redis).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2945,7 +3028,9 @@
   "abis": [],
   "description": "ORM & SQL toolkit.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3017,7 +3102,9 @@
   "abis": [],
   "description": "Database JSON kecil tanpa server.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3033,7 +3120,7 @@
   "importName": "zstandard",
   "category": "Database / Storage",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -3041,7 +3128,9 @@
   "abis": [],
   "description": "Kompresi zstd (C extension).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3065,7 +3154,9 @@
   "abis": [],
   "description": "i18n/l10n (dep Flask).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3081,15 +3172,18 @@
   "importName": "chardet",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "7.6.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Deteksi encoding (dep requests).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v7.6.0"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3113,7 +3207,9 @@
   "abis": [],
   "description": "Deteksi encoding teks.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3137,7 +3233,9 @@
   "abis": [],
   "description": "Toolkit CSV baris-perintah.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3161,7 +3259,9 @@
   "abis": [],
   "description": "reStructuredText → berbagai format.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3185,7 +3285,9 @@
   "abis": [],
   "description": "Deteksi tipe file dari magic bytes (murni-Python).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3233,7 +3335,9 @@
   "abis": [],
   "description": "Perbaiki teks Unicode rusak.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3257,7 +3361,9 @@
   "abis": [],
   "description": "Konversi Markdown → HTML.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3281,7 +3387,9 @@
   "abis": [],
   "description": "HTML → Markdown.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3305,7 +3413,9 @@
   "abis": [],
   "description": "Markdown parser cepat.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3353,7 +3463,9 @@
   "abis": [],
   "description": "Parse waktu natural.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3366,7 +3478,7 @@
  {
   "name": "patool",
   "displayName": "patool",
-  "importName": "patool",
+  "importName": "patoolib",
   "category": "Files / Office / Document",
   "type": "pure",
   "status": "COMPATIBLE",
@@ -3497,7 +3609,9 @@
   "abis": [],
   "description": "Baca/tulis Word .docx.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3545,7 +3659,9 @@
   "abis": [],
   "description": "Baca/tulis PowerPoint .pptx.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3569,7 +3685,9 @@
   "abis": [],
   "description": "ZIP dengan enkripsi AES (baca/tulis).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3585,7 +3703,7 @@
   "importName": "rarfile",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -3593,7 +3711,9 @@
   "abis": [],
   "description": "Baca RAR (butuh binary unrar).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3617,7 +3737,9 @@
   "abis": [],
   "description": "Generate PDF.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3641,7 +3763,9 @@
   "abis": [],
   "description": "Hapus file ke recycle bin.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3665,7 +3789,9 @@
   "abis": [],
   "description": "Konversi format data (CSV/JSON/Excel/YAML).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3713,7 +3839,9 @@
   "abis": [],
   "description": "Baca Excel .xls (legacy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3737,7 +3865,9 @@
   "abis": [],
   "description": "Tulis Excel .xlsx berfitur lengkap.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3761,7 +3891,9 @@
   "abis": [],
   "description": "Tulis Excel .xls (legacy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3833,7 +3965,9 @@
   "abis": [],
   "description": "Terminal styling (di atas curses — sebagian fitur terbatas).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3929,7 +4063,9 @@
   "abis": [],
   "description": "Kernel jupyter core (untuk integrasi).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4137,15 +4273,18 @@
   "importName": "audioread",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.1.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Decode audio via backend.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.1.0"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4193,7 +4332,9 @@
   "abis": [],
   "description": "Ekstrak palet warna dominan.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4217,7 +4358,9 @@
   "abis": [],
   "description": "Color science (perlu numpy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4233,15 +4376,17 @@
   "importName": "exifread",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.5.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Baca metadata EXIF.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.5.1"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4289,7 +4434,9 @@
   "abis": [],
   "description": "Buat GIF sederhana.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4409,7 +4556,9 @@
   "abis": [],
   "description": "Baca/tulis tag audio MP3/FLAC/OGG (murni-Python).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4457,7 +4606,9 @@
   "abis": [],
   "description": "Tulis/baca EXIF (untuk Pillow).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4492,7 +4643,8 @@
   "works": [
    "Image.open/resize/save",
    "filter",
-   "format JPEG/PNG"
+   "format JPEG/PNG",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "format eksotis (WEBP sebagian)"
@@ -4650,7 +4802,7 @@
   "importName": "pyzbar",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -4658,7 +4810,9 @@
   "abis": [],
   "description": "Baca barcode/QR (libzbar native).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4682,7 +4836,9 @@
   "abis": [],
   "description": "Generate QR code (pakai Pillow).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4754,7 +4910,9 @@
   "abis": [],
   "description": "Baca/tulis WAV via numpy (murni-Python).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4794,15 +4952,18 @@
   "importName": "asn1crypto",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.5.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Parser ASN.1 murni-Python (dep cryptography).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v1.5.1"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4826,7 +4987,9 @@
   "abis": [],
   "description": "OAuth/OpenID modern.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4866,7 +5029,7 @@
   "importName": "cryptography",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -4874,7 +5037,9 @@
   "abis": [],
   "description": "Primitif kripto (OpenSSL native — cek wheel Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4898,7 +5063,9 @@
   "abis": [],
   "description": "Hash angka → string pendek (bukan kriptografi).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4914,15 +5081,18 @@
   "importName": "jwt",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.4.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "PyJWT — JSON Web Tokens.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v1.4.0"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4938,7 +5108,7 @@
   "importName": "keyring",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -4946,7 +5116,9 @@
   "abis": [],
   "description": "Credential store (backend Android?).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4994,7 +5166,9 @@
   "abis": [],
   "description": "OAuth 1/2 framework.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5018,7 +5192,9 @@
   "abis": [],
   "description": "Password hashing library.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5034,7 +5210,7 @@
   "importName": "Crypto",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -5042,7 +5218,9 @@
   "abis": [],
   "description": "Kripto murni-C (wheel Android?).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5066,7 +5244,9 @@
   "abis": [],
   "description": "TOTP/HOTP two-factor authentication.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5090,7 +5270,9 @@
   "abis": [],
   "description": "JOSE implementation.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5210,7 +5392,9 @@
   "abis": [],
   "description": "Generate data palsu realistis.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5234,7 +5418,9 @@
   "abis": [],
   "description": "Linter PEP8.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5258,7 +5444,9 @@
   "abis": [],
   "description": "Frozen time di test.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5282,7 +5470,9 @@
   "abis": [],
   "description": "Property-based testing.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5346,7 +5536,7 @@
   "importName": "memory_profiler",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -5354,7 +5544,9 @@
   "abis": [],
   "description": "Profil memori per baris.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5378,7 +5570,9 @@
   "abis": [],
   "description": "Mocking (stdlib sejak 3.3).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5426,7 +5620,9 @@
   "abis": [],
   "description": "Debugger pdb++ (interaktif di terminal).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5466,7 +5662,7 @@
   "importName": "pyright",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -5474,7 +5670,9 @@
   "abis": [],
   "description": "Type checker berbasis Node — butuh nodejs, tidak didukung.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5498,7 +5696,9 @@
   "abis": [],
   "description": "Framework testing standar.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5546,7 +5746,9 @@
   "abis": [],
   "description": "Plugin coverage utk pytest.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5570,7 +5772,9 @@
   "abis": [],
   "description": "Mocking di pytest.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5594,7 +5798,9 @@
   "abis": [],
   "description": "Paralelisasi pytest.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5618,7 +5824,9 @@
   "abis": [],
   "description": "Mock requests.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5738,7 +5946,9 @@
   "abis": [],
   "description": "Datetime ramah.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5762,7 +5972,9 @@
   "abis": [],
   "description": "Koleksi utilitas Python murni.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5789,7 +6001,8 @@
    "CA bundle HTTPS"
   ],
   "works": [
-   "certifi.where()"
+   "certifi.where()",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5819,7 +6032,8 @@
    "warna ANSI lintas platform"
   ],
   "works": [
-   "Fore/Back/Style"
+   "Fore/Back/Style",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5846,7 +6060,9 @@
   "abis": [],
   "description": "Logging berwarna.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5870,7 +6086,9 @@
   "abis": [],
   "description": "Parse/iterasi ekspresi cron.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5894,7 +6112,9 @@
   "abis": [],
   "description": "Parse tanggal dari teks natural.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5918,7 +6138,9 @@
   "abis": [],
   "description": "File locking lintas platform.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5942,7 +6164,9 @@
   "abis": [],
   "description": "Fuzzy string matching (dep python-Levenshtein opsional).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5966,7 +6190,9 @@
   "abis": [],
   "description": "Format angka/data ramah manusia.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6014,7 +6240,9 @@
   "abis": [],
   "description": "Ekstensi itertools.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6038,7 +6266,9 @@
   "abis": [],
   "description": "Backport pathlib (untuk kode lama).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6086,7 +6316,9 @@
   "abis": [],
   "description": "Lokasi direktori per-platform.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6102,7 +6334,7 @@
   "importName": "psutil",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -6110,7 +6342,9 @@
   "abis": [],
   "description": "Info proses/sistem (C extension — cek wheel Android).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6175,7 +6409,8 @@
   ],
   "works": [
    "dateutil.parser",
-   "relativedelta"
+   "relativedelta",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6202,7 +6437,9 @@
   "abis": [],
   "description": "Baca file .env.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6226,7 +6463,9 @@
   "abis": [],
   "description": "Timezone database.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6255,7 +6494,8 @@
   ],
   "works": [
    "yaml.safe_load",
-   "yaml.dump"
+   "yaml.dump",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "YAML 1.2 penuh (sebagian)"
@@ -6276,7 +6516,7 @@
   "importName": "regex",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -6292,7 +6532,8 @@
   ],
   "works": [
    "regex.search",
-   "fuzzy matching"
+   "fuzzy matching",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6319,7 +6560,9 @@
   "abis": [],
   "description": "Dekorator retry.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6350,7 +6593,8 @@
   "works": [
    "print(rich)",
    "Table",
-   "Console"
+   "Console",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "live display yang butuh terminal penuh (sebagian)"
@@ -6401,7 +6645,9 @@
   "abis": [],
   "description": "Penjadwalan job sederhana.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6425,7 +6671,9 @@
   "abis": [],
   "description": "Kompatibilitas Py2/3 (dep lama).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6449,7 +6697,9 @@
   "abis": [],
   "description": "Retry library modern.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6473,7 +6723,9 @@
   "abis": [],
   "description": "30+ algoritma jarak string.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6497,7 +6749,9 @@
   "abis": [],
   "description": "TOML parser.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6521,7 +6775,9 @@
   "abis": [],
   "description": "TOML 1.0 parser (Python 3.11: gunakan tomllib bawaan).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6569,7 +6825,9 @@
   "abis": [],
   "description": "Ekstensi typing.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6593,7 +6851,9 @@
   "abis": [],
   "description": "IANA timezone data.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6617,7 +6877,9 @@
   "abis": [],
   "description": "Transliterasi Unicode → ASCII.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6696,7 +6958,8 @@
   "works": [
    "BeautifulSoup(html)",
    "find/find_all",
-   "get_text"
+   "get_text",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "parsing super cepat (pakai lxml untuk itu)"
@@ -6828,7 +7091,9 @@
   "abis": [],
   "description": "Parsing RSS/Atom.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6911,7 +7176,9 @@
   "abis": [],
   "description": "WSGI server (Unix-only — sebagian fitur tidak jalan di Android).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6935,7 +7202,9 @@
   "abis": [],
   "description": "Parser HTML sesuai spesifikasi WHATWG.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6965,7 +7234,8 @@
   ],
   "works": [
    "Client sync & async",
-   "streaming response"
+   "streaming response",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "HTTP/2 di sebagian server (dependensi h2)"
@@ -7040,7 +7310,9 @@
   "abis": [],
   "description": "Template engine (dep Flask).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7056,7 +7328,7 @@
   "importName": "lxml",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -7072,7 +7344,8 @@
   ],
   "works": [
    "etree",
-   "html.fromstring"
+   "html.fromstring",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "fitur yang butuh libxslt versi khusus"
@@ -7149,7 +7422,9 @@
   "abis": [],
   "description": "jQuery-style HTML parsing (dep lxml).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7180,7 +7455,8 @@
   "works": [
    "requests.get/post",
    "session & header",
-   "HTTPS via certifi"
+   "HTTPS via certifi",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "proxies yang butuh auth system-level"
@@ -7308,7 +7584,9 @@
   "abis": [],
   "description": "SendGrid email API.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7332,7 +7610,9 @@
   "abis": [],
   "description": "Slack SDK.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7356,7 +7636,9 @@
   "abis": [],
   "description": "Stripe payment API.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7383,7 +7665,9 @@
   "works": [],
   "doesNotWork": [],
   "dependencies": [],
-  "risks": [],
+  "risks": [
+   "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
+  ],
   "smokeTest": null,
   "license": "",
   "publisher": "",
@@ -7404,7 +7688,9 @@
   "abis": [],
   "description": "Web framework non-blocking.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7433,7 +7719,8 @@
   ],
   "works": [
    "tqdm(range(...))",
-   "write() untuk log"
+   "write() untuk log",
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [
    "GUI progress"
@@ -7484,7 +7771,9 @@
   "abis": [],
   "description": "Twitter/X API wrapper.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7508,7 +7797,9 @@
   "abis": [],
   "description": "Twilio API (SMS/voice).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7532,7 +7823,9 @@
   "abis": [],
   "description": "HTTP library berfitur lengkap (dep requests).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7580,7 +7873,9 @@
   "abis": [],
   "description": "WSGI server murni-Python (keluarga ZABACODE).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7604,7 +7899,9 @@
   "abis": [],
   "description": "WebSocket client/server.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7628,7 +7925,9 @@
   "abis": [],
   "description": "WSGI utility (dep Flask).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7644,7 +7943,7 @@
   "importName": "youtube_dl",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -7652,7 +7951,9 @@
   "abis": [],
   "description": "Download video (legal: hanya konten berizin).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7668,7 +7969,7 @@
   "importName": "yt_dlp",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -7676,7 +7977,9 @@
   "abis": [],
   "description": "Fork aktif youtube-dl.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7689,7 +7992,7 @@
  {
   "name": "argon2-cffi-bindings",
   "displayName": "argon2-cffi-bindings",
-  "importName": "argon2-cffi-bindings",
+  "importName": "_argon2_cffi_bindings",
   "category": "Security / Cryptography",
   "type": "native",
   "status": "COMPATIBLE",
@@ -7728,7 +8031,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7754,7 +8059,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7780,7 +8087,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7806,7 +8115,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7832,7 +8143,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7858,7 +8171,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7884,7 +8199,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7910,7 +8227,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7936,7 +8255,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7962,7 +8283,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7988,7 +8311,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8014,7 +8339,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8027,7 +8354,7 @@
  {
   "name": "google-crc32c",
   "displayName": "google-crc32c",
-  "importName": "google-crc32c",
+  "importName": "google_crc32c",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8066,7 +8393,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8079,7 +8408,7 @@
  {
   "name": "grpcio",
   "displayName": "grpcio",
-  "importName": "grpcio",
+  "importName": "grpc",
   "category": "Web / API / Networking",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8118,7 +8447,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8144,7 +8475,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8160,7 +8493,7 @@
   "importName": "lameenc",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": "1.7.0",
   "python": [
    "3.11"
@@ -8171,7 +8504,9 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh libmp3lame.so — tidak ada wheel/pustaka ARMv7 di indeks mana pun."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -8183,7 +8518,7 @@
  {
   "name": "lru-dict",
   "displayName": "lru-dict",
-  "importName": "lru-dict",
+  "importName": "lru",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8274,7 +8609,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8300,7 +8637,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8326,7 +8665,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8352,7 +8693,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8378,7 +8721,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8391,7 +8736,7 @@
  {
   "name": "pycryptodomex",
   "displayName": "pycryptodomex",
-  "importName": "pycryptodomex",
+  "importName": "Cryptodome",
   "category": "Security / Cryptography",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8443,7 +8788,7 @@
  {
   "name": "pyerfa",
   "displayName": "pyerfa",
-  "importName": "pyerfa",
+  "importName": "erfa",
   "category": "Data / Math / Science",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8469,7 +8814,7 @@
  {
   "name": "pynacl",
   "displayName": "pynacl",
-  "importName": "pynacl",
+  "importName": "nacl",
   "category": "Security / Cryptography",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8498,7 +8843,7 @@
   "importName": "pyproj",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": "3.6.1",
   "python": [
    "3.11"
@@ -8509,7 +8854,9 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh libproj.so — chaquopy-proj tidak menyediakan build cp311 yang cocok."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -8521,7 +8868,7 @@
  {
   "name": "pywavelets",
   "displayName": "pywavelets",
-  "importName": "pywavelets",
+  "importName": "pywt",
   "category": "Data / Math / Science",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8547,7 +8894,7 @@
  {
   "name": "ruamel-yaml-clib",
   "displayName": "ruamel-yaml-clib",
-  "importName": "ruamel-yaml-clib",
+  "importName": "ruamel.yaml.clib",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8586,7 +8933,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8612,7 +8961,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8638,7 +8989,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8651,7 +9004,7 @@
  {
   "name": "typed-ast",
   "displayName": "typed-ast",
-  "importName": "typed-ast",
+  "importName": "typed_ast",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
   "status": "COMPATIBLE",
@@ -8690,7 +9043,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8716,7 +9071,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "ARMv7-import-verified 2026-08-16 (bionic311)"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8729,7 +9086,7 @@
  {
   "name": "zope-interface",
   "displayName": "zope-interface",
-  "importName": "zope-interface",
+  "importName": "zope.interface",
   "category": "Web / API / Networking",
   "type": "native",
   "status": "COMPATIBLE",

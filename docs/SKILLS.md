@@ -1217,3 +1217,35 @@ butuh tahu persis apa yang belum beres.
 **Referensi:** `PRD_ZCODE.md` · `RENCANA_BUILD_2.md` ·
 `ARMV7_COMPAT_2026_08_13.md` · `RISET_IDE_LAIN_2026_08_13.md` ·
 `RISET_REFERENSI_USER_2026_08_13.md` · `BANDING_ZABACODE_2026_08_13.md`
+
+---
+
+## SKILL 16 — Uji massal katalog di bionic311 (2026-08-16)
+
+**Konteks.** User meminta semua paket katalog diuji "prinsip coba-search-coba"
+sebelum fix. Full emulator = meriam (RAM 1.9GB sandbox tidak kuat 341×QEMU);
+senjata yang tepat = bionic311 (qemu-user + Python 3.11 Termux/bionic ARMv7).
+
+**Harness.** `/var/tmp/mass_test.py`: resolve (resolve.py PRODUKSI, abi
+armeabi-v7a + tested-manifest) -> download wheel -> extract -> preload lib*.so
+(smoke.preload_native_libs) -> import. Resume-safe via jsonl. 286 paket ±80
+menit, RAM stabil <1GB. Hasil diarsipkan: docs/mass-test-armv7-2026-08-16.jsonl.
+
+**Label hasil: ARMV7-IMPORT-VERIFIED (bionic311)** — di bawah DEVICE VERIFIED
+(tanpa JVM/Chaquopy), di atas "harusnya jalan".
+
+**ARTEFAK HARNESS YANG DIKENAL (JANGAN vonis paket berdasarkan ini):**
+1. `cannot import name '_adapters' from 'importlib_metadata'` — shadowing
+   backport tua di site-dir uji. Bukti bantahan: click gagal harness tapi
+   smoke OK di device user.
+2. `dlopen failed: libsqlite3/libexpat/libbz2/libssl_chaquopy/
+   libandroid-posix-semaphore` — lib sistem yang Chaquopy SEDIAKAN built-in
+   tapi Termux rootfs minimal tidak. Bukti: nltk & exifread gagal harness,
+   sukses device.
+3. `cannot locate symbol ffi_type_sint8` — libffi Termux != chaquopy-libffi.
+4. Setup wajib: LD_LIBRARY_PATH ke usr/lib; libffi_*_arm.deb; ln -s libz.so.1
+   libz.so (zlib zipfile).
+
+**Temuan NYATA dari uji ini:** 16 importName salah di katalog; Bug O baru
+(sympy/mpmath, aiohttp/yarl.Query); lameenc+pyproj = UNAVAILABLE jujur;
+7 paket dependency metadata bolong (docopt, traceback2, dst).
