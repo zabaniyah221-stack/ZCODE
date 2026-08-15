@@ -1,6 +1,7 @@
 package com.zaba.zcode.ui.settings
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -386,6 +387,37 @@ fun PipScreen(
         }
     }
 
+    // v1.0.18 ②: Detail = HALAMAN penuh yang menimpa layar (pola Samples
+    // level-2), bukan dialog card. BackHandler: Detail → daftar → keluar.
+    selectedPackage?.let { pkg ->
+        val analysis = detailsAnalysis ?: CompatibilityEngine.Analysis(pkg.status, emptyList(), pkg.status.installable())
+        BackHandler { selectedPackage = null }
+        PackageDetailScreen(
+            pkg = pkg,
+            analysis = analysis,
+            installedVersion = installedMap[pkg.name.lowercase().replace("_", "-")],
+            onBack = { selectedPackage = null },
+            onInstallTested = {
+                selectedPackage = null
+                val tv = pkg.testedVersion
+                if (tv != null) installFromLibrary("${pkg.name}==$tv") else installFromLibrary(pkg.name)
+            },
+            onInstall = {
+                selectedPackage = null
+                installFromLibrary(pkg.name)
+            },
+            onUninstall = {
+                selectedPackage = null
+                doUninstall(pkg.name.lowercase().replace("_", "-"))
+            },
+            onSupport = {
+                selectedPackage = null
+                doSupportRequest(pkg.name.lowercase().replace("_", "-"))
+            }
+        )
+        return
+    }
+
     Scaffold(
         topBar = {
             Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -520,32 +552,6 @@ fun PipScreen(
     }
 
     // ---- Package Details dialog (SPEC §11) ----
-    selectedPackage?.let { pkg ->
-        val analysis = detailsAnalysis ?: CompatibilityEngine.Analysis(pkg.status, emptyList(), pkg.status.installable())
-        PackageDetailsDialog(
-            pkg = pkg,
-            analysis = analysis,
-            installedVersion = installedMap[pkg.name.lowercase().replace("_", "-")],
-            onDismiss = { selectedPackage = null },
-            onInstallTested = {
-                selectedPackage = null
-                val tv = pkg.testedVersion
-                if (tv != null) installFromLibrary("${pkg.name}==$tv") else installFromLibrary(pkg.name)
-            },
-            onInstall = {
-                selectedPackage = null
-                installFromLibrary(pkg.name)
-            },
-            onUninstall = {
-                selectedPackage = null
-                doUninstall(pkg.name.lowercase().replace("_", "-"))
-            },
-            onSupport = {
-                selectedPackage = null
-                doSupportRequest(pkg.name.lowercase().replace("_", "-"))
-            }
-        )
-    }
 }
 
 // =====================================================================
@@ -596,10 +602,14 @@ private fun LibraryTab(
     onSelect: (PackageDetails) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
+        // v1.0.18: katalog di-hoist ke remember — loadCatalog() di body
+        // LazyColumn berisiko ke-invoke tiap recomposition (tiap keystroke
+        // search) di ARMv7; sekalian dipakai placeholder dinamis.
+        val allItems = remember { repository.loadCatalog() }
         OutlinedTextField(
             value = searchQuery,
             onValueChange = onSearchChange,
-            placeholder = { Text("Search 300 packages...", fontSize = 12.sp) },
+            placeholder = { Text("Search ${allItems.size} packages...", fontSize = 12.sp) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             shape = RoundedCornerShape(8.dp),
@@ -613,8 +623,14 @@ private fun LibraryTab(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
+        // v1.0.18: legend status — ikon tidak pernah dijelaskan di layar
+        Text(
+            "🟢 teruji · 🟡 harusnya jalan · 🧪 eksperimen · ❌ tidak bisa",
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+        )
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            val allItems = repository.loadCatalog()
             val filtered = if (searchQuery.isNotBlank()) {
                 repository.search(searchQuery)
             } else allItems
@@ -746,79 +762,239 @@ private fun statusIcon(status: PackageStatus, installed: Boolean): String = when
 // =====================================================================
 
 @Composable
-private fun PackageDetailsDialog(
+// =====================================================================
+// PACKAGE DETAIL — halaman penuh "kartu perpustakaan" (v1.0.18, ②).
+// Menggantikan AlertDialog lama: field bernomor bolong (1,6,7,9-10,14…)
+// adalah sisa penomoran SPEC yang bocor ke user (screenshot 2026-08-15).
+// Template 6 seksi 5W1H, keputusan user: glyph polos ✓/∆/✗ (bukan emoji,
+// konsisten RENCANA_UPDATE "ikon polos"), sumber inline TAP-ABLE (↗ →
+// Intent.ACTION_VIEW, pola AboutScreen), baris '· dikurasi <tanggal>'.
+// Entri belum dikurasi tetap layak: description lama + WHERE dari
+// works/doesNotWork/risks + "(belum dikurasi)".
+// =====================================================================
+
+@Composable
+private fun PackageDetailScreen(
     pkg: PackageDetails,
     analysis: CompatibilityEngine.Analysis,
     installedVersion: String?,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
     onInstallTested: () -> Unit,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
     onSupport: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column {
-                Text(pkg.displayName, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+    val ctx = LocalContext.current
+    fun openUrl(url: String) {
+        try {
+            ctx.startActivity(android.content.Intent(
+                android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        } catch (e: Exception) {
+            Toast.makeText(ctx, "Tidak ada browser untuk membuka tautan", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val statusColor = when (analysis.status) {
+        PackageStatus.INCOMPATIBLE, PackageStatus.UNAVAILABLE -> Color(0xFFB3261E)
+        PackageStatus.TESTED, PackageStatus.INSTALLED -> Color(0xFF2E7D32)
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val statusGlyph = when {
+        installedVersion != null -> "✓"
+        analysis.status == PackageStatus.TESTED -> "✓"
+        analysis.status == PackageStatus.INCOMPATIBLE ||
+            analysis.status == PackageStatus.UNAVAILABLE -> "✗"
+        else -> "∆"
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // ---- Topbar (pola SamplesScreen: ← + nama) ----
+        Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    "${pkg.name} · ${analysis.status.label}",
-                    fontSize = 12.sp,
-                    color = when (analysis.status) {
-                        PackageStatus.INCOMPATIBLE, PackageStatus.UNAVAILABLE -> Color(0xFFB3261E)
-                        PackageStatus.TESTED, PackageStatus.INSTALLED -> Color(0xFF2E7D32)
-                        else -> MaterialTheme.colorScheme.primary
-                    }
+                    "←", fontSize = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.clickable(onClick = onBack).padding(10.dp)
+                )
+                Text(
+                    pkg.displayName, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = 8.dp).weight(1f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    "$statusGlyph ${analysis.status.label}" +
+                        (pkg.testedVersion?.let { " · v$it" } ?: ""),
+                    fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.SemiBold
                 )
             }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .verticalScroll(rememberScrollState())
-                    .height(360.dp)
-            ) {
-                DetailField("1. What is it?", pkg.description)
-                if (pkg.useCases.isNotEmpty()) DetailField("2. Useful for", pkg.useCases.joinToString(", "))
-                if (pkg.works.isNotEmpty()) DetailField("4. Works in ZCODE", pkg.works.joinToString("; "))
-                if (pkg.doesNotWork.isNotEmpty()) DetailField("5. Doesn't work", pkg.doesNotWork.joinToString("; "))
-                if (analysis.reasons.isNotEmpty()) DetailField("6. Device compatibility", analysis.reasons.joinToString(" "))
-                DetailField("7. Tested / latest", pkg.testedVersion ?: "belum ditetapkan (ikuti resolusi)")
-                if (pkg.dependencies.isNotEmpty()) DetailField("8. Dependency plan", pkg.dependencies.joinToString(", "))
-                DetailField("9-10. Size", "Download & installed size terhitung saat resolusi (lihat console install).")
-                if (pkg.risks.isNotEmpty()) DetailField("12. Risks", pkg.risks.joinToString("; "))
-                if (pkg.doesNotWork.isNotEmpty()) DetailField("13. Limitations", pkg.doesNotWork.joinToString("; "))
-                DetailField("14. Publisher", pkg.publisher.ifBlank { "-" })
-                DetailField("15. Source", pkg.source)
-                DetailField("16. SHA-256", pkg.sha256 ?: "Diverifikasi saat install (dari PyPI/Chaquopy).")
-                DetailField("17. License", pkg.license.ifBlank { "-" })
-                DetailField("Category / type", "${pkg.category} · ${pkg.type} · Python ${pkg.python.joinToString("/")}" +
-                    (if (pkg.abis.isNotEmpty()) " · ABI ${pkg.abis.joinToString(",")}" else ""))
-            }
-        },
-        confirmButton = {
-            when {
-                installedVersion != null && analysis.status == PackageStatus.UPDATE_AVAILABLE ->
-                    TextButton(onClick = onInstallTested) { Text("Update") }
-                analysis.status == PackageStatus.TESTED ->
-                    TextButton(onClick = onInstallTested) { Text("Install Tested Version") }
-                analysis.status == PackageStatus.COMPATIBLE ->
-                    TextButton(onClick = onInstall) { Text("Install") }
-                analysis.status == PackageStatus.EXPERIMENTAL ->
-                    TextButton(onClick = onInstall) { Text("Install Experimental") }
-                analysis.status == PackageStatus.INCOMPATIBLE ->
-                    TextButton(onClick = onSupport) { Text("Kenapa? / Request Support") }
-                analysis.status == PackageStatus.UNAVAILABLE ->
-                    TextButton(onClick = onSupport) { Text("Request Support") }
-                analysis.status == PackageStatus.INSTALLED ->
-                    TextButton(onClick = onUninstall) { Text("Uninstall") }
-                else -> TextButton(onClick = onDismiss) { Text("Tutup") }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Tutup") }
         }
-    )
+
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .verticalScroll(rememberScrollState()).padding(16.dp)
+        ) {
+            // identitas ringkas
+            Text(
+                "${pkg.name} · ${pkg.type} · Python ${pkg.python.joinToString("/")}" +
+                    (if (installedVersion != null) " · terpasang v$installedVersion" else ""),
+                fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+
+            DetailSection("WHAT IS IT",
+                pkg.longDescription.ifBlank { pkg.description.ifBlank { "(belum dikurasi)" } },
+                pkg.sources.filter { it.untuk == "what" }, ::openUrl)
+
+            if (pkg.whyUse.isNotBlank() || pkg.useCases.isNotEmpty()) {
+                DetailSection("WHY USE IT",
+                    pkg.whyUse.ifBlank { pkg.useCases.joinToString(", ") },
+                    pkg.sources.filter { it.untuk == "why" }, ::openUrl)
+            }
+
+            if (pkg.example.isNotBlank()) {
+                Text("HOW TO USE", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.height(4.dp))
+                // Panel kode: hitam pekat DISENGAJA di semua tema (aturan panel
+                // terminal, bukan layar navigasi).
+                SelectionContainer {
+                    Text(
+                        pkg.example, fontFamily = FontFamily.Monospace, fontSize = 11.sp,
+                        lineHeight = 15.sp, color = Color(0xFF9AE6B4),
+                        modifier = Modifier.fillMaxWidth()
+                            .background(Color(0xFF050806), RoundedCornerShape(8.dp))
+                            .padding(10.dp)
+                    )
+                }
+                SourceChips(pkg.sources.filter { it.untuk == "how" }, ::openUrl)
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // WHERE — milik kita, dirakit dari works/doesNotWork/risks + analysis
+            Text("WHERE IT RUNS (ZCODE · ARMv7)", fontSize = 11.sp,
+                fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
+            if (analysis.reasons.isNotEmpty()) {
+                WhereLine("∆", analysis.reasons.joinToString(" "))
+            }
+            pkg.works.forEach { WhereLine("✓", it) }
+            pkg.risks.forEach { WhereLine("∆", it) }
+            pkg.doesNotWork.forEach { WhereLine("✗", it) }
+            if (pkg.works.isEmpty() && pkg.risks.isEmpty() && pkg.doesNotWork.isEmpty()
+                && analysis.reasons.isEmpty()) {
+                WhereLine("∆", "Belum diverifikasi di ZCODE — status ${analysis.status.label}.")
+            }
+            SourceChips(pkg.sources.filter { it.untuk == "where" }, ::openUrl)
+            Spacer(Modifier.height(12.dp))
+
+            if (pkg.whoMadeIt.isNotBlank() || pkg.publisher.isNotBlank() || pkg.license.isNotBlank()) {
+                DetailSection("WHO MADE IT",
+                    pkg.whoMadeIt.ifBlank {
+                        listOf(pkg.publisher, pkg.license).filter { it.isNotBlank() }.joinToString(" · ")
+                    },
+                    pkg.sources.filter { it.untuk == "who" }, ::openUrl)
+            }
+
+            // Belajar (ID) + sumber umum (source lama ikut tap-able di sini)
+            val learn = pkg.sources.filter { it.untuk == "learn-id" }
+            if (learn.isNotEmpty()) {
+                Text("BELAJAR (ID)", fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary)
+                SourceChips(learn, ::openUrl)
+                Spacer(Modifier.height(12.dp))
+            }
+            if (pkg.source.isNotBlank() && pkg.sources.isEmpty()) {
+                // entri belum dikurasi: link PyPI lama tetap tap-able
+                SourceChips(listOf(SourceRef("what",
+                    pkg.source.removePrefix("https://").removePrefix("http://").trimEnd('/'),
+                    pkg.source)), ::openUrl)
+                Spacer(Modifier.height(8.dp))
+            }
+
+            Text(
+                if (pkg.curatedAt.isNotBlank()) "· dikurasi ${pkg.curatedAt}"
+                else "· (belum dikurasi — bantu lengkapi lewat About & Contribute)",
+                fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // ---- Tombol aksi sticky (logika per-status pindah utuh dari dialog) ----
+        Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
+            Row(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
+                Spacer(Modifier.weight(1f))
+                when {
+                    installedVersion != null && analysis.status == PackageStatus.UPDATE_AVAILABLE ->
+                        TextButton(onClick = onInstallTested) { Text("Update", fontSize = 14.sp) }
+                    analysis.status == PackageStatus.TESTED ->
+                        TextButton(onClick = onInstallTested) { Text("Install Tested Version", fontSize = 14.sp) }
+                    analysis.status == PackageStatus.COMPATIBLE ->
+                        TextButton(onClick = onInstall) { Text("Install", fontSize = 14.sp) }
+                    analysis.status == PackageStatus.EXPERIMENTAL ->
+                        TextButton(onClick = onInstall) { Text("Install Experimental", fontSize = 14.sp) }
+                    analysis.status == PackageStatus.INCOMPATIBLE ->
+                        TextButton(onClick = onSupport) { Text("Kenapa? / Request Support", fontSize = 14.sp) }
+                    analysis.status == PackageStatus.UNAVAILABLE ->
+                        TextButton(onClick = onSupport) { Text("Request Support", fontSize = 14.sp) }
+                    analysis.status == PackageStatus.INSTALLED ->
+                        TextButton(onClick = onUninstall) { Text("Uninstall", fontSize = 14.sp) }
+                    else -> {}
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailSection(
+    title: String,
+    body: String,
+    sources: List<SourceRef>,
+    onOpen: (String) -> Unit
+) {
+    Text(title, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary)
+    Spacer(Modifier.height(2.dp))
+    SelectionContainer {
+        Text(body, fontSize = 13.sp, lineHeight = 18.sp,
+            color = MaterialTheme.colorScheme.onSurface)
+    }
+    SourceChips(sources, onOpen)
+    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun SourceChips(sources: List<SourceRef>, onOpen: (String) -> Unit) {
+    if (sources.isEmpty()) return
+    Row(modifier = Modifier.padding(top = 2.dp)) {
+        sources.take(3).forEach { s ->
+            Text(
+                "[${s.label} ↗]",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable { onOpen(s.url) }.padding(end = 8.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun WhereLine(glyph: String, text: String) {
+    Row(modifier = Modifier.padding(vertical = 1.dp)) {
+        Text(glyph, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            color = when (glyph) {
+                "✓" -> Color(0xFF2E7D32)
+                "✗" -> Color(0xFFB3261E)
+                else -> Color(0xFFB08A00)
+            })
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 12.sp, lineHeight = 16.sp,
+            color = MaterialTheme.colorScheme.onSurface)
+    }
 }
 
 @Composable

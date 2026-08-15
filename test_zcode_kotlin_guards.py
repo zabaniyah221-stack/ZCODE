@@ -3021,3 +3021,51 @@ class TestInstallCancelV1018:
             "tombol Batalkan harus hidup juga selama fase install"
         )
         assert "requestInstallCancel" in src
+
+
+class TestPackageDetailScreenV1018:
+    """② Batch A: Detail = halaman penuh 'kartu perpustakaan', bukan dialog.
+
+    Kelas kesalahan yang dijaga: (1) kembali ke AlertDialog bernomor bolong,
+    (2) sumber tidak tap-able, (3) glyph kembali jadi emoji di kartu,
+    (4) skema kurasi hilang dari PackageDetails, (5) loadCatalog balik
+    ke body LazyColumn (parse per keystroke di ARMv7).
+    """
+
+    def test_dialog_lama_diganti_layar(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "PackageDetailScreen(" in src, "layar Detail penuh hilang"
+        assert "PackageDetailsDialog" not in src, (
+            "dialog card lama kembali — field bernomor bolong bocor ke user"
+        )
+        assert "BackHandler { selectedPackage = null }" in src, (
+            "back-press di Detail harus kembali ke daftar, bukan keluar layar"
+        )
+
+    def test_sumber_tap_able(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "SourceChips" in src
+        i = src.find("fun SourceChips")
+        blok = src[i:i + 800]
+        assert "clickable { onOpen(s.url) }" in blok, "chip sumber tidak bisa di-tap"
+        assert "ACTION_VIEW" in src, "tap sumber harus membuka browser (pola AboutScreen)"
+
+    def test_where_pakai_glyph_polos(self):
+        src = read(UI / "settings/PipScreen.kt")
+        i = src.find("fun WhereLine")
+        assert i > 0, "WhereLine hilang"
+        blok = src[i:i + 600]
+        for g in ('"✓"', '"✗"'):
+            assert g in blok, "glyph polos %s hilang dari WhereLine" % g
+
+    def test_skema_kurasi_ada(self):
+        src = read(APP / "core/packageengine/PackageDetails.kt")
+        for f in ("longDescription", "whyUse", "example", "whoMadeIt",
+                  "sources", "curatedAt", "data class SourceRef"):
+            assert f in src, "field kurasi %s hilang dari skema" % f
+
+    def test_load_catalog_di_remember(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "remember { repository.loadCatalog() }" in src, (
+            "loadCatalog kembali dipanggil per recomposition (ARMv7)"
+        )
