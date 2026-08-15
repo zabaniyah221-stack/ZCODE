@@ -7,6 +7,14 @@ sebelum menambah fitur (VPP, folding, bracket auto-close, multi-bahasa, dll).
 
 Lihat juga `docs/MIGRASI_CM6.md` untuk sejarah migrasi Ace → CodeMirror 6.
 
+> **RALAT 2026-08-15.** Audit ulang terhadap `editor.js` menemukan dokumen ini
+> tertinggal dari kode: **foldGutter, closeBrackets, dan
+> highlightSelectionMatches sudah AKTIF** (F1.7/F1.8 + batch folding) padahal
+> §3 lama masih menandainya "belum". Tabel di bawah sudah diralat. Ditambah
+> §3b: kandidat baru hasil riset ekosistem CM6 (official
+> `codemirror.net/docs/extensions` + community Replit). Pelajaran: peta wajib
+> di-sync setiap kali `buildState()` berubah — kode selalu menang atas dokumen.
+
 ---
 
 ## 1. Konteks teknis
@@ -40,6 +48,10 @@ Lihat juga `docs/MIGRASI_CM6.md` untuk sejarah migrasi Ace → CodeMirror 6.
 | Line wrapping | aktif (konfigurasi view) |
 | Autocomplete (kasta 1+2, offline) | `autcompletion()` — kata dokumen + keyword + builtins + snippet |
 | Find/Replace (panel bawaan) | `search()`, `searchKeymap`, `openSearchPanel` |
+| **Code folding** (ralat 2026-08-15) | `foldGutter()` + `foldKeymap` — AKTIF di `buildState()` |
+| **Close brackets** (F1.7, ralat 2026-08-15) | `closeBrackets()` via `closeBracketsCompartment` — toggle Settings via bridge `setCloseBrackets()` |
+| **Selection match highlight** (F1.8, ralat 2026-08-15) | `highlightSelectionMatches()` via Compartment — toggle via bridge `setHighlightSelectionMatches()` |
+| Font family dinamis | `fontFamilyCompartment` — bridge `setFontFamily()` dari Settings |
 | Tema OLED fixed | `EditorView.theme({...})` + `HighlightStyle` |
 | Bridge Kotlin↔JS | `setCode`, `getCode`, `insertText`, `undo`, `redo`, `duplicateRows`, `toggleCommentLines`, `onEditorReady`, `ZCODE.onCodeChange`, `openFind`, `gotoLine(n)` |
 
@@ -49,27 +61,65 @@ Kontrak bridge dipertahankan 1:1 dengan versi Ace (lihat `MIGRASI_CM6.md §3`).
 
 ## 3. Fitur yang BELUM dipakai (peluang & catatan)
 
-| Fitur | Paket CM6 | Status di ZCODE | Catatan |
+> Ralat 2026-08-15: baris lama "Code Folding / Close brackets / Selection match
+> = belum" DIHAPUS — ketiganya sudah aktif (lihat §2). Tabel ini sekarang hanya
+> berisi yang benar-benar belum ada, diperluas hasil riset ekosistem
+> (codemirror.net/docs/extensions + changelog + community Replit dkk).
+
+### 3a. NOL dependensi baru — modul sudah di-vendor, tinggal import + rebuild
+
+Semua baris ini ada di paket yang SUDAH ada di `package.json` (meta-paket
+`codemirror` membawa `@codemirror/view`, `commands`, `language`, `search`);
+esbuild men-tree-shake yang tidak diimpor, jadi biaya = beberapa KB bundle.
+
+| Fitur | Sumber | Nilai untuk ZCODE | Prioritas |
 |---|---|---|---|
-| **Lint / Problems** | `@codemirror/lint` | **Belum diimpor** | Fondasi untuk VPP (lihat `VPP_DESIGN.md` Opsi B); butuh sumber diagnostic (Lezer/Checker/pyflakes) |
-| **Code Folding** | `@codemirror/language` (`foldGutter`) | **Sengaja OFF** | Disebut eksplisit `showFoldWidgets: false` / `foldGutter` tidak dipasang. **VS Code punya, ZCODE belum** — kandidat TOOLS |
-| **Close brackets** | `@codemirror/autocomplete` (`closeBrackets`) | **Belum diaktifkan** | Sudah ada di dependensi autocomplete — **TRIVIAL** tinggal pasang |
-| **Selection match highlight** | `@codemirror/search` (`highlightSelectionMatches`) | **Belum** | Style `.cm-selectionMatch` sudah ada di tema tapi "nganggur" — **TRIVIAL** |
-| **Highlight active word** | `@codemirror/view` | Belum | Opsional |
-| **Multi-bahasa** | `@codemirror/lang-*` | **Hanya Python** | Butuh tambah dependensi + `Compartment` untuk ganti bahasa; **memperbesar bundle** (bertentangan dengan "ramping") |
-| **Banyak tema / theme switch** | `EditorView.theme` + `Compartment` | **1 tema fixed OLED** | Editor theme ikut app theme butuh `Compartment.set` + bridge `setTheme` + rebuild; **membatalkan** lock "selalu true-black OLED" bila tidak hati-hati |
-| **Keymap ekstra (Vim/Emacs)** | `@codemirror/commands` dll | Tidak | Tidak prioritas |
+| **`highlightSpecialChars`** | `@codemirror/view` | Menampakkan karakter siluman (NBSP, zero-width, tab nyasar) — sumber `IndentationError`/`SyntaxError` misterius saat user copas kode dari chat/web. Kelas bug pemula #1 di Python | **TINGGI** |
+| **`highlightTrailingWhitespace`** | `@codemirror/view` (≥6.7.0) | Pasangan visual "Auto Trim on Run" — user LIHAT spasi buntut sebelum trim menghapusnya | TINGGI |
+| **`deleteTrailingWhitespace`** | `@codemirror/commands` | Perintah siap pakai untuk aksi **"Trim Now"** (F1.9 TOOLS_CATALOG) — tidak perlu tulis sendiri | TINGGI |
+| **`placeholder`** | `@codemirror/view` | Hint saat dokumen kosong (`# tulis kode Python di sini…`) — onboarding pemula, gratis | SEDANG |
+| **`scrollPastEnd`** | `@codemirror/view` | Baris terakhir bisa discroll ke atas viewport — penting di HP karena keyboard menutupi 40% layar bawah | SEDANG |
+| **`highlightWhitespace`** | `@codemirror/view` (≥6.7.0) | Render semua spasi/tab sebagai titik — berguna untuk debug indentasi, tapi bising; kalau dipasang HARUS toggle (default OFF). Sejak view 6.34.0 pakai CSS background (murah) | RENDAH (toggle) |
+| **`hoverTooltip` / `tooltips`** | `@codemirror/view` | Baru bernilai bila ada sumber konten (signature/doc dari jedi — lihat backlog kasta 3). Catat, jangan pasang duluan | NANTI (nunggu jedi) |
+| **`phrases`** | `@codemirror/state` | i18n teks UI editor — panel Find/Replace bisa **berbahasa Indonesia** ("Cari", "Ganti", "Semua") konsisten dengan bahasa app | SEDANG (unik!) |
+
+### 3b. Dependensi BARU kecil — dievaluasi ketat (aturan ramping §6)
+
+| Fitur | Paket | Nilai untuk ZCODE | Catatan risiko |
+|---|---|---|---|
+| **Lint / Problems** | `@codemirror/lint` (`linter`, `lintGutter`, `lintKeymap`) | Fondasi **VPP** (`VPP_DESIGN.md` Opsi B): squiggle + ikon gutter dari `Checker.kt`/pyflakes | Paket official, kecil. Satu-satunya gap "ditunggu" yang tersisa |
+| **Indentation markers** | `@replit/codemirror-indentation-markers` | Garis vertikal level indent — Python hidup-mati oleh indentasi; di layar sempit + font kecil ini penyelamat. Dipakai produksi Replit | Set `highlightActiveBlock: false` (opsi resmi utk performa). Dampak WebView ARMv7 = **UNTESTED**, ukur di full emulator dulu |
+| **Wrapped line indent** | `codemirror-wrapped-line-indent` (npm, 0 deps) | ZCODE pakai `lineWrapping` — baris panjang yang wrap saat ini jatuh ke kolom 0, merusak persepsi struktur indentasi Python. Extension ini membuat sambungan wrap ikut level indent | Paket komunitas kecil (MIT). Alternatif: gist "awesome-line-wrapping" (vendor manual). Uji performa dokumen panjang |
+| **Rainbow brackets** | `eriknewland/rainbowbrackets` | Warna kurung per kedalaman — nilai kecil untuk Python (jarang nesting dalam); `bracketMatching` sudah cukup | RENDAH; penulisnya sendiri bilang eksperimental. Lewati kecuali diminta user |
+
+### 3c. Ditolak sadar / tidak relevan (dengan alternatif ZCODE)
+
+| Fitur ekosistem | Kenapa tidak | Alternatif yang sudah ada |
+|---|---|---|
+| **LSP via WebSocket** (`codemirror-languageserver`) | Butuh server + socket; salah arsitektur untuk in-process Android | Jedi via bridge PyCall (backlog kasta 3) — hasil sama tanpa server |
+| **Minimap** (`@replit/codemirror-minimap`) | Ditolak PRD §7: makan layar & daya HP ampas | gotoLine + Find + (nanti) Outline dari AST |
+| **Multi-bahasa** (`@codemirror/lang-*`) | Bundle bengkak; ZCODE Python-first | 1 bahasa, dipin |
+| **Theme packs** (`@uiw/codemirror-theme-*` 40+) | Lock true-black OLED (daya + keterbacaan) adalah keputusan | Palet ANSI di terminal, bukan di editor |
+| **Vim/Emacs/VSCode keymap** (`@replit/*`) | Layar sentuh tanpa Ctrl/Esc fisik | EDITOR HANDLE + sticky CTRL |
+| **Emmet** (`@emmetio/codemirror6-plugin`) | HTML/CSS-centric | Snippet Python di autocomplete kasta 1+2 |
+| **Interact / drag angka** (`@replit/codemirror-interact`) | Butuh hold **Alt** + drag = gestur desktop, mustahil di sentuh | — (tidak dibutuhkan) |
+| **Collab & Merge** (`@codemirror/collab`, `merge`) | Butuh server sinkronisasi / workflow desktop | Di luar visi ZCODE |
+| **`crosshairCursor`** | Perilaku tombol Alt + mouse | — |
 
 ---
 
-## 4. Estimasi pemanfaatan
+## 4. Estimasi pemanfaatan (diralat 2026-08-15)
 
-- **~75–80% kapabilitas inti yang relevan** untuk editor Python mobile sudah
-  dipakai (highlight, edit, sejarah, bracket, indent, find/replace, autocomplete).
-- **~15–25% ekosistem paket** yang dieksploitasi (3 dari sekian banyak paket
-  `@codemirror/*`; 1 bahasa; 1 tema).
-- Yang **paling relevan dengan VPP** = `@codemirror/lint` yang belum dipakai;
-  ZCODE saat ini mengandalkan `Checker.kt` sendiri (scanner 1 error).
+- **~90% kapabilitas inti yang relevan** untuk editor Python mobile sudah
+  dipakai (highlight, edit, sejarah, bracket, indent, find/replace,
+  autocomplete, folding, close-brackets, selection-match, Compartment toggles).
+- Gap fungsional tersisa dua kelas saja:
+  1. **`@codemirror/lint`** — fondasi VPP, satu-satunya modul official
+     bernilai tinggi yang belum diimpor (ZCODE masih `Checker.kt` sendiri).
+  2. **Quick win §3a** — modul yang sudah di-vendor tapi belum diimpor
+     (`highlightSpecialChars`, `highlightTrailingWhitespace`,
+     `deleteTrailingWhitespace`, `placeholder`, `scrollPastEnd`, `phrases`).
+- Fitur ekosistem lain absen **karena ditolak sadar** (§3c), bukan karena lupa.
 
 ---
 
@@ -78,8 +128,9 @@ Kontrak bridge dipertahankan 1:1 dengan versi Ace (lihat `MIGRASI_CM6.md §3`).
 - Kursor/drop cursor berwarna hijau neon (`#39FF14`) — nuansa retro fosfor.
 - Ada gaya spesifik untuk panel Find/Replace (anti "gelap-di-gelap") dan
   `.cm-searchMatch` / `.cm-searchMatch-selected`.
-- Gaya `.cm-selectionMatch` **sudah didefinisikan** namun belum ada ekstensi
-  yang menandainya (kandidat "selection match" murah).
+- Gaya `.cm-selectionMatch` sudah didefinisikan **dan sejak F1.8 sudah
+  dipakai** oleh `highlightSelectionMatches()` (ralat 2026-08-15; catatan lama
+  "nganggur" tidak berlaku lagi).
 - Lihat `TERMINAL_THEMES.md` untuk palet yang terkoordinasi dengan tema app.
 
 ---
