@@ -108,6 +108,10 @@ fun PipScreen(
     // Console dalam kotak kedua yang merebut setengah layar; jejak forensik
     // permanen sudah menjadi tugas Diagnostics (breadcrumb PKG_*).
     var consoleLines by remember { mutableStateOf(initialConsole()) }
+    // v1.0.18: antrian requirements.txt multi-baris. Paste beberapa baris
+    // tidak lagi dibuang ke baris pertama saja — sisanya mengantre dan
+    // diproses berurutan begitu engine idle (pop-on-dispatch, anti-loop).
+    var installQueue by remember { mutableStateOf(listOf<String>()) }
     var pendingRiskyReq by remember { mutableStateOf<String?>(null) }
     var pendingRiskyReason by remember { mutableStateOf("") }
     var pendingRiskyPlan by remember { mutableStateOf<DependencyResolver.ResolvePlan?>(null) }
@@ -335,6 +339,21 @@ fun PipScreen(
         }
     }
 
+
+    // Dispatcher antrian requirements.txt (v1.0.18): saat engine idle dan
+    // antrian berisi, ambil item berikutnya. Risky-dialog otomatis menahan
+    // antrian (isInstalling masih true selama dialog tampil). Item di-pop
+    // SEBELUM dieksekusi sehingga item gagal tidak mengulang selamanya.
+    LaunchedEffect(installQueue, isInstalling, isAnalyzing, isCancelling) {
+        if (installQueue.isNotEmpty() && !isInstalling && !isAnalyzing && !isCancelling) {
+            val next = installQueue.first()
+            installQueue = installQueue.drop(1)
+            packageName = next
+            appendLog("\n> antrian: $next (${installQueue.size} tersisa)\n")
+            analyzeThenInstall(next)
+        }
+    }
+
     fun installFromLibrary(req: String) {
         if (isInstalling) return
         activeTab = "MANUAL"
@@ -441,7 +460,11 @@ fun PipScreen(
                     onInstall = { analyzeThenInstall(packageName) },
                     onCancel = { cancelCurrentAnalyze() },
                     onRequirementsTxt = {
-                        appendLog("\nℹ️ requirements.txt: buka file di editor lalu salin barisnya ke sini.\n")
+                        appendLog("\nℹ️ requirements.txt: salin SEMUA isinya lalu tap Paste — semua baris akan diinstall berurutan (komentar # dilewati).\n")
+                    },
+                    onQueueLines = { lines ->
+                        installQueue = installQueue + lines
+                        appendLog("\nℹ️ ${lines.size} requirement masuk antrian. Tap Install untuk memulai.\n")
                     },
                     consoleLines = consoleLines,
                     consoleScroll = consoleScroll
@@ -825,6 +848,7 @@ private fun ManualTab(
     onInstall: () -> Unit,
     onCancel: () -> Unit,
     onRequirementsTxt: () -> Unit,
+    onQueueLines: (List<String>) -> Unit,
     consoleLines: List<ConsoleLine>,
     consoleScroll: androidx.compose.foundation.ScrollState
 ) {
@@ -908,16 +932,21 @@ private fun ManualTab(
                     if (teks.isEmpty()) {
                         Toast.makeText(ctx, "Clipboard kosong", Toast.LENGTH_SHORT).show()
                     } else {
-                        // Ambil baris pertama saja: menempelkan seluruh isi
-                        // requirements.txt ke field satu-baris hanya membuat
-                        // parser gagal dengan pesan yang membingungkan.
-                        val baris = teks.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty().trim()
+                        // v1.0.18: multi-baris TIDAK dibuang lagi. Baris pertama
+                        // mengisi field; sisanya (bukan komentar/#) ditawarkan
+                        // sebagai ANTRIAN install berurutan lewat onQueueLines.
+                        val bersih = teks.lineSequence()
+                            .map { it.trim() }
+                            .filter { it.isNotEmpty() && !it.startsWith("#") }
+                            .toList()
+                        val baris = bersih.firstOrNull().orEmpty()
                         onPackageNameChange(baris)
-                        if (teks.lines().count { it.isNotBlank() } > 1) {
+                        if (bersih.size > 1) {
+                            onQueueLines(bersih.drop(1))
                             Toast.makeText(
                                 ctx,
-                                "Beberapa baris terdeteksi — hanya baris pertama dipakai",
-                                Toast.LENGTH_SHORT
+                                "${bersih.size} requirement terdeteksi — sisanya masuk antrian setelah Install",
+                                Toast.LENGTH_LONG
                             ).show()
                         }
                     }

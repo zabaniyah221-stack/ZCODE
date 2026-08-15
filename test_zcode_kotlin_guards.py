@@ -1295,16 +1295,35 @@ class TestPasteRequirement:
             "paste dari clipboard kosong menimpa isi field tanpa penjelasan"
         )
 
-    def test_paste_hanya_ambil_baris_pertama(self):
-        """Menempelkan seluruh requirements.txt ke field satu-baris membuat
-        parser gagal dengan pesan yang membingungkan."""
+    def test_paste_multibaris_masuk_antrian(self):
+        """v1.0.18: multi-baris TIDAK dibuang lagi (perilaku lama: hanya
+        baris pertama). Baris pertama mengisi field; sisanya jadi antrian
+        install berurutan; komentar '#' dilewati; field tetap satu-baris
+        (parser tidak pernah menerima teks multi-baris mentah)."""
         src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
         i = src.find('"Paste"')
-        jendela = src[max(0, i - 1800):i + 200]
-        assert re.search(r"lineSequence\(\)\s*\.\s*firstOrNull", jendela), (
-            "isi clipboard dipakai mentah-mentah; kata 'lines()' saja tidak "
-            "cukup karena masih muncul di cabang peringatan multi-baris "
-            "(bocor uji mutasi 2026-08-13)"
+        jendela = src[max(0, i - 2600):i + 200]
+        assert re.search(r"lineSequence\(\)", jendela), (
+            "clipboard dipakai mentah-mentah tanpa dipecah per baris"
+        )
+        assert 'startsWith("#")' in jendela, "komentar requirements.txt tidak dilewati"
+        assert "onQueueLines" in jendela, (
+            "baris ke-2 dst dibuang — kembali ke perilaku pra-v1.0.18"
+        )
+        assert "firstOrNull" in jendela, "field harus tetap diisi satu baris saja"
+
+    def test_dispatcher_antrian_pop_sebelum_eksekusi(self):
+        """Item antrian di-pop SEBELUM dieksekusi — item yang gagal tidak
+        boleh mengulang dirinya selamanya (anti-loop)."""
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        i = src.find("installQueue.first()")
+        assert i > 0, "dispatcher antrian hilang"
+        blok = src[i:i + 400]
+        eksekusi = blok.find("analyzeThenInstall(")
+        pop = blok.find("installQueue.drop(1)")
+        assert 0 < pop < eksekusi, (
+            "drop(1) harus terjadi SEBELUM analyzeThenInstall — kalau tidak, "
+            "item gagal berputar selamanya"
         )
 
 
