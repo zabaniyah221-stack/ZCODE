@@ -650,5 +650,59 @@
  ],
  "mypy": [
   "1.18.2"
+ ],
+ "websockets": [
+  "17.0.1"
+ ],
+ "pendulum": [
+  "3.2.0"
+ ],
+ "pyzipper": [
+  "0.4.0"
+ ],
+ "sqlalchemy": [
+  "2.0.52"
+ ],
+ "stripe": [
+  "15.5.0"
+ ],
+ "sendgrid": [
+  "6.12.5"
+ ],
+ "optuna": [
+  "4.9.0"
+ ],
+ "isort": [
+  "8.0.1"
+ ],
+ "apscheduler": [
+  "3.11.3"
+ ],
+ "bokeh": [
+  "3.9.2"
+ ],
+ "astropy": [
+  "6.0.0"
+ ],
+ "bitarray": [
+  "2.8.2"
+ ],
+ "wordcloud": [
+  "1.9.2"
+ ],
+ "pycocotools": [
+  "2.0.7"
+ ],
+ "argon2-cffi": [
+  "20.1.0"
+ ],
+ "lxml": [
+  "5.3.0"
+ ],
+ "quantities": [
+  "0.16.4"
+ ],
+ "seaborn": [
+  "0.13.2"
  ]
 }

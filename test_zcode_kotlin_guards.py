@@ -3163,7 +3163,13 @@ class TestKelengkapanKatalogV1018:
     def test_batu_sandungan_punya_alternatif(self):
         d = self._cat()
         byname = {p["name"]: p for p in d}
-        for n in ("scipy", "tensorflow", "konlpy", "transformers", "lameenc"):
+        # lameenc DIKELUARKAN dari daftar ini 2026-08-17: vonis lama salah
+        # diagnosa (wheel cp311 armv7 ada; akarnya host-dep chaquopy-lame
+        # tak tertarik instal-pertama = kelas Bug Q, kini difix +
+        # ARMV7-IMPORT-VERIFIED bionic311). Gantinya moviepy — mustahil
+        # permanen (imageio-ffmpeg wajib saat import, wheel binary ffmpeg
+        # hanya macos/linux/win).
+        for n in ("scipy", "tensorflow", "konlpy", "transformers", "moviepy"):
             p = byname.get(n)
             if not p:
                 continue

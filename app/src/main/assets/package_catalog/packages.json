@@ -457,8 +457,8 @@
   "importName": "openai",
   "category": "AI / ML / NLP",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.35.0",
   "python": [
    "3.11"
   ],
@@ -466,7 +466,9 @@
   "description": "OpenAI API client (butuh internet + kunci).",
   "useCases": [],
   "works": [
-   "CATATAN: instal dengan pin `openai==1.35.0` (deps era pydantic v1 murni-Python); versi terbaru butuh pydantic-core Rust yang tak ber-wheel ARMv7"
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v1.35.0 instal+smoke OK",
+   "CATATAN: instal dengan pin `openai==1.35.0` (deps era pydantic v1 murni-Python); versi terbaru butuh pydantic-core Rust yang tak ber-wheel ARMv7",
+   "Pin 1.35.0 + pydantic 1.10.19 terbukti di device 2026-08-17 (instal 02:07, 12 paket deps OK)"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1063,8 +1065,8 @@
   "importName": "apscheduler",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.11.3",
   "python": [
    "3.11"
   ],
@@ -1072,6 +1074,7 @@
   "description": "Scheduler advanced.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v3.11.3 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -1358,7 +1361,7 @@
   "importName": "docker",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "INCOMPATIBLE",
+  "status": "COMPATIBLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1366,8 +1369,12 @@
   "abis": [],
   "description": "Butuh Docker daemon — out of scope ZCODE.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "Naik kelas 2026-08-17: docker 7.2.0 = pure wheel, deps hanya requests+urllib3 (dua-duanya TESTED). Import & pembuatan client terverifikasi sandbox. Ini CLIENT library: bisa mengendalikan Docker daemon REMOTE via tcp:// (mis. server di LAN/VPS)."
+  ],
+  "doesNotWork": [
+   "Tidak ada Docker daemon di Android — operasi lokal (docker.from_env) akan gagal koneksi. Hanya berguna dengan daemon remote via DockerClient(base_url='tcp://host:2375')."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -1451,6 +1458,7 @@
    "ALTERNATIF: pygithub (DEVICE TESTED) untuk operasi GitHub via API"
   ],
   "doesNotWork": [
+   "Wheel 3.1.59 pure ADA — tapi IMPORT LANGSUNG GAGAL tanpa binary git ('Bad git executable', uji sandbox 2026-08-17). Tidak akan lolos smoke test ZCODE.",
    "Butuh binary `git` di sistem — tidak ada di Android (error device: 'Bad git executable')."
   ],
   "dependencies": [],
@@ -1524,8 +1532,8 @@
   "importName": "isort",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.0.1",
   "python": [
    "3.11"
   ],
@@ -1533,6 +1541,7 @@
   "description": "Import sorter.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v8.0.1 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -2107,8 +2116,8 @@
   "importName": "bokeh",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.9.2",
   "python": [
    "3.11"
   ],
@@ -2116,6 +2125,7 @@
   "description": "Visualisasi interaktif berbasis browser.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v3.9.2 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -2187,7 +2197,7 @@
   "importName": "cvxpy",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2195,8 +2205,12 @@
   "abis": [],
   "description": "Optimisasi convex (dependensi berat).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: pulp TIDAK bisa juga (solver x86) — utk optimasi ringan gunakan scipy-free: implementasi simplex manual atau optuna (TESTED) utk hyperparameter search"
+  ],
+  "doesNotWork": [
+   "cvxpy butuh osqp/scs/scipy — semua C/C++ tanpa wheel ARMv7 (log device 2026-08-17: COMPATIBILITY fail di osqp)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -2945,15 +2959,17 @@
   "importName": "optuna",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.9.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Hyperparameter optimization modern.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v4.9.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3310,6 +3326,7 @@
    "ALTERNATIF: tulis model + ekspor .lp, selesaikan di mesin lain"
   ],
   "doesNotWork": [
+   "Wheel pure ADA & instal kini bersih (Bug U fix EACCES), tapi solver CBC yang dibundel = binary x86 — tidak akan pernah jalan di ARM. Vonis dikunci user 2026-08-17 tanpa perlu re-test.",
    "Terpasang, tetapi solver CBC bawaan adalah binary linux x86 (solverdir/cbc/linux/i32) — tidak bisa dieksekusi di Android ARM."
   ],
   "dependencies": [],
@@ -3457,8 +3474,8 @@
   "importName": "quantities",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.16.4",
   "python": [
    "3.11"
   ],
@@ -3466,6 +3483,7 @@
   "description": "Unit & dimensi fisika.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v0.16.4 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -3489,7 +3507,8 @@
     "url": "http://python-quantities.readthedocs.io/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (python-quantities, maintainer ekosistem NumPy)"
  },
  {
   "name": "scikit-image",
@@ -3638,8 +3657,8 @@
   "importName": "seaborn",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.13.2",
   "python": [
    "3.11"
   ],
@@ -3647,6 +3666,7 @@
   "description": "Visualisasi statistik di atas matplotlib.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v0.13.2 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -3670,7 +3690,8 @@
     "url": "http://seaborn.pydata.org"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Michael Waskom (peneliti neurosains; dibangun di atas matplotlib)"
  },
  {
   "name": "simpy",
@@ -4575,7 +4596,7 @@
   "importName": "pickledb",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -4583,8 +4604,13 @@
   "abis": [],
   "description": "Key-value store sederhana.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: diskcache 5.6.3 (TESTED, pure, zero-deps) utk key-value persisten",
+   "ALTERNATIF: sqlite3 + json bawaan Python"
+  ],
+  "doesNotWork": [
+   "pickledb >=1.x butuh orjson (Rust, tanpa wheel ARMv7; log device 2026-08-17). Versi lama 0.9.x sdist-only."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -4814,8 +4840,8 @@
   "importName": "sqlalchemy",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.0.52",
   "python": [
    "3.11"
   ],
@@ -4823,6 +4849,7 @@
   "description": "ORM & SQL toolkit.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v2.0.52 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -4855,7 +4882,7 @@
   "importName": "sqlitedict",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -4863,8 +4890,13 @@
   "abis": [],
   "description": "Dict persisten di SQLite.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: diskcache 5.6.3 (TESTED) — API dict persisten di atas sqlite",
+   "ALTERNATIF: sqlite3 bawaan Python"
+  ],
+  "doesNotWork": [
+   "sqlitedict di PyPI sdist-only (tidak pernah merilis wheel; log device 2026-08-17: COMPATIBILITY fail). ZCODE wheel-only demi keamanan (tanpa eksekusi setup.py)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -4894,7 +4926,7 @@
   "importName": "sqlmodel",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -4902,8 +4934,13 @@
   "abis": [],
   "description": "SQLAlchemy + Pydantic.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: sqlalchemy 2.0.52 (TESTED 2026-08-17) untuk ORM penuh",
+   "ALTERNATIF: peewee 4.3.0 (TESTED) untuk ORM ringan"
+  ],
+  "doesNotWork": [
+   "sqlmodel 0.0.39 butuh pydantic>=2.11 (log device 2026-08-17: ModuleNotFoundError annotated_types), dan pydantic v2 mustahil di ARMv7 (pydantic-core = Rust, tanpa wheel). Pin pydantic kita 1.10.19 tidak kompatibel dgn sqlmodel modern."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -5689,7 +5726,7 @@
   "importName": "py7zr",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -5697,8 +5734,13 @@
   "abis": [],
   "description": "Baca/tulis 7z murni-Python.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: pyzipper 0.4.0 (TESTED 2026-08-17) utk ZIP terenkripsi AES",
+   "ALTERNATIF: zipfile/tarfile bawaan Python utk arsip umum"
+  ],
+  "doesNotWork": [
+   "py7zr terbaru butuh backports-zstd (C-ext tanpa wheel ARMv7; log device 2026-08-17: COMPATIBILITY fail)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -5820,7 +5862,9 @@
   "description": "Deteksi tipe file via libmagic (native). Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Wheel 0.4.27 pure ADA — tapi IMPORT LANGSUNG GAGAL tanpa libmagic.so sistem (dibuktikan sandbox 2026-08-17 dgn simulasi dlopen gagal: ImportError 'failed to find libmagic'). Android tidak punya libmagic."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -5892,8 +5936,8 @@
   "importName": "pyzipper",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.4.0",
   "python": [
    "3.11"
   ],
@@ -5901,6 +5945,7 @@
   "description": "ZIP dengan enkripsi AES (baca/tulis).",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v0.4.0 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -6659,7 +6704,9 @@
   "description": "Butuh windowing desktop. Tidak ada wheel cp311 armeabi-v7a di indeks Chaquopy.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Wheel 2.1.16 pure zero-deps ADA, import OK headless (uji sandbox 2026-08-17) — tapi 95% fungsi pyglet = window/OpenGL/display yang tidak ada di runtime ZCODE (NoSuchDisplayException). Badge jalan hanya akan menipu."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -7117,9 +7164,11 @@
   "abis": [],
   "description": "Perceptual image hashing (butuh Pillow).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "KANDIDAT v1.0.19: jika fitur deps-opsional lahir, ahash/dhash/whash bisa hidup parsial tanpa scipy"
+  ],
   "doesNotWork": [
-   "Butuh scipy — tidak tersedia di ARMv7."
+   "imagehash 4.3.2 declare deps scipy — scipy tanpa wheel ARMv7. TAPI riset 2026-08-17: scipy hanya dipakai phash/phash_simple (lazy import di dalam fungsi); ahash/dhash/whash sebenarnya hidup dgn numpy+pillow+PyWavelets (pywavelets cp311 armv7 ADA di toko Chaquopy). Kandidat fitur 'deps-opsional' v1.0.19 — sampai itu ada, resolver akan gagal di scipy."
   ],
   "dependencies": [],
   "risks": [],
@@ -7242,6 +7291,7 @@
    "ALTERNATIF: imageio (DEVICE TESTED) untuk baca/tulis frame"
   ],
   "doesNotWork": [
+   "moviepy 2.x WAJIB imageio-ffmpeg saat import (uji sandbox 2026-08-17: ModuleNotFoundError, bukan lazy import) dan imageio-ffmpeg hanya merilis wheel berisi binary ffmpeg utk macos/linux/win — tidak akan pernah ada versi Android. moviepy 1.x sdist-only. Rantai tertutup dari semua arah.",
    "Dependensi imageio-ffmpeg membundel binary ffmpeg — tidak tersedia utk Android."
   ],
   "dependencies": [],
@@ -7621,7 +7671,9 @@
   "description": "Wrapper tesseract — binary tidak tersedia di Android.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Wheel 0.3.13 pure ADA, import OK (uji sandbox 2026-08-17) — tapi setiap pemakaian butuh binary tesseract di PATH (TesseractNotFoundError). Binary tesseract Android tidak tersedia utk Chaquopy."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -7858,15 +7910,17 @@
   "importName": "argon2",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "20.1.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Argon2 (C extension).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v20.1.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8935,8 +8989,12 @@
   "abis": [],
   "description": "Static type checker (berat di device kecil).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "Pin manifest 1.18.2 (v1.0.18-polish): wheel py3-none-any murni, deps pure (typing-extensions/mypy-extensions/pathspec). Jalan sebagai interpreted mode — lebih lambat dari versi compiled PC, sabar di file besar (RAM 4GB). Status: riset metadata, menunggu tes device."
+  ],
+  "doesNotWork": [
+   "mypy>=1.19 menarik librt (C-ext mypyc, tanpa wheel ARMv7 — mypy.readthedocs.io/en/stable/changelog.html). Log device 2026-08-17: mypy 2.3.1 gagal COMPATIBILITY di librt."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -9371,7 +9429,7 @@
   "importName": "tox",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -9379,8 +9437,12 @@
   "abis": [],
   "description": "Test environment automation.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: jalankan pytest langsung (pytest-cov TESTED 2026-08-17 di device)"
+  ],
+  "doesNotWork": [
+   "KELAS SHADOWING STDLIB + mustahil-fundamental: (a) smoke gagal packaging.pylock krn packaging 24.1 beku APK menang di sys.modules (riset 2026-08-17, docs/RISET_SHADOWING_STDLIB.md); (b) lebih dasar: kerja tox = bikin virtualenv + spawn subprocess python — di Chaquopy tidak ada binary python utk di-spawn. Lolos import pun tak akan jalan."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -10039,15 +10101,17 @@
   "importName": "pendulum",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.2.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Datetime modern (pendulum sudah pure sejak 3.0).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v3.2.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -10162,8 +10226,8 @@
   "importName": "pydantic",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.10.19",
   "python": [
    "3.11"
   ],
@@ -10175,6 +10239,7 @@
    "API models"
   ],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v1.10.19 instal+smoke OK",
    "BaseModel",
    "validators",
    "JSON schema"
@@ -11558,8 +11623,8 @@
   "importName": "lxml",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "5.3.0",
   "python": [
    "3.11"
   ],
@@ -11573,6 +11638,7 @@
    "parsing XML/HTML cepat"
   ],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v5.3.0 instal+smoke OK",
    "etree",
    "html.fromstring",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
@@ -11888,7 +11954,9 @@
   "description": "Butuh browser + driver — di luar jangkauan Android in-process.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Wheel 4.47.0 pure-Python ADA dan import OK (uji sandbox 2026-08-17) — yang TIDAK ada di Android: browser + webdriver (chromedriver/geckodriver). Semua perintah butuh keduanya. Bukan masalah wheel, masalah dunia luar."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -11918,8 +11986,8 @@
   "importName": "sendgrid",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.12.5",
   "python": [
    "3.11"
   ],
@@ -11927,6 +11995,7 @@
   "description": "SendGrid email API.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v6.12.5 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -12001,8 +12070,8 @@
   "importName": "stripe",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "15.5.0",
   "python": [
    "3.11"
   ],
@@ -12010,6 +12079,7 @@
   "description": "Stripe payment API.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v15.5.0 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -12033,7 +12103,8 @@
     "url": "https://stripe.com/docs/api/?lang=python"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Stripe, Inc. (SDK resmi API pembayaran Stripe)"
  },
  {
   "name": "telegram",
@@ -12395,8 +12466,8 @@
   "importName": "websockets",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "17.0.1",
   "python": [
    "3.11"
   ],
@@ -12404,6 +12475,7 @@
   "description": "WebSocket client/server.",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v17.0.1 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -12600,7 +12672,7 @@
   "importName": "astropy",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "6.0.0",
   "python": [
    "3.11"
@@ -12611,6 +12683,7 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v6.0.0 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -12687,7 +12760,7 @@
   "importName": "bitarray",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "2.8.2",
   "python": [
    "3.11"
@@ -12698,6 +12771,7 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v2.8.2 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -13343,7 +13417,7 @@
   "importName": "lameenc",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "UNAVAILABLE",
+  "status": "COMPATIBLE",
   "testedVersion": "1.7.0",
   "python": [
    "3.11"
@@ -13354,12 +13428,10 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "SEMBUH v1.0.18-polish: vonis lama salah diagnosa — wheel cp311 armv7 ADA di toko Chaquopy; yang gagal adalah host-dep chaquopy-lame tak tertarik saat instal-pertama (kelas Bug Q). ARMV7-IMPORT-VERIFIED 2026-08-17 (bionic311: import lameenc 1.7.0 OK).",
    "ALTERNATIF: Alternatif: simpan WAV (stdlib wave), konversi di layanan/perangkat lain."
   ],
-  "doesNotWork": [
-   "Butuh libmp3lame.so — tidak ada wheel/pustaka ARMv7 di indeks mana pun (uji massal 2026-08-16).",
-   "Butuh libmp3lame.so — tidak ada wheel/pustaka ARMv7 di indeks mana pun."
-  ],
+  "doesNotWork": [],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -13695,7 +13767,7 @@
   "importName": "pycocotools",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "2.0.7",
   "python": [
    "3.11"
@@ -13706,6 +13778,7 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v2.0.7 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -13791,7 +13864,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "FIX v1.0.18-polish: host-dep chaquopy-curl-openssl-3 kini tertarik saat instal-pertama (kelas Bug Q; dulu gagal 'libcurl.so not found' di device 2026-08-17). ARMV7-IMPORT-VERIFIED bionic311: PycURL/7.45.2 libcurl/7.76.1 OpenSSL/3.0.18 import OK."
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13908,7 +13983,7 @@
   "importName": "pyproj",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "UNAVAILABLE",
+  "status": "COMPATIBLE",
   "testedVersion": "3.6.1",
   "python": [
    "3.11"
@@ -13919,6 +13994,7 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "SEMBUH v1.0.18-polish: vonis lama salah diagnosa — wheel cp311 armv7 ADA di toko Chaquopy; yang gagal adalah rantai host-dep chaquopy-proj-openssl-3 -> libtiff -> libjpeg tak tertarik saat instal-pertama (kelas Bug Q). ARMV7-IMPORT-VERIFIED 2026-08-17 (bionic311: import + transform EPSG:4326->3857 OK).",
    "ALTERNATIF: Alternatif: rumus haversine manual untuk jarak koordinat sederhana."
   ],
   "doesNotWork": [
@@ -14009,7 +14085,9 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Ini SUPPORT LIBRARY (hanya _ruamel_yaml.so), bukan modul utk diimpor langsung — log device 2026-08-17: ModuleNotFoundError 'ruamel'. Bukan bug: instal ruamel.yaml (0.19.1 kini pure-Python wheel)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -14214,7 +14292,7 @@
   "importName": "wordcloud",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.9.2",
   "python": [
    "3.11"
@@ -14225,6 +14303,7 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v1.9.2 instal+smoke OK",
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
   "doesNotWork": [],
@@ -14335,5 +14414,48 @@
    }
   ],
   "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+ },
+ {
+  "name": "virtualenv",
+  "displayName": "virtualenv",
+  "importName": "virtualenv",
+  "category": "Dev Tools / Testing",
+  "type": "pure",
+  "status": "UNAVAILABLE",
+  "testedVersion": null,
+  "python": [
+   "3.11"
+  ],
+  "abis": [],
+  "description": "Pembuat lingkungan Python terisolasi.",
+  "useCases": [],
+  "works": [
+   "ALTERNATIF: tiap paket ZCODE sudah terisolasi per-versi oleh TransactionManager — konsep venv tidak diperlukan di sini"
+  ],
+  "doesNotWork": [
+   "Butuh binary python yang bisa di-spawn subprocess — tidak ada di runtime Chaquopy in-process. Wheel-nya pure tapi fungsinya mustahil di Android (analisis 2026-08-17)."
+  ],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "MIT",
+  "publisher": "PyPA",
+  "source": "https://pypi.org/project/virtualenv/",
+  "sha256": null,
+  "longDescription": "Alat standar PyPA untuk membuat lingkungan Python terisolasi di PC. Di ZCODE fungsinya digantikan isolasi per-paket TransactionManager.",
+  "whoMadeIt": "PyPA (Python Packaging Authority)",
+  "sources": [
+   {
+    "untuk": "what",
+    "label": "pypi.org/project/virtualenv",
+    "url": "https://pypi.org/project/virtualenv/"
+   },
+   {
+    "untuk": "why",
+    "label": "virtualenv.pypa.io",
+    "url": "https://virtualenv.pypa.io/"
+   }
+  ],
+  "curatedAt": "2026-08-17 (analisis subprocess-python)"
  }
 ]
