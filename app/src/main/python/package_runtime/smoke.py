@@ -479,12 +479,22 @@ def run_smoke(
                     )
                 results.append({"test": name, "type": kind, "ok": ok, "error": err})
             elif kind == "NATIVE_LOAD":
-                # native load terbukti lewat import yang sukses + .so hadir
+                # BUG V (2026-08-16): aturan lama "wajib ada .so di staging"
+                # menggagalkan paket yang importnya SUKSES — coverage 7.15.4
+                # (resolver memilih wheel py3-none-any = murni Python, jelas
+                # tanpa .so) dan pyzbar 0.1.8 (.so-nya dimuat dari pustaka
+                # pendukung, bukan staging paket ini) dibunuh padahal sehat.
+                # Hakim sesungguhnya adalah IMPORT: kalau ekstensi native
+                # benar-benar hilang, import pasti gagal dlopen. Ketiadaan
+                # .so saat import sukses = informasi, bukan kegagalan.
                 ok, err = _run_with_timeout(lambda: _do_import(target), timeout_s)
                 libs = native_info["native_libs"]
-                ok = ok and bool(libs)
-                if not ok and not err:
-                    err = "Import OK tapi tidak ada .so di staging (mungkin butuh .so lain)."
+                if ok and not libs:
+                    native_info["note"] = (
+                        native_info.get("note", "") +
+                        " NATIVE_LOAD: import OK tanpa .so di staging "
+                        "(wheel murni Python / .so dari pustaka pendukung)."
+                    ).strip()
                 results.append({"test": name, "type": kind, "ok": ok, "error": err})
             elif kind in ("BASIC_API", "FILE_OUTPUT"):
                 code = t.get("code")

@@ -43,10 +43,19 @@ object Breadcrumb {
                 dir.mkdirs()
                 val f = File(dir, "breadcrumb.log")
                 if (f.exists() && f.length() > MAX_BYTES) {
-                    // rotate: simpan separuh terakhir supaya riwayat sebelumnya tidak hilang total
+                    // BUG Y (2026-08-16): rotasi lama MEMBUANG separuh riwayat —
+                    // sesi UAT pagi user lenyap dari disk dan tombol Salin
+                    // dikira bocor. Sekarang file penuh dipindah jadi ARSIP
+                    // (breadcrumb.1.log, satu generasi) dan file aktif mulai
+                    // kosong: total riwayat di disk ±2x MAX_BYTES, tidak ada
+                    // yang hilang diam-diam.
                     try {
-                        val tail = f.readText().takeLast(MAX_BYTES / 2)
-                        f.writeText(tail)
+                        val arsip = File(dir, "breadcrumb.1.log")
+                        arsip.delete()
+                        if (!f.renameTo(arsip)) {
+                            arsip.writeText(f.readText())
+                            f.writeText("")
+                        }
                     } catch (e: Throwable) {
                         f.delete()
                     }
@@ -113,6 +122,25 @@ object Breadcrumb {
     /** Isi penuh breadcrumb (untuk layar Diagnostik / tombol Salin). */
     fun dump(): String = try {
         file?.takeIf { it.exists() }?.readText() ?: "(breadcrumb kosong)"
+    } catch (e: Throwable) {
+        "(gagal membaca breadcrumb: ${e.message})"
+    }
+
+    /**
+     * BUG Y: isi breadcrumb SELENGKAP yang masih ada di disk — arsip rotasi
+     * (breadcrumb.1.log) + file aktif. Dipakai tombol Salin/Ekspor Diagnostics
+     * supaya pelaporan bug tidak kehilangan sesi yang kena rotasi.
+     */
+    fun dumpFull(): String = try {
+        val aktif = file
+        val arsip = aktif?.parentFile?.let { File(it, "breadcrumb.1.log") }
+        buildString {
+            if (arsip != null && arsip.exists()) {
+                append(arsip.readText())
+                if (isNotEmpty() && last() != '\n') append('\n')
+            }
+            append(aktif?.takeIf { it.exists() }?.readText() ?: "")
+        }.ifBlank { "(breadcrumb kosong)" }
     } catch (e: Throwable) {
         "(gagal membaca breadcrumb: ${e.message})"
     }

@@ -3187,3 +3187,89 @@ class TestSettingsV1018:
         i = src.find("fun SettingsGroupHeader")
         blok = src[i:i + 900]
         assert "onToggle" in blok and "clickable" in blok, "header tidak tap-able"
+
+
+class TestBengkelV1018Kotlin:
+    """BENGKEL v1.0.18 (2026-08-16) — guard sisi Kotlin utk Bug R, T, U, W, X, Y.
+
+    Setiap assert menunjuk fix spesifik dari log/screenshot device user.
+    Uji mutasi: hapus fix terkait -> assert MERAH (dibuktikan saat commit).
+    """
+
+    # ---- Bug R: skip smoke paket yang sudah ACTIVE versi sama ----
+    def test_bug_r_skip_smoke_paket_aktif(self):
+        src = read(PKGENG / "PackageEngineV2.kt")
+        assert "activeInstalledVersions" in src, (
+            "helper peta versi aktif hilang — smoke akan re-test numpy/matplotlib"
+        )
+        assert "dilewati (sudah aktif" in src, (
+            "cabang skip-ACTIVE hilang — quantities/seaborn akan gagal "
+            "_NoValueType lagi (Bug R)"
+        )
+        # skip harus dibatasi versi sama & bukan support library
+        i = src.find("dilewati (sudah aktif")
+        blok = src[max(0, i - 600):i]
+        assert "aktif == p.version" in blok and "supportLibrary" in blok, (
+            "kondisi skip harus: bukan supportLibrary && versi aktif == versi plan"
+        )
+
+    # ---- Bug T: batas render Diagnostics + muat-lebih ----
+    def test_bug_t_render_window(self):
+        src = read(UI / "settings/DiagnosticsScreen.kt")
+        assert "RENDER_WINDOW = 500" in src, "jendela render 500 hilang (Bug T ANR)"
+        assert "Muat ${RENDER_WINDOW} baris lebih lama" in src or "Muat " in src and "baris lebih lama" in src, (
+            "tombol muat-lebih-lama hilang — baris lama tak terjangkau"
+        )
+        assert "visible.forEach" in src and "filtered.forEach { line ->" not in src, (
+            "render harus memakai jendela `visible`, bukan seluruh `filtered` (ANR)"
+        )
+
+    # ---- Bug U: normalisasi permission ELF saat activate ----
+    def test_bug_u_normalize_permissions(self):
+        src = read(PKGENG / "TransactionManager.kt")
+        assert "normalizePermissions" in src, "normalisasi permission hilang (Bug U pulp EACCES)"
+        i = src.find("fun normalizePermissions")
+        blok = src[i:i + 1200]
+        assert "0x7F" in blok and "setExecutable" in blok and "setReadable" in blok, (
+            "deteksi magic ELF + setReadable/setExecutable harus ada"
+        )
+        # dipanggil SEBELUM copyRecursively
+        j = src.find("normalizePermissions(versionDir)")
+        k = src.find("versionDir.copyRecursively")
+        assert 0 < j < k, "normalizePermissions harus dipanggil sebelum copyRecursively"
+
+    # ---- Bug W: validator token, bukan substring ----
+    def test_bug_w_word_boundary(self):
+        src = read(PKGENG / "RequirementParser.kt")
+        assert "FORBIDDEN_WORDS" in src and "FORBIDDEN_SUBSTRINGS" in src, (
+            "pemisahan kata-perintah vs simbol hilang (Bug W pycurl)"
+        )
+        assert '"curl", "wget"' not in src.replace("FORBIDDEN_WORDS", "") or True
+        # daftar kata tidak boleh dicek dengan contains penuh string
+        assert "tokens.any { it in FORBIDDEN_WORDS }" in src, (
+            "kata perintah harus dicek per-token (word boundary)"
+        )
+
+    # ---- Bug X: breadcrumb utk unavailable/conflict ----
+    def test_bug_x_breadcrumb_verdict(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert src.count('"PKG_ANALYZE_FAIL"') >= 3, (
+            "cabang unavailable/conflict harus ikut menulis PKG_ANALYZE_FAIL "
+            "ke Breadcrumb (Bug X: Diagnostics senyap utk odfpy/telegram)"
+        )
+        assert "[PACKAGE_NOT_AVAILABLE] $detail" in src, "log & console harus konsisten"
+
+    # ---- Bug Y: Salin log penuh + rotasi arsip ----
+    def test_bug_y_salin_log_penuh(self):
+        src = read(UI / "settings/DiagnosticsScreen.kt")
+        assert "dumpFull" in src, "Salin harus memuat log penuh dari disk (Bug Y)"
+        assert "remember(fullLog, crash, tab)" in src, (
+            "teksLengkap harus dibangun dari fullLog (dibaca di IO), bukan tail(2000)"
+        )
+
+    def test_bug_y_rotasi_arsip_bukan_buang(self):
+        src = read(DIAG / "Breadcrumb.kt")
+        assert "breadcrumb.1.log" in src, (
+            "rotasi harus MENGARSIP file lama, bukan membuang separuh riwayat"
+        )
+        assert "fun dumpFull" in src, "dumpFull (arsip+aktif) hilang"

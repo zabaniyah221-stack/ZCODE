@@ -319,14 +319,27 @@ fun PipScreen(
                     appendLog("\nℹ️ ${plan.stdlib.joinToString(" ") { it.reason }}\n")
                     return@withContext
                 }
+                // BUG X (2026-08-16): dua cabang ini dulu hanya menulis ke
+                // console tanpa Breadcrumb — di Diagnostics, resolve odfpy/
+                // telegram/crontab/pypeln tampak berakhir tanpa verdict
+                // (WORKER_END lalu senyap). Console sudah jujur; log-nya yang
+                // bolong. Samakan dengan cabang PKG_ANALYZE_FAIL di atas.
                 if (plan.conflicts.isNotEmpty()) {
                     isInstalling = false
-                    appendLog("\n❌ [DEPENDENCY_CONFLICT] ${plan.conflicts.joinToString("; ") { "${it.name}: ${it.versionA} vs ${it.versionB}" }}\n")
+                    val detail = plan.conflicts.joinToString("; ") { "${it.name}: ${it.versionA} vs ${it.versionB}" }
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_ANALYZE_FAIL", "$trimmed [DEPENDENCY_CONFLICT] $detail"
+                    )
+                    appendLog("\n❌ [DEPENDENCY_CONFLICT] $detail\n")
                     return@withContext
                 }
                 if (plan.unavailable.isNotEmpty()) {
                     isInstalling = false
-                    appendLog("\n❌ [PACKAGE_NOT_AVAILABLE] ${plan.unavailable.joinToString("; ") { it.name + ": " + it.reason }}\n")
+                    val detail = plan.unavailable.joinToString("; ") { it.name + ": " + it.reason }
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "PKG_ANALYZE_FAIL", "$trimmed [PACKAGE_NOT_AVAILABLE] $detail"
+                    )
+                    appendLog("\n❌ [PACKAGE_NOT_AVAILABLE] $detail\n")
                     return@withContext
                 }
                 if (risk != null) {

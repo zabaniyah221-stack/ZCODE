@@ -362,6 +362,14 @@ NATIVE_HOST_DEPS: dict[str, list[str]] = {
     "pillow": ["chaquopy-libjpeg", "chaquopy-freetype"],
     "lxml": ["chaquopy-libxml2", "chaquopy-libxslt"],
     "pyyaml": ["chaquopy-libyaml"],
+    # [dari perangkat] BUG Q (2026-08-16, breadcrumb Infinix): instal PERTAMA
+    # murmurhash/preshed gagal "libc++_shared.so not found: needed by mrmr.so"
+    # karena wheel chaquopy-libcxx belum ada di cache saat smoke. Percobaan
+    # kedua sukses (cache terisi) — pola persis BUG P. Entri ini memastikan
+    # libcxx ikut ter-resolve SEBELUM smoke pada instal pertama.
+    "murmurhash": ["chaquopy-libcxx"],
+    "cymem": ["chaquopy-libcxx"],
+    "preshed": ["chaquopy-libcxx"],
     "opencv-python": [
         "chaquopy-libgfortran", "chaquopy-libpng", "chaquopy-libjpeg",
         "chaquopy-openblas", "numpy",
@@ -778,6 +786,25 @@ def _resolve_unlocked(
             _latest_info = {}
         if _latest_info.get("version"):
             best["latest_version"] = _latest_info["version"]
+            # BUG S lapis-2 (2026-08-16): warning versi-fosil. Kasus gensim
+            # 0.10.1 (2014) & hyperopt 0.3.0 (2013) — resolver mundur jauh ke
+            # versi purba karena hanya itu yang ber-wheel ARMv7, user tidak
+            # diberi tahu. Tidak memblokir instal; hanya jujur di log.
+            try:
+                from packaging.version import Version as _V
+                _chosen_v = _V(best.get("version") or "0")
+                _latest_v = _V(best["latest_version"])
+                if (not _chosen_v.is_prerelease and not _latest_v.is_prerelease
+                        and _latest_v.release and _chosen_v.release
+                        and _latest_v.release[0] - _chosen_v.release[0] >= 2):
+                    notes.append(
+                        "PERINGATAN: %s terpasang v%s, terbaru v%s — versi jauh "
+                        "tertinggal karena keterbatasan wheel ARMv7; API bisa "
+                        "beda dari tutorial modern." % (
+                            cname, best["version"], best["latest_version"])
+                    )
+            except Exception:  # noqa: BLE001 — warning tidak boleh fatal
+                pass
         try:
             from .wheeldeps import deps_from_wheel
             berkas = best.get("local_path") or ""

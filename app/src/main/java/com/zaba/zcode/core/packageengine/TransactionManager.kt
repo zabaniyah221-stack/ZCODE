@@ -128,6 +128,15 @@ class TransactionManager(private val context: Context) {
                 }
                 val target = File(sitePkgs, p.canonicalName)
                 if (target.exists()) target.deleteRecursively()
+                // BUG U (2026-08-16): zipfile Python TIDAK memulihkan permission
+                // saat ekstraksi (keterbatasan zipfile.extractall yang berumur
+                // 10+ tahun; pip menulis workaround serupa). Wheel pulp membundel
+                // binary solver `solverdir/cbc/linux/i32/cbc` yang keluar tanpa
+                // bit read → copyRecursively gagal `open failed: EACCES` dan
+                // SELURUH transaksi rollback. Normalisasi: semua file readable;
+                // file ber-magic ELF (\x7fELF) juga executable — memperbaiki
+                // kelas masalah untuk semua paket pembundel binary.
+                normalizePermissions(versionDir)
                 versionDir.copyRecursively(File(target, p.version), overwrite = true)
                 moved.add(target)
                 current.put(p.canonicalName, installedEntry(p, "site-packages/${p.canonicalName}/${p.version}"))
@@ -154,6 +163,30 @@ class TransactionManager(private val context: Context) {
         tx.dir.deleteRecursively()
         journal(tx.id, "install", "SUCCESS", null, null)
         return true to "OK"
+    }
+
+    /**
+     * BUG U: pastikan seluruh isi direktori bisa dibaca (dan ELF bisa
+     * dieksekusi). Dipanggil sebelum copyRecursively di activate. Gagal
+     * per-file tidak fatal — copy yang jadi hakimnya.
+     */
+    private fun normalizePermissions(root: File) {
+        try {
+            root.walkTopDown().forEach { f ->
+                try {
+                    if (!f.canRead()) f.setReadable(true, false)
+                    if (f.isFile && !f.name.endsWith(".py") && !f.name.endsWith(".pyc")) {
+                        val header = ByteArray(4)
+                        val n = f.inputStream().use { it.read(header) }
+                        val isElf = n == 4 && header[0] == 0x7F.toByte() &&
+                            header[1] == 'E'.code.toByte() &&
+                            header[2] == 'L'.code.toByte() &&
+                            header[3] == 'F'.code.toByte()
+                        if (isElf && !f.canExecute()) f.setExecutable(true, false)
+                    }
+                } catch (_: Exception) { /* per-file: biarkan copy menghakimi */ }
+            }
+        } catch (_: Exception) { /* normalisasi bukan alasan menggagalkan activate */ }
     }
 
     private fun installedEntry(p: PlanPackage, path: String): JSONObject {

@@ -464,7 +464,22 @@ class PackageEngineV2(private val context: Context) {
             val allStagingDirs = planPackages.map {
                 File(tx.stagingSitePackages, "${it.canonicalName}/${it.version}").absolutePath
             } + activeSitePackagePaths()
+            // BUG R (2026-08-16): paket yang SUDAH AKTIF dengan versi sama tidak
+            // boleh di-smoke ulang. numpy/matplotlib (state C global) tidak
+            // mendukung double-import dalam satu proses: re-smoke saat menjadi
+            // deps paket lain meledak `_NoValueType` (quantities, seaborn,
+            // wordcloud) dan `generic_type already registered` (contourpy via
+            // pycocotools) — transaksi tak bersalah ikut di-rollback. Bukti
+            // kontras: emcee sukses karena itu impor PERTAMA numpy di prosesnya.
+            // Entri di installed.json hanya bisa ada karena pernah LOLOS smoke,
+            // jadi melewatinya aman. Versi berbeda tetap diuji penuh.
+            val activeVersions = activeInstalledVersions()
             for (p in planPackages) {
+                val aktif = activeVersions[p.canonicalName]
+                if (!p.supportLibrary && aktif != null && aktif == p.version) {
+                    onStep(Step.Log("  ${p.canonicalName}: dilewati (sudah aktif @$aktif & pernah lolos smoke)"))
+                    continue
+                }
                 // Pustaka pendukung (chaquopy-openblas, chaquopy-libjpeg, ...)
                 // TIDAK punya modul Python untuk diimpor. Menjalankan uji impor
                 // terhadapnya akan selalu gagal dan membatalkan seluruh
@@ -591,6 +606,27 @@ class PackageEngineV2(private val context: Context) {
         }
     } catch (e: Exception) {
         emptyList()
+    }
+
+    /**
+     * BUG R: peta canonicalName -> versi AKTIF dari installed.json.
+     * Entri hanya bisa ada bila paket pernah lolos smoke + activate, jadi
+     * peta ini adalah bukti "pernah sehat" yang dipakai untuk melewati
+     * re-smoke (numpy/matplotlib crash bila diimpor ulang satu proses).
+     */
+    private fun activeInstalledVersions(): Map<String, String> = try {
+        val stateFile = File(Paths.pythonState(context), "installed.json")
+        if (!stateFile.exists()) {
+            emptyMap()
+        } else {
+            val obj = org.json.JSONObject(stateFile.readText())
+            obj.keys().asSequence().mapNotNull { key ->
+                val v = obj.optJSONObject(key)?.optString("version")?.takeIf { it.isNotBlank() }
+                v?.let { key to it }
+            }.toMap()
+        }
+    } catch (e: Exception) {
+        emptyMap()
     }
 
     private fun buildSmokeTests(
