@@ -49,6 +49,9 @@ class ResolveOperationBridge(
                 "http_retry" -> "$pkg: $source gagal ($detail), mencoba lagi${attemptLabel(attempt + 1, maxAttempts)}"
                 "http_ok" -> "$pkg: $source selesai ($detail)"
                 "http_fail" -> "$pkg: $source gagal ($detail)"
+                // 404 probe sumber = alur normal (toko tidak menjual paket
+                // ini), bukan error. Keputusan user 2026-08-17: label polos.
+                "target_not_found" -> "$pkg: TARGET NOT FOUND [$source]"
                 "cancelled" -> "Pembatalan diterima; merapikan operasi…"
                 else -> listOf(pkg, source, detail).filter { it.isNotBlank() }.joinToString(": ")
             }
@@ -69,6 +72,10 @@ class ResolveOperationBridge(
 
     companion object {
         private val nextId = AtomicLong(0)
+        // `target_not_found` SENGAJA tidak diagnostic: 404 probe adalah alur
+        // normal (±90 event per sesi UAT — dulu membanjiri breadcrumb sebagai
+        // "http_fail" palsu). Konsol tetap menampilkannya; jejak sumber final
+        // tiap paket sudah tercatat lewat `package_chosen`.
         private val DIAGNOSTIC_STAGES = setOf(
             "http_retry", "http_fail", "cancelled", "package_chosen"
         )

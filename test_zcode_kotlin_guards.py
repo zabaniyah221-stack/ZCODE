@@ -2649,9 +2649,22 @@ class TestDependensiDariWheel:
         """
         src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
         assert "_METADATA_CACHE" in src, "tidak ada singgahan metadata"
-        assert "_MAX_HTTP_ATTEMPTS = 2" in src, (
-            "retry HTTP harus punya budget dua total attempt; tiga attempt × 20s "
-            "adalah akar regresi timeout seluruh modul v1.0.15"
+        # SEJARAH DUA ERA — jangan hapus konteks ini:
+        # v1.0.15: PyCall memakai latch 90s → 3×20s + backoff menabrak
+        #   deadline, worker yatim. Guard era itu mem-pin "= 2".
+        # v1.0.18-polish (2026-08-17): latch 90s SUDAH DIHAPUS (worker
+        #   dimiliki thread pemanggil; lihat doc PyCall.kt "Timeout operasi
+        #   panjang bukan tanggung jawab wrapper ini"). Audit outer layer
+        #   per SKILL 12.1: tidak ada deadline luar tersisa. Budget kini 3
+        #   (bukti UAT 2026-08-16: yt-dlp URLError attempt 2/2 lalu sukses
+        #   manual — 4G user kedip). Yang dijaga sekarang = KONTRAKNYA:
+        #   budget terbatas kecil, bukan angka keramat.
+        m = re.search(r"_MAX_HTTP_ATTEMPTS = (\d+)", src)
+        assert m, "budget retry HTTP harus eksplisit"
+        assert 2 <= int(m.group(1)) <= 3, (
+            "budget retry wajib 2-3 total attempt; lebih dari itu wajib "
+            "audit ulang seluruh outer layer (SKILL 12.1) dan update guard "
+            "ini dengan justifikasi tertulis"
         )
         i = src.find("def fetch_pypi_metadata")
         assert i > 0
@@ -3273,3 +3286,34 @@ class TestBengkelV1018Kotlin:
             "rotasi harus MENGARSIP file lama, bukan membuang separuh riwayat"
         )
         assert "fun dumpFull" in src, "dumpFull (arsip+aktif) hilang"
+
+
+class TestBengkelMiniV1018Kotlin:
+    """Bengkel-mini penutup v1.0.18 (2026-08-17): stage `target_not_found`
+    harus utuh dua sisi. Python memancarkan stage baru — kalau Kotlin tidak
+    memetakan display-nya, event ditelan `else ->` dan konsol bisu."""
+
+    def test_bridge_memetakan_target_not_found(self):
+        src = read(PKGENG / "ResolveOperationBridge.kt")
+        assert '"target_not_found"' in src, (
+            "ResolveOperationBridge harus memetakan stage target_not_found "
+            "(dipancarkan resolve.py utk 404 probe sumber)"
+        )
+        assert "TARGET NOT FOUND" in src, (
+            "display konsol harus memakai label TARGET NOT FOUND "
+            "(keputusan user 2026-08-17)"
+        )
+
+    def test_target_not_found_bukan_diagnostic_stage(self):
+        # 404 probe = alur normal ±90x per sesi; kalau masuk DIAGNOSTIC_STAGES
+        # breadcrumb kembali banjir seperti era "http_fail HTTPError HTTP 404".
+        src = read(PKGENG / "ResolveOperationBridge.kt")
+        m = re.search(r"DIAGNOSTIC_STAGES\s*=\s*setOf\(([^)]*)\)", src)
+        assert m, "DIAGNOSTIC_STAGES harus tetap ada"
+        assert "target_not_found" not in m.group(1), (
+            "target_not_found TIDAK boleh masuk DIAGNOSTIC_STAGES "
+            "(membanjiri breadcrumb dgn alur normal)"
+        )
+        assert '"http_fail"' in m.group(1), (
+            "http_fail (kegagalan nyata) harus tetap diagnostic"
+        )

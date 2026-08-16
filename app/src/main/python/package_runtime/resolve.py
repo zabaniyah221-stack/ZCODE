@@ -39,7 +39,10 @@ _NETWORK_TIMEOUT_S = 20
 # v1.0.15 memakai 3 × 20 detik per URL sementara PyCall memotong SELURUH
 # dependency graph pada 90 detik. Dua total attempt cukup untuk satu kegagalan
 # transient tanpa melipatgandakan waktu buta di jaringan seluler.
-_MAX_HTTP_ATTEMPTS = 2
+# 3 sejak v1.0.18-polish: yt-dlp gagal URLError di attempt 2/2 lalu sukses
+# manual (UAT 2026-08-16) — jaringan 4G user sering kedip sesaat. 404 TIDAK
+# ikut retry (lihat _retryable_error): jawaban pasti, bukan gangguan.
+_MAX_HTTP_ATTEMPTS = 3
 _RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504, 520, 527})
 _MAX_DEPTH = 20
 _MAX_PACKAGES = 60
@@ -196,8 +199,20 @@ def _http_get(url: str) -> bytes:
             )
             # Jangan masukkan URL mentah/credential ke Diagnostics.
             last_summary = detail
+            # HTTP 404 pada probe sumber = "toko ini tidak menjual paket itu".
+            # Itu alur NORMAL (probe Chaquopy dulu → fallback PyPI), bukan
+            # kegagalan jaringan. Sebelumnya dicatat "http_fail HTTPError
+            # HTTP 404" — ±90 baris "fail" palsu per sesi UAT menutupi error
+            # sungguhan. Keputusan user 2026-08-17: label TARGET NOT FOUND,
+            # tanpa detail. `http_fail` tetap untuk kegagalan nyata
+            # (timeout/DNS/5xx/koneksi putus).
+            if status == 404:
+                stage = "target_not_found"
+                detail = ""
+            else:
+                stage = "http_retry" if retry else "http_fail"
             _emit_progress(
-                "http_retry" if retry else "http_fail",
+                stage,
                 source=source, attempt=attempt,
                 max_attempts=_MAX_HTTP_ATTEMPTS, detail=detail,
             )
@@ -370,6 +385,32 @@ NATIVE_HOST_DEPS: dict[str, list[str]] = {
     "murmurhash": ["chaquopy-libcxx"],
     "cymem": ["chaquopy-libcxx"],
     "preshed": ["chaquopy-libcxx"],
+    # [dari perangkat + arsip mass-test 2026-08-16] kelas Bug Q juga:
+    # pycurl gagal UAT 2026-08-17 "libcurl.so not found" (breadcrumb device);
+    # lameenc/pyproj gagal mass-test bionic311 "libmp3lame.so/libproj.so not
+    # found" (docs/mass-test-armv7-2026-08-16.jsonl). METADATA wheel toko
+    # Chaquopy menyebut host-dep ini, tapi baru terbaca SETELAH wheel masuk
+    # cache — celah instal-pertama. Entri di sini menutupnya.
+    "pycurl": ["chaquopy-curl-openssl-3"],
+    "lameenc": ["chaquopy-lame"],
+    "pyproj": ["chaquopy-proj-openssl-3"],
+    # [dari METADATA wheel + bionic311 2026-08-17] libproj.so menautkan
+    # libtiff.so, dan libtiff.so menautkan libjpeg_chaquopy.so (import
+    # pyproj gagal dlopen berlapis sebelum rantai lengkap). METADATA
+    # chaquopy-proj/libtiff menyebut semuanya, tapi terbaca SETELAH wheel
+    # masuk cache — celah instal-pertama yang sama, dua level lebih dalam.
+    # Preseden pola: chaquopy-openblas -> chaquopy-libgfortran.
+    "chaquopy-proj-openssl-3": [
+        "chaquopy-libcxx", "chaquopy-curl-openssl-3", "chaquopy-libtiff",
+    ],
+    "chaquopy-libtiff": ["chaquopy-libjpeg", "chaquopy-libcxx"],
+    # [dari perangkat, UAT maraton 2026-08-16] hidden-dep murni-Python:
+    # matplotlib-inline mengimpor matplotlib saat dipakai ipython, tapi
+    # METADATA-nya TIDAK menyebut matplotlib (dep opsional runtime).
+    # Bukti dua arah: ipython gagal saat matplotlib belum aktif, sukses
+    # setelah matplotlib terpasang. Peta ini sudah terbukti boleh membawa
+    # paket Python penuh, bukan hanya .so (lihat "pandas": ["numpy"]).
+    "matplotlib-inline": ["matplotlib"],
     "opencv-python": [
         "chaquopy-libgfortran", "chaquopy-libpng", "chaquopy-libjpeg",
         "chaquopy-openblas", "numpy",
