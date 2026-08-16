@@ -5,7 +5,7 @@
   "importName": "anthropic",
   "category": "AI / ML / NLP",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -13,8 +13,12 @@
   "abis": [],
   "description": "Anthropic Claude API client.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: openai dengan pin openai==1.35.0 + pydantic==1.10.19"
+  ],
+  "doesNotWork": [
+   "Dependensi tokenizers/jiter (Rust) tidak punya wheel ARMv7 (dibuktikan di device 17:53)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -83,7 +87,7 @@
   "importName": "gensim",
   "category": "AI / ML / NLP",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -91,8 +95,12 @@
   "abis": [],
   "description": "Topic modeling (butuh scipy).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: nltk (DEVICE TESTED) untuk NLP dasar"
+  ],
+  "doesNotWork": [
+   "Wheel ARMv7 hanya versi 0.10.1 (2014) — API purba; versi berguna butuh scipy."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -122,7 +130,7 @@
   "importName": "imblearn",
   "category": "AI / ML / NLP",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -131,7 +139,9 @@
   "description": "Resampling data tidak seimbang (di atas scikit-learn).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Paket JEBAKAN di PyPI — alias kosong; instal menghasilkan error literal 'wheel-platform-tag-is-broken-on-empty-wheels-see-issue-141'. Paket asli bernama imbalanced-learn, tetapi ia butuh scipy yang tidak tersedia di ARMv7."
+  ],
   "dependencies": [],
   "risks": [
    "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
@@ -162,7 +172,7 @@
   "importName": "jieba",
   "category": "AI / ML / NLP",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -171,7 +181,9 @@
   "description": "Segmentasi kata Mandarin.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Hanya tersedia sdist di PyPI — ZCODE wheel-only."
+  ],
   "dependencies": [],
   "risks": [
    "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
@@ -286,7 +298,7 @@
   "importName": "langchain",
   "category": "AI / ML / NLP",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -294,8 +306,12 @@
   "abis": [],
   "description": "Framework LLM apps (dependensi banyak).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: openai (pin 1.35.0) + kode orkestrasi sendiri"
+  ],
+  "doesNotWork": [
+   "Dependensi orjson (Rust) tidak punya wheel ARMv7."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -449,7 +465,9 @@
   "abis": [],
   "description": "OpenAI API client (butuh internet + kunci).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "CATATAN: instal dengan pin `openai==1.35.0` (deps era pydantic v1 murni-Python); versi terbaru butuh pydantic-core Rust yang tak ber-wheel ARMv7"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1003,8 +1021,8 @@
   "importName": "ansible",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "12.3.0",
   "python": [
    "3.11"
   ],
@@ -1012,7 +1030,8 @@
   "description": "Automation config (berat, butuh SSH).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v12.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1085,8 +1104,8 @@
   "importName": "autoflake",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.3.3",
   "python": [
    "3.11"
   ],
@@ -1094,7 +1113,8 @@
   "description": "Hapus import tidak terpakai.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.3.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1126,8 +1146,8 @@
   "importName": "autopep8",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.3.2",
   "python": [
    "3.11"
   ],
@@ -1135,7 +1155,8 @@
   "description": "Perbaiki gaya PEP8 otomatis.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.3.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1153,7 +1174,8 @@
     "url": "https://pypi.org/project/autopep8/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "black",
@@ -1161,8 +1183,8 @@
   "importName": "black",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "26.5.1",
   "python": [
    "3.11"
   ],
@@ -1170,7 +1192,8 @@
   "description": "Python code formatter.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v26.5.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1202,7 +1225,7 @@
   "importName": "cheetah",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1210,8 +1233,12 @@
   "abis": [],
   "description": "Template engine Cheetah.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: jinja2 / mako (keduanya DEVICE TESTED)"
+  ],
+  "doesNotWork": [
+   "Tidak ada wheel yang kompatibel (dibuktikan di device 18:04)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -1251,7 +1278,8 @@
   "useCases": [],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v2.7.1"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v2.7.1",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.7.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1285,7 +1313,7 @@
   "importName": "crontab",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1293,8 +1321,12 @@
   "abis": [],
   "description": "Manipulasi crontab.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: python-crontab (DEVICE TESTED)"
+  ],
+  "doesNotWork": [
+   "Hanya tersedia sdist di PyPI — ZCODE wheel-only."
+  ],
   "dependencies": [],
   "risks": [
    "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
@@ -1365,15 +1397,17 @@
   "importName": "fabric",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.2.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Alias fabric.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.2.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1404,7 +1438,7 @@
   "importName": "git",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1413,9 +1447,12 @@
   "description": "Git via Python (butuh binary git).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "ALTERNATIF: pygithub (DEVICE TESTED) untuk operasi GitHub via API"
   ],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh binary `git` di sistem — tidak ada di Android (error device: 'Bad git executable')."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -1445,8 +1482,8 @@
   "importName": "invoke",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.2.1",
   "python": [
    "3.11"
   ],
@@ -1454,7 +1491,8 @@
   "description": "Task runner Pythonic.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.2.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1527,7 +1565,7 @@
   "importName": "jinjalint",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1536,7 +1574,9 @@
   "description": "Linter template Jinja.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Dependensi docopt hanya tersedia sdist — tidak bisa dipasang (wheel-only)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -1566,15 +1606,17 @@
   "importName": "kubernetes",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "36.0.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "K8s client (butuh cluster).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v36.0.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1605,8 +1647,8 @@
   "importName": "mako",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.4.1",
   "python": [
    "3.11"
   ],
@@ -1614,7 +1656,8 @@
   "description": "Template engine Mako.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1646,8 +1689,8 @@
   "importName": "nox",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2026.8.10",
   "python": [
    "3.11"
   ],
@@ -1655,7 +1698,8 @@
   "description": "Automation test environments.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2026.8.10 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1687,8 +1731,8 @@
   "importName": "pre_commit",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.6.2",
   "python": [
    "3.11"
   ],
@@ -1696,7 +1740,8 @@
   "description": "Git hooks manager.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.6.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1728,15 +1773,17 @@
   "importName": "github",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.9.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "GitHub API client.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.9.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -1758,7 +1805,8 @@
     "url": "https://pygithub.readthedocs.io/en/stable/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "pypeln",
@@ -1766,7 +1814,7 @@
   "importName": "pypeln",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1774,8 +1822,12 @@
   "abis": [],
   "description": "Pipeline data concurrent.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: multiprocessing/concurrent.futures stdlib"
+  ],
+  "doesNotWork": [
+   "Dependensi stopit hanya sdist — tidak bisa dipasang."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -1804,8 +1856,8 @@
   "importName": "pystache",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.6.8",
   "python": [
    "3.11"
   ],
@@ -1813,7 +1865,8 @@
   "description": "Mustache template.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.6.8 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1845,8 +1898,8 @@
   "importName": "crontab",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.3.0",
   "python": [
    "3.11"
   ],
@@ -1854,7 +1907,8 @@
   "description": "Alias crontab.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1886,8 +1940,8 @@
   "importName": "ruamel.yaml",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.19.1",
   "python": [
    "3.11"
   ],
@@ -1895,7 +1949,8 @@
   "description": "YAML round-trip (dep banyak tool).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.19.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -1927,7 +1982,7 @@
   "importName": "watchfiles",
   "category": "Automation / Scripting",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -1938,7 +1993,9 @@
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)"
   ],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Satu-satunya wheel pure adalah placeholder 0.0.0a1 tanpa isi (import OK, fungsi tidak ada). Versi asli butuh ekstensi Rust tanpa wheel ARMv7."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -1968,8 +2025,8 @@
   "importName": "yapf",
   "category": "Automation / Scripting",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.43.0",
   "python": [
    "3.11"
   ],
@@ -1977,7 +2034,8 @@
   "description": "Formatter ala Google.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.43.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -2009,7 +2067,7 @@
   "importName": "arviz",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2018,7 +2076,9 @@
   "description": "Visualisasi & diagnostik Bayesian (butuh matplotlib/xarray).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh scipy/pandas-stack penuh — gagal COMPATIBILITY di device."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -2166,15 +2226,17 @@
   "importName": "dask",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2026.7.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Komputasi paralel & array chunked (berat).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2026.7.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2215,7 +2277,8 @@
   "useCases": [],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.1.6"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.1.6",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.1.6 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -2249,15 +2312,17 @@
   "importName": "fortranformat",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.0.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Baca/tulis format Fortran.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.0.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2322,7 +2387,7 @@
   "importName": "hyperopt",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2330,8 +2395,12 @@
   "abis": [],
   "description": "Hyperparameter optimization (distributed).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: optuna (sukses terpasang di device)"
+  ],
+  "doesNotWork": [
+   "Resolver hanya menemukan versi fosil 0.3.0 (2013) dan tetap gagal; versi modern butuh py4j/scipy."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -2361,7 +2430,7 @@
   "importName": "lifelines",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2370,7 +2439,9 @@
   "description": "Survival analysis.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh scipy — gagal COMPATIBILITY di device."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -2400,7 +2471,7 @@
   "importName": "lmfit",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2409,7 +2480,9 @@
   "description": "Curve fitting berbasis scipy.optimize.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh scipy.optimize — gagal COMPATIBILITY di device."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -2459,7 +2532,8 @@
    "backend Agg",
    "savefig('out.png')",
    "plot/scatter/bar",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.6.0 instal+smoke OK"
   ],
   "doesNotWork": [
    "GUI window interaktif",
@@ -2504,8 +2578,8 @@
   "importName": "mpmath",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.3.0",
   "python": [
    "3.11"
   ],
@@ -2513,7 +2587,8 @@
   "description": "Aritmetika presisi sewenang-wenang.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -2584,15 +2659,17 @@
   "importName": "networkx",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.6.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Struktur graf & jaringan.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.6.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -2632,7 +2709,8 @@
   "description": "Natural language toolkit (data model terpisah).",
   "useCases": [],
   "works": [
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.10.3"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.10.3",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.10.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -2764,7 +2842,8 @@
    "np.arange/array",
    "operasi vektor",
    "np.linalg",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.26.2 instal+smoke OK"
   ],
   "doesNotWork": [
    "BLAS/LAPACK berkinerja penuh (wheel Chaquopy tersedia tapi terbatas)"
@@ -2973,7 +3052,7 @@
   "importName": "peakutils",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -2982,7 +3061,9 @@
   "description": "Deteksi puncak pada data 1D.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh scipy — gagal COMPATIBILITY di device."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -3012,8 +3093,8 @@
   "importName": "periodictable",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.1.0",
   "python": [
    "3.11"
   ],
@@ -3021,7 +3102,8 @@
   "description": "Data tabel periodik.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -3053,8 +3135,8 @@
   "importName": "pint",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.25.3",
   "python": [
    "3.11"
   ],
@@ -3062,7 +3144,8 @@
   "description": "Unit conversion Python.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.25.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -3172,8 +3255,8 @@
   "importName": "prettytable",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.18.0",
   "python": [
    "3.11"
   ],
@@ -3181,7 +3264,8 @@
   "description": "Tabel ASCII sederhana.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.18.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -3213,7 +3297,7 @@
   "importName": "pulp",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -3222,9 +3306,12 @@
   "description": "Linear programming (solver default bawaan).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "ALTERNATIF: tulis model + ekspor .lp, selesaikan di mesin lain"
   ],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Terpasang, tetapi solver CBC bawaan adalah binary linux x86 (solverdir/cbc/linux/i32) — tidak bisa dieksekusi di Android ARM."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -3288,15 +3375,17 @@
   "importName": "pydicom",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.0.2",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Baca/tulis file DICOM (medis).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.2 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3318,7 +3407,8 @@
     "url": "https://pydicom.github.io/pydicom"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "pykalman",
@@ -3326,7 +3416,7 @@
   "importName": "pykalman",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -3335,7 +3425,9 @@
   "description": "Kalman filter.",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh scipy — gagal COMPATIBILITY di device."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -3586,15 +3678,17 @@
   "importName": "simpy",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.1.2",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Simulasi event-discrete.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.1.2 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3703,15 +3797,17 @@
   "importName": "sympy",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.14.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Matematika simbolik murni-Python.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.14.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3742,15 +3838,17 @@
   "importName": "tabulate",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.10.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Render tabel teks dari data.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.10.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3820,8 +3918,8 @@
   "importName": "uncertainties",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.2.3",
   "python": [
    "3.11"
   ],
@@ -3829,7 +3927,8 @@
   "description": "Angka dengan ketidakpastian (error propagation).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.2.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -3861,15 +3960,17 @@
   "importName": "xarray",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2023.12.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Array berlabel untuk data multidimensi.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2023.12.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3900,15 +4001,17 @@
   "importName": "aiosqlite",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.22.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "SQLite async untuk asyncio.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.22.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -3930,7 +4033,8 @@
     "url": "https://aiosqlite.omnilib.dev"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "blosc",
@@ -3977,15 +4081,17 @@
   "importName": "boto3",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.43.72",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "AWS SDK (perlu kredensial).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.43.72 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4016,8 +4122,8 @@
   "importName": "cloudpickle",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.1.2",
   "python": [
    "3.11"
   ],
@@ -4025,7 +4131,8 @@
   "description": "Pickle untuk fungsi/closure.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.1.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4057,8 +4164,8 @@
   "importName": "dataset",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.0.0",
   "python": [
    "3.11"
   ],
@@ -4066,7 +4173,8 @@
   "description": "Database untuk manusia (di atas SQLAlchemy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.0.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4098,8 +4206,8 @@
   "importName": "dill",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.4.1",
   "python": [
    "3.11"
   ],
@@ -4107,7 +4215,8 @@
   "description": "Pickle extended.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.4.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4139,15 +4248,17 @@
   "importName": "diskcache",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "5.6.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Cache berbasis disk (SQLite).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v5.6.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4178,15 +4289,17 @@
   "importName": "fabric",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.2.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Deployment via SSH (di atas paramiko).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.2.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4217,8 +4330,8 @@
   "importName": "joblib",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.5.3",
   "python": [
    "3.11"
   ],
@@ -4226,7 +4339,8 @@
   "description": "Persistensi objek + parallel (dep scikit-learn).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.5.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4258,8 +4372,8 @@
   "importName": "lz4",
   "category": "Database / Storage",
   "type": "native",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.3.2",
   "python": [
    "3.11"
   ],
@@ -4267,7 +4381,8 @@
   "description": "Kompresi LZ4 (C extension).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.3.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4299,15 +4414,17 @@
   "importName": "minio",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "7.2.20",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "S3-compatible client.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v7.2.20 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -4416,8 +4533,8 @@
   "importName": "peewee",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.3.0",
   "python": [
    "3.11"
   ],
@@ -4425,7 +4542,8 @@
   "description": "ORM kecil.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4448,7 +4566,8 @@
     "url": "https://docs.peewee-orm.com/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "pickledb",
@@ -4572,8 +4691,8 @@
   "importName": "pymysql",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.0",
   "python": [
    "3.11"
   ],
@@ -4581,7 +4700,8 @@
   "description": "MySQL driver murni-Python.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4652,8 +4772,8 @@
   "importName": "redis",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.1.0",
   "python": [
    "3.11"
   ],
@@ -4661,7 +4781,8 @@
   "description": "Redis client (butuh server Redis).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4812,8 +4933,8 @@
   "importName": "tinydb",
   "category": "Database / Storage",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.9.0",
   "python": [
    "3.11"
   ],
@@ -4821,7 +4942,8 @@
   "description": "Database JSON kecil tanpa server.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.9.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4853,8 +4975,8 @@
   "importName": "zstandard",
   "category": "Database / Storage",
   "type": "native",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.15.2",
   "python": [
    "3.11"
   ],
@@ -4862,7 +4984,8 @@
   "description": "Kompresi zstd (C extension).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.15.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4894,8 +5017,8 @@
   "importName": "babel",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.18.0",
   "python": [
    "3.11"
   ],
@@ -4903,7 +5026,8 @@
   "description": "i18n/l10n (dep Flask).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.18.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4945,7 +5069,8 @@
   "useCases": [],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v7.6.0"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v7.6.0",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v7.6.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -4979,8 +5104,8 @@
   "importName": "charset_normalizer",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.5.1",
   "python": [
    "3.11"
   ],
@@ -4988,7 +5113,8 @@
   "description": "Deteksi encoding teks.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.5.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5020,8 +5146,8 @@
   "importName": "csvkit",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.2.0",
   "python": [
    "3.11"
   ],
@@ -5029,7 +5155,8 @@
   "description": "Toolkit CSV baris-perintah.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.2.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5061,8 +5188,8 @@
   "importName": "docutils",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.23",
   "python": [
    "3.11"
   ],
@@ -5070,7 +5197,8 @@
   "description": "reStructuredText → berbagai format.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.23 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5093,7 +5221,8 @@
     "url": "https://docutils.sourceforge.io/docs/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "filetype",
@@ -5101,8 +5230,8 @@
   "importName": "filetype",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.0",
   "python": [
    "3.11"
   ],
@@ -5110,7 +5239,8 @@
   "description": "Deteksi tipe file dari magic bytes (murni-Python).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5142,15 +5272,17 @@
   "importName": "fpdf",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.8.8",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "PDF sederhana (fpdf2).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.8.8 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5181,8 +5313,8 @@
   "importName": "ftfy",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.3.1",
   "python": [
    "3.11"
   ],
@@ -5190,7 +5322,8 @@
   "description": "Perbaiki teks Unicode rusak.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.3.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5222,8 +5355,8 @@
   "importName": "markdown",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.10.3",
   "python": [
    "3.11"
   ],
@@ -5231,7 +5364,8 @@
   "description": "Konversi Markdown → HTML.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.10.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5263,8 +5397,8 @@
   "importName": "markdownify",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.3",
   "python": [
    "3.11"
   ],
@@ -5272,7 +5406,8 @@
   "description": "HTML → Markdown.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5295,7 +5430,8 @@
     "url": "http://github.com/matthewwithanm/python-markdownify"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "mistune",
@@ -5303,8 +5439,8 @@
   "importName": "mistune",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.3.4",
   "python": [
    "3.11"
   ],
@@ -5312,7 +5448,8 @@
   "description": "Markdown parser cepat.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.3.4 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5344,7 +5481,7 @@
   "importName": "odf",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -5352,8 +5489,12 @@
   "abis": [],
   "description": "Baca/tulis OpenDocument.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: python-docx (DEVICE TESTED) untuk dokumen Word"
+  ],
+  "doesNotWork": [
+   "Hanya tersedia sdist di PyPI — ZCODE wheel-only (verdict device: PACKAGE_NOT_AVAILABLE)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -5383,8 +5524,8 @@
   "importName": "parsedatetime",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.6",
   "python": [
    "3.11"
   ],
@@ -5392,7 +5533,8 @@
   "description": "Parse waktu natural.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.6 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5424,15 +5566,17 @@
   "importName": "patoolib",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.0.5",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Wrapper archive multi-format.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.0.5 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5463,15 +5607,17 @@
   "importName": "pdfminer",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "20260107",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Parser PDF tingkat rendah.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v20260107 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5502,15 +5648,17 @@
   "importName": "pdfplumber",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.11.10",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Ekstraksi teks/tabel PDF (dependensi berat).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.11.10 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5580,15 +5728,17 @@
   "importName": "pypdf",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.16.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Baca/tulis PDF (pengganti PyPDF2).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.16.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -5619,8 +5769,8 @@
   "importName": "docx",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.0",
   "python": [
    "3.11"
   ],
@@ -5628,7 +5778,8 @@
   "description": "Baca/tulis Word .docx.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5699,8 +5850,8 @@
   "importName": "pptx",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.0.2",
   "python": [
    "3.11"
   ],
@@ -5708,7 +5859,8 @@
   "description": "Baca/tulis PowerPoint .pptx.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.0.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5781,8 +5933,8 @@
   "importName": "rarfile",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.5",
   "python": [
    "3.11"
   ],
@@ -5790,7 +5942,8 @@
   "description": "Baca RAR (butuh binary unrar).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.5 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5822,8 +5975,8 @@
   "importName": "reportlab",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "5.0.0",
   "python": [
    "3.11"
   ],
@@ -5831,7 +5984,8 @@
   "description": "Generate PDF.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v5.0.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5863,8 +6017,8 @@
   "importName": "send2trash",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.1.0",
   "python": [
    "3.11"
   ],
@@ -5872,7 +6026,8 @@
   "description": "Hapus file ke recycle bin.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5904,8 +6059,8 @@
   "importName": "tablib",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.10.0",
   "python": [
    "3.11"
   ],
@@ -5913,7 +6068,8 @@
   "description": "Konversi format data (CSV/JSON/Excel/YAML).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.10.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -5983,8 +6139,8 @@
   "importName": "xlrd",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.0.2",
   "python": [
    "3.11"
   ],
@@ -5992,7 +6148,8 @@
   "description": "Baca Excel .xls (legacy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.0.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6024,8 +6181,8 @@
   "importName": "xlsxwriter",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.2.9",
   "python": [
    "3.11"
   ],
@@ -6033,7 +6190,8 @@
   "description": "Tulis Excel .xlsx berfitur lengkap.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.2.9 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6065,8 +6223,8 @@
   "importName": "xlwt",
   "category": "Files / Office / Document",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.3.0",
   "python": [
    "3.11"
   ],
@@ -6074,7 +6232,8 @@
   "description": "Tulis Excel .xls (legacy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6184,8 +6343,8 @@
   "importName": "blessed",
   "category": "GUI / Games / App Framework",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.48.0",
   "python": [
    "3.11"
   ],
@@ -6193,7 +6352,8 @@
   "description": "Terminal styling (di atas curses — sebagian fitur terbatas).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.48.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6288,15 +6448,17 @@
   "importName": "IPython",
   "category": "GUI / Games / App Framework",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "9.16.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "REPL canggih (berat; ZCODE punya REPL sendiri).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v9.16.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6327,8 +6489,8 @@
   "importName": "jupyter_core",
   "category": "GUI / Games / App Framework",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "5.9.1",
   "python": [
    "3.11"
   ],
@@ -6336,7 +6498,8 @@
   "description": "Kernel jupyter core (untuk integrasi).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v5.9.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6446,15 +6609,17 @@
   "importName": "prompt_toolkit",
   "category": "GUI / Games / App Framework",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.0.53",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Prompt interaktif kaya (dipakai IPython).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.53 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6596,15 +6761,17 @@
   "importName": "textual",
   "category": "GUI / Games / App Framework",
   "type": "pure",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.2.8",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "TUI framework modern (butuh terminal penuh).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.2.8 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -6669,7 +6836,8 @@
   "useCases": [],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.1.0"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.1.0",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6737,8 +6905,8 @@
   "importName": "colorthief",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.2.1",
   "python": [
    "3.11"
   ],
@@ -6746,7 +6914,8 @@
   "description": "Ekstrak palet warna dominan.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.2.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6778,8 +6947,8 @@
   "importName": "colour",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.1.5",
   "python": [
    "3.11"
   ],
@@ -6787,7 +6956,8 @@
   "description": "Color science (perlu numpy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.1.5 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6828,7 +6998,8 @@
   "description": "Baca metadata EXIF.",
   "useCases": [],
   "works": [
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.5.1"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v3.5.1",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.5.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6896,8 +7067,8 @@
   "importName": "gif",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "23.3.0",
   "python": [
    "3.11"
   ],
@@ -6905,7 +7076,8 @@
   "description": "Buat GIF sederhana.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v23.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -6937,7 +7109,7 @@
   "importName": "imagehash",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -6946,7 +7118,9 @@
   "description": "Perceptual image hashing (butuh Pillow).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Butuh scipy — tidak tersedia di ARMv7."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -6976,15 +7150,17 @@
   "importName": "imageio",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.37.4",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "I/O gambar multi-format.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.37.4 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7054,7 +7230,7 @@
   "importName": "moviepy",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -7062,8 +7238,12 @@
   "abis": [],
   "description": "Editing video (butuh ffmpeg).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: imageio (DEVICE TESTED) untuk baca/tulis frame"
+  ],
+  "doesNotWork": [
+   "Dependensi imageio-ffmpeg membundel binary ffmpeg — tidak tersedia utk Android."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -7088,8 +7268,8 @@
   "importName": "mutagen",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.48.1",
   "python": [
    "3.11"
   ],
@@ -7097,7 +7277,8 @@
   "description": "Baca/tulis tag audio MP3/FLAC/OGG (murni-Python).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.48.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7173,8 +7354,8 @@
   "importName": "piexif",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.1.3",
   "python": [
    "3.11"
   ],
@@ -7182,7 +7363,8 @@
   "description": "Tulis/baca EXIF (untuk Pillow).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.1.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7311,15 +7493,17 @@
   "importName": "pydub",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.25.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Manipulasi audio (butuh ffmpeg/avconv untuk banyak format).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.25.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7508,8 +7692,8 @@
   "importName": "qrcode",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.2",
   "python": [
    "3.11"
   ],
@@ -7517,7 +7701,8 @@
   "description": "Generate QR code (pakai Pillow).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7549,7 +7734,7 @@
   "importName": "soundfile",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -7557,8 +7742,12 @@
   "abis": [],
   "description": "Baca/tulis WAV/FLAC (libsndfile native).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: wavio / miniaudio (keduanya DEVICE TESTED)"
+  ],
+  "doesNotWork": [
+   "Butuh libsndfile.so sistem — tidak ada di Android/Chaquopy (error device: dlopen libsndfile.so not found)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -7627,8 +7816,8 @@
   "importName": "wavio",
   "category": "Image / Audio / Media",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.0.9",
   "python": [
    "3.11"
   ],
@@ -7636,7 +7825,8 @@
   "description": "Baca/tulis WAV via numpy (murni-Python).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.0.9 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7717,7 +7907,8 @@
   "useCases": [],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v1.5.1"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v1.5.1",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.5.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7746,8 +7937,8 @@
   "importName": "authlib",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.7.2",
   "python": [
    "3.11"
   ],
@@ -7755,7 +7946,8 @@
   "description": "OAuth/OpenID modern.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.7.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7787,15 +7979,17 @@
   "importName": "bcrypt",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.1.7",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Hash password (C extension).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.1.7 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -7867,8 +8061,8 @@
   "importName": "hashids",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.3.1",
   "python": [
    "3.11"
   ],
@@ -7876,7 +8070,8 @@
   "description": "Hash angka → string pendek (bukan kriptografi).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.3.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7918,7 +8113,8 @@
   "useCases": [],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
-   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v1.4.0"
+   "DEVICE VERIFIED 2026-08-16 (Infinix ARMv7, breadcrumb user): install+smoke OK v1.4.0",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -7952,8 +8148,8 @@
   "importName": "keyring",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "25.7.0",
   "python": [
    "3.11"
   ],
@@ -7961,7 +8157,8 @@
   "description": "Credential store (backend Android?).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v25.7.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8026,8 +8223,8 @@
   "importName": "oauthlib",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.3.1",
   "python": [
    "3.11"
   ],
@@ -8035,7 +8232,8 @@
   "description": "OAuth 1/2 framework.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.3.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8067,8 +8265,8 @@
   "importName": "passlib",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.7.4",
   "python": [
    "3.11"
   ],
@@ -8076,7 +8274,8 @@
   "description": "Password hashing library.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.7.4 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8108,8 +8307,8 @@
   "importName": "Crypto",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.21.0",
   "python": [
    "3.11"
   ],
@@ -8117,7 +8316,8 @@
   "description": "Kripto murni-C (wheel Android?).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.21.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8149,8 +8349,8 @@
   "importName": "pyotp",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.10.0",
   "python": [
    "3.11"
   ],
@@ -8158,7 +8358,8 @@
   "description": "TOTP/HOTP two-factor authentication.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.10.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8190,8 +8391,8 @@
   "importName": "jose",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.5.0",
   "python": [
    "3.11"
   ],
@@ -8199,7 +8400,8 @@
   "description": "JOSE implementation.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.5.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8231,15 +8433,17 @@
   "importName": "trustme",
   "category": "Security / Cryptography",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Generate TLS cert untuk testing lokal.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8270,15 +8474,17 @@
   "importName": "bandit",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.9.4",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Security linter untuk kode Python.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.9.4 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8348,15 +8554,17 @@
   "importName": "factory",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.3.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Factory fixtures.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.3.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8387,8 +8595,8 @@
   "importName": "faker",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "40.36.0",
   "python": [
    "3.11"
   ],
@@ -8396,7 +8604,8 @@
   "description": "Generate data palsu realistis.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v40.36.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8428,8 +8637,8 @@
   "importName": "flake8",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "7.3.0",
   "python": [
    "3.11"
   ],
@@ -8437,7 +8646,8 @@
   "description": "Linter PEP8.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v7.3.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8469,8 +8679,8 @@
   "importName": "freezegun",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.5.5",
   "python": [
    "3.11"
   ],
@@ -8478,7 +8688,8 @@
   "description": "Frozen time di test.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.5.5 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8510,8 +8721,8 @@
   "importName": "hypothesis",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.155.7",
   "python": [
    "3.11"
   ],
@@ -8519,7 +8730,8 @@
   "description": "Property-based testing.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.155.7 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8551,15 +8763,17 @@
   "importName": "ipdb",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.13.13",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "ipython debugger (butuh ipython).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.13.13 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8629,8 +8843,8 @@
   "importName": "memory_profiler",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.61.0",
   "python": [
    "3.11"
   ],
@@ -8638,7 +8852,8 @@
   "description": "Profil memori per baris.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.61.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8670,8 +8885,8 @@
   "importName": "mock",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "5.2.0",
   "python": [
    "3.11"
   ],
@@ -8679,7 +8894,8 @@
   "description": "Mocking (stdlib sejak 3.3).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v5.2.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8750,8 +8966,8 @@
   "importName": "pdbpp",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.12.1",
   "python": [
    "3.11"
   ],
@@ -8759,7 +8975,8 @@
   "description": "Debugger pdb++ (interaktif di terminal).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.12.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8823,8 +9040,8 @@
   "importName": "pyright",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.1.411",
   "python": [
    "3.11"
   ],
@@ -8832,7 +9049,8 @@
   "description": "Type checker berbasis Node — butuh nodejs, tidak didukung.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.1.411 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8864,8 +9082,8 @@
   "importName": "pytest",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "9.1.1",
   "python": [
    "3.11"
   ],
@@ -8873,7 +9091,8 @@
   "description": "Framework testing standar.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v9.1.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -8905,15 +9124,17 @@
   "importName": "pytest_asyncio",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.4.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Async testing pytest.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -8985,8 +9206,8 @@
   "importName": "pytest_mock",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.15.1",
   "python": [
    "3.11"
   ],
@@ -8994,7 +9215,8 @@
   "description": "Mocking di pytest.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.15.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9026,8 +9248,8 @@
   "importName": "xdist",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.8.0",
   "python": [
    "3.11"
   ],
@@ -9035,7 +9257,8 @@
   "description": "Paralelisasi pytest.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.8.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9067,8 +9290,8 @@
   "importName": "responses",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.26.2",
   "python": [
    "3.11"
   ],
@@ -9076,7 +9299,8 @@
   "description": "Mock requests.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.26.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9186,7 +9410,7 @@
   "importName": "unittest2",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -9194,8 +9418,12 @@
   "abis": [],
   "description": "Backport unittest.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: pytest (DEVICE TESTED) atau unittest stdlib"
+  ],
+  "doesNotWork": [
+   "Fosil backport Python 2 era 2013; deps traceback2 tak ter-resolve."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -9225,15 +9453,17 @@
   "importName": "vcr",
   "category": "Testing / Quality / Debugging",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.3.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Record & replay HTTP.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.3.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -9264,8 +9494,8 @@
   "importName": "arrow",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.4.0",
   "python": [
    "3.11"
   ],
@@ -9273,7 +9503,8 @@
   "description": "Datetime ramah.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9296,7 +9527,8 @@
     "url": "https://arrow.readthedocs.io"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "boltons",
@@ -9304,8 +9536,8 @@
   "importName": "boltons",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "26.1.0",
   "python": [
    "3.11"
   ],
@@ -9313,7 +9545,8 @@
   "description": "Koleksi utilitas Python murni.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v26.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9336,7 +9569,8 @@
     "url": "https://github.com/mahmoud/boltons"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "certifi",
@@ -9344,8 +9578,8 @@
   "importName": "certifi",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2026.7.22",
   "python": [
    "3.11"
   ],
@@ -9356,7 +9590,8 @@
   ],
   "works": [
    "certifi.where()",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2026.7.22 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9390,8 +9625,8 @@
   "importName": "colorama",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.4.6",
   "python": [
    "3.11"
   ],
@@ -9402,7 +9637,8 @@
   ],
   "works": [
    "Fore/Back/Style",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.4.6 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9427,7 +9663,8 @@
     "url": "https://github.com/tartley/colorama"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Arnon Yaari"
  },
  {
   "name": "colorlog",
@@ -9435,8 +9672,8 @@
   "importName": "colorlog",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.12.0",
   "python": [
    "3.11"
   ],
@@ -9444,7 +9681,8 @@
   "description": "Logging berwarna.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.12.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9476,8 +9714,8 @@
   "importName": "croniter",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.2.4",
   "python": [
    "3.11"
   ],
@@ -9485,7 +9723,8 @@
   "description": "Parse/iterasi ekspresi cron.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.2.4 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9517,8 +9756,8 @@
   "importName": "dateparser",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.4.2",
   "python": [
    "3.11"
   ],
@@ -9526,7 +9765,8 @@
   "description": "Parse tanggal dari teks natural.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9553,8 +9793,8 @@
   "importName": "filelock",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.32.3",
   "python": [
    "3.11"
   ],
@@ -9562,7 +9802,8 @@
   "description": "File locking lintas platform.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.32.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9594,8 +9835,8 @@
   "importName": "fuzzywuzzy",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.18.0",
   "python": [
    "3.11"
   ],
@@ -9603,7 +9844,8 @@
   "description": "Fuzzy string matching (dep python-Levenshtein opsional).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.18.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9635,8 +9877,8 @@
   "importName": "humanize",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.16.0",
   "python": [
    "3.11"
   ],
@@ -9644,7 +9886,8 @@
   "description": "Format angka/data ramah manusia.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.16.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9676,15 +9919,17 @@
   "importName": "inflect",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "7.5.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Pluralisasi kata Inggris.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v7.5.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -9701,7 +9946,8 @@
     "url": "https://pypi.org/project/inflect/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "more-itertools",
@@ -9709,8 +9955,8 @@
   "importName": "more_itertools",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "11.1.0",
   "python": [
    "3.11"
   ],
@@ -9718,7 +9964,8 @@
   "description": "Ekstensi itertools.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v11.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9750,8 +9997,8 @@
   "importName": "pathlib2",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.3.7.post1",
   "python": [
    "3.11"
   ],
@@ -9759,7 +10006,8 @@
   "description": "Backport pathlib (untuk kode lama).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.3.7.post1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9830,8 +10078,8 @@
   "importName": "platformdirs",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.11.3",
   "python": [
    "3.11"
   ],
@@ -9839,7 +10087,8 @@
   "description": "Lokasi direktori per-platform.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.11.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9871,8 +10120,8 @@
   "importName": "psutil",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "7.1.3",
   "python": [
    "3.11"
   ],
@@ -9880,7 +10129,8 @@
   "description": "Info proses/sistem (C extension — cek wheel Android).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v7.1.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -9963,8 +10213,8 @@
   "importName": "dateutil",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.9.0.post0",
   "python": [
    "3.11"
   ],
@@ -9977,7 +10227,8 @@
   "works": [
    "dateutil.parser",
    "relativedelta",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.9.0.post0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10011,8 +10262,8 @@
   "importName": "dotenv",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.2",
   "python": [
    "3.11"
   ],
@@ -10020,7 +10271,8 @@
   "description": "Baca file .env.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10047,8 +10299,8 @@
   "importName": "pytz",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2026.3.post1",
   "python": [
    "3.11"
   ],
@@ -10056,7 +10308,8 @@
   "description": "Timezone database.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2026.3.post1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10088,8 +10341,8 @@
   "importName": "yaml",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.0.3",
   "python": [
    "3.11"
   ],
@@ -10102,7 +10355,8 @@
   "works": [
    "yaml.safe_load",
    "yaml.dump",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.0.3 instal+smoke OK"
   ],
   "doesNotWork": [
    "YAML 1.2 penuh (sebagian)"
@@ -10138,8 +10392,8 @@
   "importName": "regex",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2023.10.3",
   "python": [
    "3.11"
   ],
@@ -10155,7 +10409,8 @@
   "works": [
    "regex.search",
    "fuzzy matching",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2023.10.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10189,8 +10444,8 @@
   "importName": "retry",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.9.2",
   "python": [
    "3.11"
   ],
@@ -10198,7 +10453,8 @@
   "description": "Dekorator retry.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.9.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10246,7 +10502,8 @@
    "print(rich)",
    "Table",
    "Console",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v13.7.1 instal+smoke OK"
   ],
   "doesNotWork": [
    "live display yang butuh terminal penuh (sebagian)"
@@ -10289,8 +10546,8 @@
   "importName": "schedule",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.2.2",
   "python": [
    "3.11"
   ],
@@ -10298,7 +10555,8 @@
   "description": "Penjadwalan job sederhana.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10330,8 +10588,8 @@
   "importName": "six",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.17.0",
   "python": [
    "3.11"
   ],
@@ -10339,7 +10597,8 @@
   "description": "Kompatibilitas Py2/3 (dep lama).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.17.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10371,8 +10630,8 @@
   "importName": "tenacity",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "9.1.4",
   "python": [
    "3.11"
   ],
@@ -10380,7 +10639,8 @@
   "description": "Retry library modern.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v9.1.4 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10412,8 +10672,8 @@
   "importName": "textdistance",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.6.3",
   "python": [
    "3.11"
   ],
@@ -10421,7 +10681,8 @@
   "description": "30+ algoritma jarak string.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.6.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10453,8 +10714,8 @@
   "importName": "toml",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.10.2",
   "python": [
    "3.11"
   ],
@@ -10462,7 +10723,8 @@
   "description": "TOML parser.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.10.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10494,8 +10756,8 @@
   "importName": "tomli",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.4.1",
   "python": [
    "3.11"
   ],
@@ -10503,7 +10765,8 @@
   "description": "TOML 1.0 parser (Python 3.11: gunakan tomllib bawaan).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.4.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10535,15 +10798,17 @@
   "importName": "toolz",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.1.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Fungsi utilitas fungsional.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.1.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -10574,8 +10839,8 @@
   "importName": "typing_extensions",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.16.0",
   "python": [
    "3.11"
   ],
@@ -10583,7 +10848,8 @@
   "description": "Ekstensi typing.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.16.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10615,8 +10881,8 @@
   "importName": "tzdata",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2026.3",
   "python": [
    "3.11"
   ],
@@ -10624,7 +10890,8 @@
   "description": "IANA timezone data.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2026.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10656,8 +10923,8 @@
   "importName": "unidecode",
   "category": "Utilities / CLI / Terminal",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.4.0",
   "python": [
    "3.11"
   ],
@@ -10665,7 +10932,8 @@
   "description": "Transliterasi Unicode → ASCII.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -10692,7 +10960,7 @@
   "importName": "watchdog",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -10701,7 +10969,9 @@
   "description": "File system watcher (native).",
   "useCases": [],
   "works": [],
-  "doesNotWork": [],
+  "doesNotWork": [
+   "Tidak ada wheel ARMv7 di indeks mana pun (dibuktikan di device)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -10731,15 +11001,17 @@
   "importName": "aiohttp",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "EXPERIMENTAL",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.9.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "HTTP client/server async (native, agak berat).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.9.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -10829,8 +11101,8 @@
   "importName": "click",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.4.2",
   "python": [
    "3.11"
   ],
@@ -10841,7 +11113,8 @@
   ],
   "works": [
    "@click.command",
-   "options & args"
+   "options & args",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.4.2 instal+smoke OK"
   ],
   "doesNotWork": [
    "prompt interaktif terbatas di ZCODE"
@@ -10877,15 +11150,17 @@
   "importName": "discord",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.7.1",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Discord bot library.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.7.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -10955,8 +11230,8 @@
   "importName": "feedparser",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.0.14",
   "python": [
    "3.11"
   ],
@@ -10964,7 +11239,8 @@
   "description": "Parsing RSS/Atom.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.0.14 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11011,7 +11287,8 @@
   "works": [
    "route & render",
    "JSON API",
-   "development server"
+   "development server",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.3 instal+smoke OK"
   ],
   "doesNotWork": [
    "HTTPS production",
@@ -11055,8 +11332,8 @@
   "importName": "gunicorn",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "26.0.0",
   "python": [
    "3.11"
   ],
@@ -11064,7 +11341,8 @@
   "description": "WSGI server (Unix-only — sebagian fitur tidak jalan di Android).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v26.0.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11096,8 +11374,8 @@
   "importName": "html5lib",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "1.1",
   "python": [
    "3.11"
   ],
@@ -11105,7 +11383,8 @@
   "description": "Parser HTML sesuai spesifikasi WHATWG.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11152,7 +11431,8 @@
   "works": [
    "Client sync & async",
    "streaming response",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.27.2 instal+smoke OK"
   ],
   "doesNotWork": [
    "HTTP/2 di sebagian server (dependensi h2)"
@@ -11195,15 +11475,17 @@
   "importName": "itsdangerous",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.2.0",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Signing data (dep Flask).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.2.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -11225,7 +11507,8 @@
     "url": "https://itsdangerous.palletsprojects.com/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "jinja2",
@@ -11233,8 +11516,8 @@
   "importName": "jinja2",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.1.6",
   "python": [
    "3.11"
   ],
@@ -11242,7 +11525,8 @@
   "description": "Template engine (dep Flask).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.1.6 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11265,7 +11549,8 @@
     "url": "https://jinja.palletsprojects.com/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
  },
  {
   "name": "lxml",
@@ -11365,15 +11650,17 @@
   "importName": "praw",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "8.0.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "Reddit API wrapper.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.0.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -11404,8 +11691,8 @@
   "importName": "pyquery",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.1.0",
   "python": [
    "3.11"
   ],
@@ -11413,7 +11700,8 @@
   "description": "jQuery-style HTML parsing (dep lxml).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11548,7 +11836,7 @@
   "importName": "sanic",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "EXPERIMENTAL",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -11556,8 +11844,12 @@
   "abis": [],
   "description": "Web server async (butuh uvloop? tidak di Android).",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: flask / uvicorn (keduanya DEVICE TESTED)"
+  ],
+  "doesNotWork": [
+   "Dependensi httptools tidak punya wheel ARMv7 (dibuktikan di device)."
+  ],
   "dependencies": [],
   "risks": [],
   "smokeTest": null,
@@ -11667,8 +11959,8 @@
   "importName": "slack_sdk",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.43.0",
   "python": [
    "3.11"
   ],
@@ -11676,7 +11968,8 @@
   "description": "Slack SDK.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.43.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11748,7 +12041,7 @@
   "importName": "telegram",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
+  "status": "UNAVAILABLE",
   "testedVersion": null,
   "python": [
    "3.11"
@@ -11756,8 +12049,12 @@
   "abis": [],
   "description": "Telegram Bot API wrapper.",
   "useCases": [],
-  "works": [],
-  "doesNotWork": [],
+  "works": [
+   "ALTERNATIF: kirim pesan via requests ke Bot API Telegram (HTTP murni)"
+  ],
+  "doesNotWork": [
+   "Paket 'telegram' di PyPI bukan bot API aktif dan tak ber-wheel kompatibel."
+  ],
   "dependencies": [],
   "risks": [
    "uji massal 2026-08-16: import gagal di harness ARMv7 — perlu verifikasi ulang nama modul/isi wheel"
@@ -11789,8 +12086,8 @@
   "importName": "tornado",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "6.5.2",
   "python": [
    "3.11"
   ],
@@ -11798,7 +12095,8 @@
   "description": "Web framework non-blocking.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v6.5.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11844,7 +12142,8 @@
   "works": [
    "tqdm(range(...))",
    "write() untuk log",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.66.4 instal+smoke OK"
   ],
   "doesNotWork": [
    "GUI progress"
@@ -11887,8 +12186,8 @@
   "importName": "tweepy",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "4.17.0",
   "python": [
    "3.11"
   ],
@@ -11896,7 +12195,8 @@
   "description": "Twitter/X API wrapper.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v4.17.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11928,8 +12228,8 @@
   "importName": "twilio",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "9.11.0",
   "python": [
    "3.11"
   ],
@@ -11937,7 +12237,8 @@
   "description": "Twilio API (SMS/voice).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v9.11.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -11969,8 +12270,8 @@
   "importName": "urllib3",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2.7.0",
   "python": [
    "3.11"
   ],
@@ -11978,7 +12279,8 @@
   "description": "HTTP library berfitur lengkap (dep requests).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.7.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12010,15 +12312,17 @@
   "importName": "uvicorn",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "0.52.3",
   "python": [
    "3.11"
   ],
   "abis": [],
   "description": "ASGI server murni-Python.",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.52.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -12049,8 +12353,8 @@
   "importName": "waitress",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.0.2",
   "python": [
    "3.11"
   ],
@@ -12058,7 +12362,8 @@
   "description": "WSGI server murni-Python (keluarga ZABACODE).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12131,8 +12436,8 @@
   "importName": "werkzeug",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.1.8",
   "python": [
    "3.11"
   ],
@@ -12140,7 +12445,8 @@
   "description": "WSGI utility (dep Flask).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.1.8 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12172,8 +12478,8 @@
   "importName": "youtube_dl",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2021.12.17",
   "python": [
    "3.11"
   ],
@@ -12181,7 +12487,8 @@
   "description": "Download video (legal: hanya konten berizin).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2021.12.17 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12213,8 +12520,8 @@
   "importName": "yt_dlp",
   "category": "Web / API / Networking",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "2026.8.16",
   "python": [
    "3.11"
   ],
@@ -12222,7 +12529,8 @@
   "description": "Fork aktif youtube-dl.",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2026.8.16 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12254,7 +12562,7 @@
   "importName": "_argon2_cffi_bindings",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "21.2.0",
   "python": [
    "3.11"
@@ -12264,7 +12572,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v21.2.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -12333,7 +12643,7 @@
   "importName": "aubio",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "0.4.9",
   "python": [
    "3.11"
@@ -12344,7 +12654,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.4.9 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12419,7 +12730,7 @@
   "importName": "brotli",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.0.7",
   "python": [
    "3.11"
@@ -12430,7 +12741,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.0.7 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12505,7 +12817,7 @@
   "importName": "contourpy",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.0.5",
   "python": [
    "3.11"
@@ -12516,7 +12828,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.0.5 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12548,7 +12861,7 @@
   "importName": "cymem",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "2.0.6",
   "python": [
    "3.11"
@@ -12559,7 +12872,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.0.6 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12591,7 +12905,7 @@
   "importName": "cytoolz",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "0.12.2",
   "python": [
    "3.11"
@@ -12602,7 +12916,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.12.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12634,7 +12949,7 @@
   "importName": "depthai",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "2.24.0.0",
   "python": [
    "3.11"
@@ -12645,7 +12960,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.24.0.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12677,7 +12993,7 @@
   "importName": "editdistance",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "0.6.2",
   "python": [
    "3.11"
@@ -12688,7 +13004,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.6.2 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12720,7 +13037,7 @@
   "importName": "ephem",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "3.7.7.0",
   "python": [
    "3.11"
@@ -12731,7 +13048,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.7.7.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12763,7 +13081,7 @@
   "importName": "frozenlist",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.4.0",
   "python": [
    "3.11"
@@ -12774,7 +13092,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12806,7 +13125,7 @@
   "importName": "google_crc32c",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.7.1",
   "python": [
    "3.11"
@@ -12816,7 +13135,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.7.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -12847,7 +13168,7 @@
   "importName": "greenlet",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "3.0.1",
   "python": [
    "3.11"
@@ -12858,7 +13179,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.1 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12890,7 +13212,7 @@
   "importName": "grpc",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.59.3",
   "python": [
    "3.11"
@@ -12900,7 +13222,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.59.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -12931,7 +13255,7 @@
   "importName": "jpegio",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "0.2.8",
   "python": [
    "3.11"
@@ -12942,7 +13266,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.2.8 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -12974,7 +13299,7 @@
   "importName": "kiwisolver",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.4.5",
   "python": [
    "3.11"
@@ -12985,7 +13310,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.5 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13064,7 +13390,7 @@
   "importName": "lru",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.1.8",
   "python": [
    "3.11"
@@ -13074,7 +13400,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.1.8 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13105,7 +13433,7 @@
   "importName": "markupsafe",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "3.0.3",
   "python": [
    "3.11"
@@ -13115,7 +13443,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.3 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13146,7 +13476,7 @@
   "importName": "miniaudio",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.59",
   "python": [
    "3.11"
@@ -13156,7 +13486,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.59 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13187,7 +13519,7 @@
   "importName": "multidict",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "5.1.0",
   "python": [
    "3.11"
@@ -13198,7 +13530,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v5.1.0 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13230,7 +13563,7 @@
   "importName": "murmurhash",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.0.10",
   "python": [
    "3.11"
@@ -13241,7 +13574,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.0.10 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13273,7 +13607,7 @@
   "importName": "netifaces",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "0.10.9",
   "python": [
    "3.11"
@@ -13284,7 +13618,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.10.9 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13316,7 +13651,7 @@
   "importName": "preshed",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "3.0.9",
   "python": [
    "3.11"
@@ -13327,7 +13662,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.0.9 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13402,7 +13738,7 @@
   "importName": "Cryptodome",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "3.21.0",
   "python": [
    "3.11"
@@ -13412,7 +13748,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v3.21.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13484,7 +13822,7 @@
   "importName": "erfa",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "2.0.1.1",
   "python": [
    "3.11"
@@ -13494,7 +13832,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.0.1.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13525,7 +13865,7 @@
   "importName": "nacl",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.5.0",
   "python": [
    "3.11"
@@ -13535,7 +13875,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.5.0 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13613,7 +13955,7 @@
   "importName": "pywt",
   "category": "Data / Math / Science",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.4.1",
   "python": [
    "3.11"
@@ -13623,7 +13965,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.4.1 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13695,7 +14039,7 @@
   "importName": "soxr",
   "category": "Image / Audio / Media",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "0.3.7",
   "python": [
    "3.11"
@@ -13706,7 +14050,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v0.3.7 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13738,7 +14083,7 @@
   "importName": "srsly",
   "category": "AI / ML / NLP",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "2.4.8",
   "python": [
    "3.11"
@@ -13749,7 +14094,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v2.4.8 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13781,7 +14127,7 @@
   "importName": "tgcrypto",
   "category": "Security / Cryptography",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.2.5",
   "python": [
    "3.11"
@@ -13792,7 +14138,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.5 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],
@@ -13824,7 +14171,7 @@
   "importName": "typed_ast",
   "category": "Utilities / CLI / Terminal",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.5.4",
   "python": [
    "3.11"
@@ -13834,7 +14181,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.5.4 instal+smoke OK"
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],
@@ -13908,7 +14257,7 @@
   "importName": "yarl",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "1.9.3",
   "python": [
    "3.11"
@@ -13919,7 +14268,8 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "ARMv7-import-verified 2026-08-16 (bionic311)",
+   "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.9.3 instal+smoke OK"
   ],
   "doesNotWork": [],
   "dependencies": [],

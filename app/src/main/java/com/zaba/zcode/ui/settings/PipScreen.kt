@@ -637,9 +637,10 @@ private fun LibraryTab(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
         }
-        // v1.0.18: legend status — ikon tidak pernah dijelaskan di layar
+        // v1.0.18: legend status — ikon tidak pernah dijelaskan di layar.
+        // Glyph polos (keputusan user pasca-UAT), selaras statusIcon().
         Text(
-            "🟢 teruji · 🟡 harusnya jalan · 🧪 eksperimen · ❌ tidak bisa",
+            "✓ teruji · △ harusnya jalan · ! eksperimen · ✕ tidak bisa",
             fontSize = 10.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
@@ -761,14 +762,19 @@ private fun CatalogRow(
     Divider(color = Color.White.copy(alpha = 0.05f))
 }
 
+// Keputusan user 2026-08-16 (pasca UAT 341 paket): glyph POLOS 14sp, bukan
+// emoji berwarna — konsisten prinsip "ikon polos" RENCANA_UPDATE & template
+// Detail (✓/∆/✗). Makna: ✓ terpasang/teruji · △ harusnya jalan · ! eksperimen
+// · ✕ tidak bisa. Sinyal sekali-sapu tetap ada (hemat 341 tap di 4G lambat),
+// polusi visualnya yang dibuang.
 private fun statusIcon(status: PackageStatus, installed: Boolean): String = when {
-    installed -> "✅"
-    status == PackageStatus.TESTED -> "🟢"
-    status == PackageStatus.COMPATIBLE -> "🟡"
-    status == PackageStatus.EXPERIMENTAL -> "🧪"
-    status == PackageStatus.INCOMPATIBLE -> "❌"
-    status == PackageStatus.UNAVAILABLE -> "🚫"
-    else -> "❔"
+    installed -> "✓"
+    status == PackageStatus.TESTED -> "✓"
+    status == PackageStatus.COMPATIBLE -> "△"
+    status == PackageStatus.EXPERIMENTAL -> "!"
+    status == PackageStatus.INCOMPATIBLE -> "✕"
+    status == PackageStatus.UNAVAILABLE -> "✕"
+    else -> "?"
 }
 
 // =====================================================================
