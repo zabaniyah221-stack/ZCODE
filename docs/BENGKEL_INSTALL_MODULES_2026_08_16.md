@@ -389,3 +389,51 @@ matplotlib aktif), ipdb (transaksi hilang), coverage/pytest-cov & pyzbar
   bisa nyusul tanpa resiko kode (boleh ikut kalau batch lancar).
 - Lint gutter, AI BYOK, Alpine proot → v1.0.19, jangan bocor ke sini.
 - `.github/workflows/*` → ranah user.
+
+---
+
+## 10. PENUTUPAN BENGKEL — hasil UAT final (2026-08-17)
+
+User menguji APK bengkel dan **menyalin log 873 baris SEBAGAI TEKS UTUH**
+(bukan 100 screenshot) — itu sendiri bukti hidup Bug Y sembuh.
+
+### Cap DEVICE VERIFIED (Infinix SMART 9 HD, ARMv7, v1.0.18, 2026-08-17)
+| Bug | Bukti di log 873 baris |
+|---|---|
+| **R** | quantities 01:58 & seaborn 02:00 INSTALL_OK — dulu crash deterministik `_NoValueType`/`FillType` 4 repro |
+| **S** | apscheduler dapat **3.11.3 stable** (dulu 4.0.0a6); warning fosil muncul utk zope-interface/cryptography/argon2/astropy/openai |
+| **T** | Diagnostics 873 baris dibuka tanpa ANR |
+| **V** | pyzbar 01:46 & coverage (via pytest-cov 01:44) INSTALL_OK — dulu dibunuh aturan wajib-.so |
+| **W** | pycurl DITERIMA parser (dulu ditolak 37x); gagalnya kini jujur di dlopen |
+| **X** | ruamel/fastapi/mypy/py7zr/pickledb/sqlitedict/cvxpy semua tercatat PKG_ANALYZE_FAIL di breadcrumb |
+| **Y** | log penuh dari disk termasuk arsip rotasi, tersalin utuh |
+| **U** | TETAP SANDBOX VERIFIED — user memutuskan skip re-test pulp (solver x86, vonis dikunci) |
+
+### Temuan baru dari log yang sama → bengkel-mini v1.0.18-polish
+1. **pycurl** gagal `libcurl.so not found` → kelas Bug Q; fix
+   `pycurl -> chaquopy-curl-openssl-3` + ARMV7-IMPORT-VERIFIED bionic311
+   (PycURL/7.45.2 libcurl/7.76.1 OpenSSL/3.0.18).
+2. **lameenc/pyproj** — vonis lama SALAH DIAGNOSA (arsip mass-test jsonl:
+   dlopen host-dep, bukan wheel hilang). Fix peta host-dep + rantai dalam
+   proj->libtiff->libjpeg; dua-duanya ARMV7-IMPORT-VERIFIED.
+3. **tox/setuptools/zope-interface** → riset shadowing stdlib:
+   `docs/RISET_SHADOWING_STDLIB.md` (mekanisme tox TERBUKTI repro; obat
+   "provided packages" DESIGNED utk v1.0.19).
+4. Relabel 404 probe → `target_not_found` / konsol `TARGET NOT FOUND`
+   (keputusan user; ±90 baris http_fail palsu per sesi lenyap).
+5. Retry URLError 2→3 (yt-dlp kedip 4G); pin mypy 1.18.2 (librt mulai 1.19).
+6. Ekspedisi harta karun 83 paket ✕: docker naik kelas (client remote),
+   6 kartu dikoreksi alasan presisi, 3 jebakan vonis palsu terhindar
+   (anthropic/line-profiler/sanic tetap ✕ dgn bukti berlapis).
+
+Katalog akhir: **TESTED 229** | UNAVAILABLE 77 | EXPERIMENTAL 16 |
+INCOMPATIBLE 10 | COMPATIBLE 10 (total 342, +virtualenv).
+
+### UAT ringan yang diminta ke user (bukan maraton)
+1. pycurl → harus sukses instal+smoke (fix host-dep)
+2. lameenc / pyproj → harus sukses (kalau pyproj kena CRSError data dir,
+   itu bug lanjutan aktivasi, laporkan — resolvernya sudah benar)
+3. mypy → harus dapat 1.18.2 dan jalan (interpreted, agak lambat itu normal)
+4. docker / diskcache / ruamel.yaml → opsional, sesuai mood
+5. Lirik konsol sekali: baris `TARGET NOT FOUND [chaquopy]` muncul
+   menggantikan `http_fail HTTPError HTTP 404`
