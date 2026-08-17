@@ -1081,3 +1081,117 @@ class TestBengkelMiniV1018:
         assert all(v.startswith("1.") for v in vers), (
             f"pin mypy harus < 1.19 (librt tak punya wheel ARMv7); dapat {vers}"
         )
+
+
+class TestSignalShim:
+    """Shim signal.signal (2026-08-17): kode Python ZCODE selalu di background
+    thread Android; paket yang memasang signal handler saat import (bukti
+    device: pycurl via modul bonus `curl`) mati ValueError "main thread".
+    Desain catch-based (rpy2 #769 / CPython 38904): thread-check bisa bohong
+    di runtime embedded, percobaan nyata tidak."""
+
+    def _fresh_shim(self):
+        import importlib
+        from package_runtime import signalshim
+        importlib.reload(signalshim)  # reset _ORIGINAL_SIGNAL & riwayat
+        return signalshim
+
+    def test_install_idempoten(self):
+        import signal as sigmod
+        asli = sigmod.signal
+        shim = self._fresh_shim()
+        try:
+            shim.install()
+            pertama = sigmod.signal
+            shim.install()
+            assert sigmod.signal is pertama, "install() kedua tidak boleh melapis ganda"
+            assert pertama is not asli
+        finally:
+            sigmod.signal = asli
+
+    def test_background_thread_tidak_meledak_dan_tercatat(self):
+        import signal as sigmod
+        import threading
+        asli = sigmod.signal
+        shim = self._fresh_shim()
+        try:
+            shim.install()
+            res = {}
+
+            def worker():
+                try:
+                    # persis pola curl/__init__.py di wheel pycurl
+                    sigmod.signal(sigmod.SIGPIPE, sigmod.SIG_IGN)
+                    res["ok"] = True
+                except ValueError as e:
+                    res["err"] = str(e)
+
+            t = threading.Thread(target=worker)
+            t.start(); t.join()
+            assert res.get("ok"), (
+                "signal.signal dari background thread harus di-skip anggun, "
+                f"bukan meledak; res={res}"
+            )
+            assert "SIGPIPE" in shim.skipped_registrations, (
+                "skip harus tercatat jujur di skipped_registrations"
+            )
+        finally:
+            sigmod.signal = asli
+
+    def test_valueerror_lain_tidak_ditelan(self):
+        # Uji mutasi putaran 1 membongkar guard lama sebagai PALSU: memakai
+        # signal number tak valid, jalur skip pun ikut melempar ValueError
+        # (dari getsignal), jadi filter "main thread" yang dihapus tetap
+        # lolos. Versi ini mengontrol error-nya sendiri: ValueError non-main-
+        # thread WAJIB keluar utuh TANPA tercatat sebagai skip.
+        import signal as sigmod
+        asli = sigmod.signal
+        shim = self._fresh_shim()
+        try:
+            shim.install()
+
+            def asli_palsu(signalnum, handler):
+                raise ValueError("error sungguhan yang bukan soal thread")
+
+            shim._ORIGINAL_SIGNAL = asli_palsu
+            sigmod.signal.__zcode_original__ = asli_palsu
+            with pytest.raises(ValueError, match="bukan soal thread"):
+                sigmod.signal(sigmod.SIGPIPE, sigmod.SIG_IGN)
+            assert not shim.skipped_registrations, (
+                "ValueError non-main-thread tidak boleh tercatat sebagai skip"
+            )
+        finally:
+            sigmod.signal = asli
+
+    def test_gerbang_terpasang_di_smoke_dan_runner(self):
+        src_smoke = open(os.path.join(
+            ROOT, "app/src/main/python/package_runtime/smoke.py")).read()
+        src_runner = open(os.path.join(
+            ROOT, "app/src/main/python/zcode_runner.py")).read()
+        for nama, src in (("smoke.py", src_smoke), ("zcode_runner.py", src_runner)):
+            assert "signalshim" in src and "install()" in src, (
+                f"{nama} harus memasang signalshim.install() — dua gerbang "
+                "eksekusi (smoke test & script user) sama-sama background thread"
+            )
+
+    def test_trace_hint_menyebut_pelaku(self):
+        # Lapis 1: pesan error smoke harus membawa jejak file:baris pemanggil.
+        err = None
+        try:
+            import tempfile, textwrap, importlib.util
+            with tempfile.TemporaryDirectory() as d:
+                pelaku = os.path.join(d, "pelaku_signal.py")
+                open(pelaku, "w").write(textwrap.dedent("""
+                    def ledak():
+                        raise ValueError("simulasi dari modul pelaku")
+                """))
+                spec = importlib.util.spec_from_file_location("pelaku_signal", pelaku)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                ok, err = smoke_mod._run_with_timeout(mod.ledak, 5.0)
+                assert not ok
+        except AssertionError:
+            raise
+        assert err and "jejak:" in err and "pelaku_signal.py" in err, (
+            f"pesan error harus menyebut file pelaku, dapat: {err}"
+        )
