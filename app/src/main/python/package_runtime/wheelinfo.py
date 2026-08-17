@@ -256,6 +256,17 @@ def best_wheel(candidates: list[dict], tested_versions=None, supported_tags=None
     # Simulasi pipeline penuh memproduksi ulang colorama-0.3.5, requests-2.0.0
     # (2013) dan Click-7.0 — sama persis dengan log perangkat user.
     # Sekarang: prioritas menaik (1 terbaik), lalu VERSI MENURUN (terbaru menang).
+    #
+    # BUG S (2026-08-16, log UAT Infinix): "versi terbaru" tanpa pandang bulu
+    # membuat pre-release menang — apscheduler 4.0.0a6, isort 9.0.0b2, plotly
+    # 7.0.0rc0, sqlalchemy 2.1.0b3, pydantic 2.14.0b1, stripe 15.6.0a1,
+    # watchfiles 0.0.0a1 (placeholder kosong). Aturan pip/PEP 440: pre-release
+    # HANYA dipilih bila tidak ada rilis stable sama sekali (atau specifier
+    # secara eksplisit memintanya — kasus itu sudah tersaring di _contains
+    # sebelum kandidat sampai ke sini). Terapkan hal yang sama.
+    stable = [r for r in ranked if not r[1].is_prerelease]
+    if stable:
+        ranked = stable
     ranked.sort(key=lambda r: (r[0], _NegVersion(r[1])))
     prio, _vkey, chosen, reason = ranked[0]
     chosen = dict(chosen)

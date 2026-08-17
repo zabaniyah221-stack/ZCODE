@@ -60,6 +60,15 @@ import kotlinx.coroutines.withContext
  * seluruh aplikasi. Menampilkan layar megah yang isinya setengah kosong tanpa
  * penjelasan akan menyesatkan, jadi keterbatasannya ditulis di layar.
  */
+/**
+ * BUG T: jumlah baris log yang dirender per jendela. 500 baris × ~15sp ≈
+ * layar-layar yang masih ringan untuk Helio G50; 1961 node sekaligus terbukti
+ * ANR di perangkat user. Kolom biasa dipertahankan (bukan LazyColumn) karena
+ * SelectionContainer — kemampuan blok-salin lintas baris — tidak bekerja baik
+ * di dalam LazyColumn; dengan jendela 500 node, Column sudah aman.
+ */
+private const val RENDER_WINDOW = 500
+
 private enum class DiagTab(val label: String, val prefixes: List<String>) {
     SEMUA("SEMUA", emptyList()),
     RUN("RUN", listOf("FAB_", "SAVE_", "TERMINAL_", "SESSION_", "PY_", "PYTHON_", "SCRIPT_", "LOGGER_", "FILE_", "FOCUS_")),
@@ -81,20 +90,36 @@ fun DiagnosticsScreen(
     var entriDiekspor by remember { mutableStateOf<RunLogStore.Entry?>(null) }
     var muatUlang by remember { mutableIntStateOf(0) }
     var loading by remember { mutableStateOf(true) }
+    // BUG T: batas RENDER awal. Data lengkap tetap di `crumbs`; yang dibatasi
+    // hanya jumlah node Compose. 1961 Text sekaligus di Column+verticalScroll
+    // (dibungkus SelectionContainer) = ANR "ZCODE tidak ada tanggapan" di
+    // perangkat user. Tombol "muat lebih lama" menambah jendela per 500.
+    var shownCount by remember { mutableIntStateOf(RENDER_WINDOW) }
+
+    // BUG Y: log penuh dari disk (arsip rotasi + aktif) untuk Salin/Bagikan.
+    var fullLog by remember { mutableStateOf("") }
 
     LaunchedEffect(muatUlang) {
-        // Baca dari disk di IO — file bisa 128KB dan ini layar diagnostik,
-        // paling tidak pantas kalau justru ia yang membuat UI tersendat.
+        // Baca dari disk di IO — file bisa 512KB+arsip dan ini layar
+        // diagnostik, paling tidak pantas kalau ia sendiri yang bikin ANR.
+        data class Loaded(
+            val crumbs: List<String>,
+            val crash: String?,
+            val runLogs: List<RunLogStore.Entry>,
+            val full: String
+        )
         val loaded = withContext(Dispatchers.IO) {
-            Triple(
-                Breadcrumb.tail(2000).lines().filter { it.isNotBlank() },
-                CrashReporter.lastReport(context),
-                RunLogStore.list(context)
+            Loaded(
+                crumbs = Breadcrumb.tail(2000).lines().filter { it.isNotBlank() },
+                crash = CrashReporter.lastReport(context),
+                runLogs = RunLogStore.list(context),
+                full = Breadcrumb.dumpFull()
             )
         }
-        crumbs = loaded.first
-        crash = loaded.second
-        runLogs = loaded.third
+        crumbs = loaded.crumbs
+        crash = loaded.crash
+        runLogs = loaded.runLogs
+        fullLog = loaded.full
         loading = false
     }
 
@@ -121,12 +146,22 @@ fun DiagnosticsScreen(
         if (tab == DiagTab.SEMUA) crumbs
         else crumbs.filter { line -> tab.prefixes.any { line.contains(it) } }
     }
+    // BUG T: jendela render — hanya `shownCount` baris TERAKHIR yang jadi node.
+    val visible = remember(filtered, shownCount) {
+        if (filtered.size <= shownCount) filtered else filtered.takeLast(shownCount)
+    }
 
-    val teksLengkap = remember(filtered, crash) {
+    // BUG Y: Salin/Bagikan memuat log SELENGKAP yang ada di disk (arsip rotasi
+    // + file aktif, sudah dibaca di IO ke `fullLog`), bukan buffer tampilan
+    // yang terpotong tail(2000) — dulu user melapor "Salin tidak utuh".
+    val teksLengkap = remember(fullLog, crash, tab) {
         buildString {
             append("=== ZCODE DIAGNOSTICS (${tab.label}) ===\n")
-            append("baris: ${filtered.size} dari ${crumbs.size}\n\n")
-            filtered.forEach { append(it).append('\n') }
+            val penuh = fullLog.trimEnd().lines().filter { it.isNotBlank() }
+            val isi = if (tab == DiagTab.SEMUA) penuh
+            else penuh.filter { line -> tab.prefixes.any { line.contains(it) } }
+            append("baris: ${isi.size} (log penuh dari disk, termasuk arsip rotasi)\n\n")
+            isi.forEach { append(it).append('\n') }
             append("\n=== CRASH TERAKHIR ===\n")
             append(crash ?: "(belum pernah crash Java)")
         }
@@ -268,7 +303,22 @@ fun DiagnosticsScreen(
                                 fontFamily = FontFamily.Monospace
                             )
                         }
-                        filtered.forEach { line ->
+                        // BUG T: tampilkan hanya jendela terakhir. Baris lama
+                        // tetap ada di data — tombol ini menambah jendela.
+                        // Salin/Bagikan SELALU log penuh, tak peduli jendela.
+                        if (filtered.size > visible.size) {
+                            Text(
+                                "▲ Muat ${RENDER_WINDOW} baris lebih lama " +
+                                    "(${filtered.size - visible.size} tersembunyi)",
+                                color = Color(0xFF7DD3FC),
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                modifier = Modifier
+                                    .clickable { shownCount += RENDER_WINDOW }
+                                    .padding(vertical = 6.dp)
+                            )
+                        }
+                        visible.forEach { line ->
                             Text(
                                 line,
                                 color = warnaBaris(line),

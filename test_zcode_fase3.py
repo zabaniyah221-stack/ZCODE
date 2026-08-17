@@ -136,7 +136,12 @@ class TestPaletteRedesign:
 class TestSamples:
     SAMPLE_IDS = ["hello_world", "text_input", "simple_math", "functions_quadratic",
                   "for_loop_factorial", "while_loop_guess", "generators_squares",
-                  "dictionaries_db", "numpy_basics", "numpy_stats", "web_fetch_json"]
+                  "dictionaries_db", "numpy_basics", "numpy_stats", "web_fetch_json",
+                  # batch v1.0.18 (2026-08-16): stdlib B2 + etalase TESTED B3
+                  "try_except", "classes_oop", "file_io", "json_data",
+                  "datetime_random", "requests_api", "rich_table",
+                  "tqdm_progress", "openpyxl_excel", "pillow_image",
+                  "matplotlib_chart"]
 
     def test_route_halaman_samples(self):
         assert '"samples"' in read(MAIN), "route samples hilang di MainActivity"

@@ -43,7 +43,6 @@ import com.zaba.zcode.core.samples.SampleLibrary
  * BackHandler sistem mengikuti hierarki yang sama (rule #2: edge case back-press).
  */
 
-private val OledBlack = Color(0xFF050806)
 
 @Composable
 fun SamplesScreen(
@@ -61,7 +60,9 @@ fun SamplesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(OledBlack)
+            // v1.0.18: layar navigasi ikut TEMA (laporan user: Samples tetap
+            // hitam saat ganti tema). Hitam pekat hanya untuk panel terminal.
+            .background(MaterialTheme.colorScheme.background)
     ) {
         // ---- Topbar halaman: ← + judul (konsisten 48dp ala topbar utama) ----
         Surface(color = MaterialTheme.colorScheme.surfaceVariant) {

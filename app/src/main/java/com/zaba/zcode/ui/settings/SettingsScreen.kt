@@ -22,6 +22,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -78,6 +82,14 @@ fun SettingsScreen(
             }
         }
     ) { padding ->
+        // v1.0.18 (saran user): seksi model EXPAND ala Library — layar lega,
+        // satu bahasa navigasi (Library/Samples/Settings). Default: hanya
+        // "Tampilan" terbuka supaya layar pertama tidak kosong. State tidak
+        // perlu persist — preferensi buka-tutup bukan data.
+        var openSections by remember { mutableStateOf(setOf("tampilan")) }
+        fun toggle(id: String) {
+            openSections = if (id in openSections) openSections - id else openSections + id
+        }
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -88,24 +100,24 @@ fun SettingsScreen(
             // ===========================================================
             // 🎨 Tampilan / Appearance
             // ===========================================================
-            item { SettingsGroupHeader("🎨 Tampilan / Appearance") }
+            item { SettingsGroupHeader("🎨 Tampilan / Appearance", expanded = "tampilan" in openSections, onToggle = { toggle("tampilan") }) }
 
             // F1.5: Pemilih tema yang jelas (RETRO/DRACULA/TOKYO_NIGHT)
-            item {
+            if ("tampilan" in openSections) item {
                 ThemePickerRow(
                     current = vm.themeType,
                     onSelect = { vm.setTheme(it) }
                 )
             }
 
-            item {
+            if ("tampilan" in openSections) item {
                 FontSizeRow(
                     current = vm.terminalFontSize,
                     onSelect = { vm.setFontSize(it) }
                 )
             }
 
-            item {
+            if ("tampilan" in openSections) item {
                 FontFamilyRow(
                     current = vm.appFontFamily,
                     onSelect = { vm.setFontFamily(it) }
@@ -117,10 +129,10 @@ fun SettingsScreen(
             // ===========================================================
             // ⌨️ Editor
             // ===========================================================
-            item { SettingsGroupHeader("⌨️ Editor") }
+            item { SettingsGroupHeader("⌨️ Editor", expanded = "editor" in openSections, onToggle = { toggle("editor") }) }
 
             // F1.6: Cerminkan toggle Symbol bar
-            item {
+            if ("editor" in openSections) item {
                 SettingsToggleRow(
                     label = "Symbol bar",
                     description = "Baris simbol cepat di bawah editor",
@@ -130,7 +142,7 @@ fun SettingsScreen(
             }
 
             // F1.7: Toggle auto-close brackets (CM6)
-            item {
+            if ("editor" in openSections) item {
                 SettingsToggleRow(
                     label = "Auto-close brackets",
                     description = "Tutup kurung/kutip otomatis saat mengetik",
@@ -140,7 +152,7 @@ fun SettingsScreen(
             }
 
             // F1.8: Toggle selection match highlight (CM6)
-            item {
+            if ("editor" in openSections) item {
                 SettingsToggleRow(
                     label = "Sorot kata yang diseleksi",
                     description = "Highlight semua kemunculan kata yang dipilih",
@@ -154,10 +166,10 @@ fun SettingsScreen(
             // ===========================================================
             // ▶️ Run & Terminal
             // ===========================================================
-            item { SettingsGroupHeader("▶️ Run & Terminal") }
+            item { SettingsGroupHeader("▶️ Run & Terminal", expanded = "run" in openSections, onToggle = { toggle("run") }) }
 
             // F1.6: Cerminkan toggle Auto Trim on Run
-            item {
+            if ("run" in openSections) item {
                 SettingsToggleRow(
                     label = "Auto Trim saat Run",
                     description = "Buang spasi akhir tiap baris sebelum eksekusi",
@@ -167,7 +179,7 @@ fun SettingsScreen(
             }
 
             // F2.4: Toggle indikator "Menyalakan Python…" di terminal
-            item {
+            if ("run" in openSections) item {
                 SettingsToggleRow(
                     label = "Indikator \"Menyalakan Python…\"",
                     description = "Tampilkan status cold-start Python di terminal",
@@ -177,7 +189,7 @@ fun SettingsScreen(
             }
 
             // F2.2: Batas Output Terminal (Ring Buffer)
-            item {
+            if ("run" in openSections) item {
                 OutputLimitRow(
                     current = vm.terminalOutputLimit,
                     onSelect = { vm.setOutputLimit(it) }
@@ -189,10 +201,10 @@ fun SettingsScreen(
             // ===========================================================
             // 🔒 Privasi & Data
             // ===========================================================
-            item { SettingsGroupHeader("🔒 Privasi & Data") }
+            item { SettingsGroupHeader("🔒 Privasi & Data", expanded = "privasi" in openSections, onToggle = { toggle("privasi") }) }
 
             // F1.4: Clear All dipindah dari TOOLS ke sini (destruktif, bukan tool)
-            item {
+            if ("privasi" in openSections) item {
                 SettingsDestructiveRow(
                     label = "Clear All Drafts & Files",
                     description = "Hapus semua file .py di workspace",
@@ -205,16 +217,23 @@ fun SettingsScreen(
             // ===========================================================
             // ℹ️ Tentang
             // ===========================================================
-            item { SettingsGroupHeader("ℹ️ Tentang") }
+            item { SettingsGroupHeader("ℹ️ Tentang", expanded = "tentang" in openSections, onToggle = { toggle("tentang") }) }
 
-            item {
-                SettingsInfoRow(
-                    label = "Versi app",
-                    value = "v1.0.0"
-                )
+            if ("tentang" in openSections) item {
+                // v1.0.18: JANGAN hardcode versi — layar ini sempat berbohong
+                // "v1.0.0" saat APK sudah 1.0.18 (laporan user 2026-08-16,
+                // "satu ZCODE dua versi"). Baca dari packageManager seperti
+                // AboutScreen: satu sumber kebenaran.
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                val versi = remember {
+                    try {
+                        "v" + (ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "?")
+                    } catch (e: Exception) { "v?" }
+                }
+                SettingsInfoRow(label = "Versi app", value = versi)
             }
 
-            item {
+            if ("tentang" in openSections) item {
                 SettingsInfoRow(
                     label = "Tema aktif",
                     value = vm.themeType.name.replace('_', ' ')
@@ -232,14 +251,32 @@ fun SettingsScreen(
 // =====================================================================
 
 @Composable
-private fun SettingsGroupHeader(title: String) {
-    Text(
-        text = title,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
-    )
+private fun SettingsGroupHeader(
+    title: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    // v1.0.18: header seksi tap-able (model expand ala Library — saran user).
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(top = 16.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = if (expanded) "▾" else "▸",
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 13.sp
+        )
+    }
 }
 
 @Composable

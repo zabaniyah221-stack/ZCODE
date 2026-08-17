@@ -22,6 +22,15 @@ import socket
 import sys
 import threading
 
+# Script user SELALU berjalan di background thread (main thread Chaquopy =
+# UI thread Android). Tanpa shim ini, `import pycurl`/paket lain yang
+# memanggil signal.signal() mati ValueError "signal only works in main
+# thread" — bukti device 2026-08-17. Idempoten; smoke.py memasang shim yang
+# sama untuk jalur smoke test. Desain: package_runtime/signalshim.py.
+from package_runtime import signalshim
+
+signalshim.install()
+
 # Batas waktu default untuk SEMUA koneksi jaringan yang dibuat script user
 # (urllib.request, http.client, requests, socket) — fix 2026-08-12.
 #

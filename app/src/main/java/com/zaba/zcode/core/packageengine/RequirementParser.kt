@@ -33,9 +33,18 @@ object RequirementParser {
             "(\\s*;\\s*.+)?$"
     )
 
-    private val FORBIDDEN = listOf(
-        "rm ", "curl", "wget", "mkdir", "cd ", "sudo", "&&", "||",
-        "`", "\$(", "--trusted-host", "--index-url", "--extra-index-url",
+    // BUG W (2026-08-16): dulu daftar ini dicek dengan contains() sehingga
+    // nama paket sah seperti `pycurl` (mengandung "curl") ikut tertolak 37x
+    // di log UAT user. Perintah shell hanya berbahaya sebagai TOKEN berdiri
+    // sendiri ("curl http://..."), bukan substring nama paket. Maka:
+    // - kata perintah dicek per-token (word boundary),
+    // - simbol shell & flag pip tetap dicek sebagai substring.
+    private val FORBIDDEN_WORDS = listOf(
+        "rm", "curl", "wget", "mkdir", "cd", "sudo", "sh", "bash", "pip", "python"
+    )
+    private val FORBIDDEN_SUBSTRINGS = listOf(
+        "&&", "||", "`", "\$(",
+        "--trusted-host", "--index-url", "--extra-index-url",
         "--target", "--upgrade", "--force"
     )
 
@@ -43,7 +52,10 @@ object RequirementParser {
         val t = (text ?: "").trim()
         if (t.isEmpty()) return "Requirement kosong."
         if (t.length > 500) return "Requirement terlalu panjang (maks 500 karakter)."
-        if (FORBIDDEN.any { t.contains(it) }) {
+        val tokens = t.lowercase().split(Regex("\\s+"))
+        val forbidden = FORBIDDEN_SUBSTRINGS.any { t.contains(it) } ||
+            tokens.any { it in FORBIDDEN_WORDS }
+        if (forbidden) {
             return "Input mengandung pola yang dilarang. Manual Install hanya menerima " +
                 "requirement Python (contoh: requests, requests==2.32.3, pydantic>=2,<3), " +
                 "bukan perintah shell/opsi pip."

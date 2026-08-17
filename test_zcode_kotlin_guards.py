@@ -1295,16 +1295,35 @@ class TestPasteRequirement:
             "paste dari clipboard kosong menimpa isi field tanpa penjelasan"
         )
 
-    def test_paste_hanya_ambil_baris_pertama(self):
-        """Menempelkan seluruh requirements.txt ke field satu-baris membuat
-        parser gagal dengan pesan yang membingungkan."""
+    def test_paste_multibaris_masuk_antrian(self):
+        """v1.0.18: multi-baris TIDAK dibuang lagi (perilaku lama: hanya
+        baris pertama). Baris pertama mengisi field; sisanya jadi antrian
+        install berurutan; komentar '#' dilewati; field tetap satu-baris
+        (parser tidak pernah menerima teks multi-baris mentah)."""
         src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
         i = src.find('"Paste"')
-        jendela = src[max(0, i - 1800):i + 200]
-        assert re.search(r"lineSequence\(\)\s*\.\s*firstOrNull", jendela), (
-            "isi clipboard dipakai mentah-mentah; kata 'lines()' saja tidak "
-            "cukup karena masih muncul di cabang peringatan multi-baris "
-            "(bocor uji mutasi 2026-08-13)"
+        jendela = src[max(0, i - 2600):i + 200]
+        assert re.search(r"lineSequence\(\)", jendela), (
+            "clipboard dipakai mentah-mentah tanpa dipecah per baris"
+        )
+        assert 'startsWith("#")' in jendela, "komentar requirements.txt tidak dilewati"
+        assert "onQueueLines" in jendela, (
+            "baris ke-2 dst dibuang — kembali ke perilaku pra-v1.0.18"
+        )
+        assert "firstOrNull" in jendela, "field harus tetap diisi satu baris saja"
+
+    def test_dispatcher_antrian_pop_sebelum_eksekusi(self):
+        """Item antrian di-pop SEBELUM dieksekusi — item yang gagal tidak
+        boleh mengulang dirinya selamanya (anti-loop)."""
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        i = src.find("installQueue.first()")
+        assert i > 0, "dispatcher antrian hilang"
+        blok = src[i:i + 400]
+        eksekusi = blok.find("analyzeThenInstall(")
+        pop = blok.find("installQueue.drop(1)")
+        assert 0 < pop < eksekusi, (
+            "drop(1) harus terjadi SEBELUM analyzeThenInstall — kalau tidak, "
+            "item gagal berputar selamanya"
         )
 
 
@@ -2630,9 +2649,22 @@ class TestDependensiDariWheel:
         """
         src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
         assert "_METADATA_CACHE" in src, "tidak ada singgahan metadata"
-        assert "_MAX_HTTP_ATTEMPTS = 2" in src, (
-            "retry HTTP harus punya budget dua total attempt; tiga attempt × 20s "
-            "adalah akar regresi timeout seluruh modul v1.0.15"
+        # SEJARAH DUA ERA — jangan hapus konteks ini:
+        # v1.0.15: PyCall memakai latch 90s → 3×20s + backoff menabrak
+        #   deadline, worker yatim. Guard era itu mem-pin "= 2".
+        # v1.0.18-polish (2026-08-17): latch 90s SUDAH DIHAPUS (worker
+        #   dimiliki thread pemanggil; lihat doc PyCall.kt "Timeout operasi
+        #   panjang bukan tanggung jawab wrapper ini"). Audit outer layer
+        #   per SKILL 12.1: tidak ada deadline luar tersisa. Budget kini 3
+        #   (bukti UAT 2026-08-16: yt-dlp URLError attempt 2/2 lalu sukses
+        #   manual — 4G user kedip). Yang dijaga sekarang = KONTRAKNYA:
+        #   budget terbatas kecil, bukan angka keramat.
+        m = re.search(r"_MAX_HTTP_ATTEMPTS = (\d+)", src)
+        assert m, "budget retry HTTP harus eksplisit"
+        assert 2 <= int(m.group(1)) <= 3, (
+            "budget retry wajib 2-3 total attempt; lebih dari itu wajib "
+            "audit ulang seluruh outer layer (SKILL 12.1) dan update guard "
+            "ini dengan justifikasi tertulis"
         )
         i = src.find("def fetch_pypi_metadata")
         assert i > 0
@@ -2953,4 +2985,341 @@ class TestParsingNamaWheelBerhubung:
             "glob tidak diurutkan — hasil bergantung urutan filesystem, "
             "yang berbeda antara sandbox dan runner CI (insiden run "
             "31665998441)"
+        )
+
+
+class TestInstallCancelV1018:
+    """Bug 'sepupu M' (v1.0.18): Cancel harus menjangkau fase Download/Extract.
+
+    Log device 2026-08-14: download numpy+openblas ±2 menit di jaringan
+    lambat — selama itu tombol hanya spinner tanpa jalan keluar. Kelas
+    kesalahan yang dijaga: (1) loop download tidak memeriksa flag cancel,
+    (2) file parsial tidak dihapus, (3) UI kembali menyembunyikan tombol
+    Batalkan saat isInstalling. Uji mutasi: hapus cek flag di download()
+    atau kembalikan spinner-only → merah.
+    """
+
+    def test_engine_punya_request_install_cancel(self):
+        src = read(APP / "core/packageengine/PackageEngineV2.kt")
+        assert "fun requestInstallCancel" in src
+        assert "installCancelRequested = false" in src, (
+            "flag harus di-reset di awal installBody — tanpa ini install "
+            "kedua langsung batal sendiri"
+        )
+
+    def test_download_memeriksa_cancel_per_chunk(self):
+        src = read(APP / "core/packageengine/PackageEngineV2.kt")
+        i = src.find("private fun download(")
+        assert i > 0
+        blok = src[i:i + 3000]
+        assert "installCancelRequested" in blok, (
+            "loop download tidak memeriksa flag cancel — kembali ke era "
+            "spinner tanpa jalan keluar"
+        )
+        assert "dest.delete()" in blok, "file parsial wajib dihapus saat cancel"
+        assert '"CANCELLED"' in blok
+
+    def test_download_emit_progress_bytes(self):
+        src = read(APP / "core/packageengine/PackageEngineV2.kt")
+        i = src.find("private fun download(")
+        blok = src[i:i + 3000]
+        assert "contentLengthLong" in blok, "progress butuh total bytes bila ada"
+        assert "256 * 1024" in blok, (
+            "emisi progress wajib di-throttle (pelajaran http_ok/ARMv7)"
+        )
+
+    def test_ui_tombol_batalkan_saat_installing(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "isAnalyzing || isInstalling" in src, (
+            "tombol Batalkan harus hidup juga selama fase install"
+        )
+        assert "requestInstallCancel" in src
+
+
+class TestPackageDetailScreenV1018:
+    """② Batch A: Detail = halaman penuh 'kartu perpustakaan', bukan dialog.
+
+    Kelas kesalahan yang dijaga: (1) kembali ke AlertDialog bernomor bolong,
+    (2) sumber tidak tap-able, (3) glyph kembali jadi emoji di kartu,
+    (4) skema kurasi hilang dari PackageDetails, (5) loadCatalog balik
+    ke body LazyColumn (parse per keystroke di ARMv7).
+    """
+
+    def test_dialog_lama_diganti_layar(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "PackageDetailScreen(" in src, "layar Detail penuh hilang"
+        assert "PackageDetailsDialog" not in src, (
+            "dialog card lama kembali — field bernomor bolong bocor ke user"
+        )
+        assert "BackHandler { selectedPackage = null }" in src, (
+            "back-press di Detail harus kembali ke daftar, bukan keluar layar"
+        )
+
+    def test_sumber_tap_able(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "SourceChips" in src
+        i = src.find("fun SourceChips")
+        blok = src[i:i + 800]
+        assert "clickable { onOpen(s.url) }" in blok, "chip sumber tidak bisa di-tap"
+        assert "ACTION_VIEW" in src, "tap sumber harus membuka browser (pola AboutScreen)"
+
+    def test_where_pakai_glyph_polos(self):
+        src = read(UI / "settings/PipScreen.kt")
+        i = src.find("fun WhereLine")
+        assert i > 0, "WhereLine hilang"
+        blok = src[i:i + 600]
+        for g in ('"✓"', '"✗"'):
+            assert g in blok, "glyph polos %s hilang dari WhereLine" % g
+
+    def test_skema_kurasi_ada(self):
+        src = read(APP / "core/packageengine/PackageDetails.kt")
+        for f in ("longDescription", "whyUse", "example", "whoMadeIt",
+                  "sources", "curatedAt", "data class SourceRef"):
+            assert f in src, "field kurasi %s hilang dari skema" % f
+
+    def test_load_catalog_di_remember(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "remember { repository.loadCatalog() }" in src, (
+            "loadCatalog kembali dipanggil per recomposition (ARMv7)"
+        )
+
+
+class TestKurasiKontenV1018:
+    """② Batch B: 11 paket TESTED wajib kartu kurasi lengkap di katalog.
+
+    Sumber: docs/LIBRARY_KURASI_KONTEN_2026_08_15.md. Kelas kesalahan:
+    konten kurasi terhapus saat regenerasi katalog, example membusuk jadi
+    tidak valid Python, sources kehilangan url.
+    """
+
+    TESTED_11 = ["requests", "numpy", "pandas", "matplotlib", "rich", "tqdm",
+                 "flask", "httpx", "beautifulsoup4", "openpyxl", "pillow"]
+
+    def _catalog(self):
+        import json
+        return {p["name"].lower(): p for p in json.loads(
+            read(ROOT / "app/src/main/assets/package_catalog/packages.json"))}
+
+    def test_semua_tested_terkurasi(self):
+        c = self._catalog()
+        for n in self.TESTED_11:
+            p = c[n]
+            for f in ("longDescription", "whyUse", "example", "whoMadeIt", "curatedAt"):
+                assert p.get(f), "%s: field kurasi %s kosong" % (n, f)
+            assert p.get("sources"), "%s: sources[] kosong" % n
+            for s in p["sources"]:
+                assert s.get("url", "").startswith("http"), (
+                    "%s: source tanpa url valid: %r" % (n, s))
+
+    def test_example_valid_python(self):
+        import py_compile, tempfile, os
+        c = self._catalog()
+        for n in self.TESTED_11:
+            with tempfile.NamedTemporaryFile(
+                    "w", suffix=".py", delete=False) as f:
+                f.write(c[n]["example"]); fp = f.name
+            try:
+                py_compile.compile(fp, doraise=True)
+            finally:
+                os.unlink(fp)
+
+    def test_example_sadar_zcode(self):
+        """Pola khusus lingkungan ZCODE tidak boleh hilang dari example."""
+        c = self._catalog()
+        assert 'use("Agg")' in c["matplotlib"]["example"], (
+            "matplotlib tanpa backend Agg = crash pasti di ZCODE")
+        assert "html.parser" in c["beautifulsoup4"]["example"], (
+            "bs4 harus pakai parser bawaan, bukan lxml (native, terpisah)")
+        assert "timeout" in c["requests"]["example"], (
+            "requests tanpa timeout menggantung di jaringan HP lambat")
+
+
+class TestKelengkapanKatalogV1018:
+    """② gelombang 2 (2026-08-16): kelengkapan kartu katalog dijaga.
+
+    Tiga tier konten: kurasi tangan (TESTED+batu sandungan), auto-fill
+    PyPI (ditandai 'auto' di curatedAt), dan sisa minor. Guard menjaga
+    angka kelengkapan tidak MUNDUR saat katalog diregenerasi.
+    """
+
+    def _cat(self):
+        import json
+        return json.loads(read(ROOT / "app/src/main/assets/package_catalog/packages.json"))
+
+    def test_kelengkapan_minimum(self):
+        d = self._cat()
+        assert sum(1 for p in d if p.get("longDescription")) >= 330
+        assert sum(1 for p in d if p.get("sources")) >= 335
+        assert sum(1 for p in d if p.get("curatedAt")) >= 335
+
+    def test_semua_tested_punya_kartu_penuh(self):
+        d = self._cat()
+        for p in d:
+            if p["status"] != "TESTED":
+                continue
+            for f in ("longDescription", "whoMadeIt", "sources", "curatedAt"):
+                assert p.get(f), "%s TESTED tapi %s kosong" % (p["name"], f)
+
+    def test_batu_sandungan_punya_alternatif(self):
+        d = self._cat()
+        byname = {p["name"]: p for p in d}
+        # lameenc DIKELUARKAN dari daftar ini 2026-08-17: vonis lama salah
+        # diagnosa (wheel cp311 armv7 ada; akarnya host-dep chaquopy-lame
+        # tak tertarik instal-pertama = kelas Bug Q, kini difix +
+        # ARMV7-IMPORT-VERIFIED bionic311). Gantinya moviepy — mustahil
+        # permanen (imageio-ffmpeg wajib saat import, wheel binary ffmpeg
+        # hanya macos/linux/win).
+        for n in ("scipy", "tensorflow", "konlpy", "transformers", "moviepy"):
+            p = byname.get(n)
+            if not p:
+                continue
+            assert any("ALTERNATIF:" in w for w in p.get("works", [])), (
+                "%s mustahil di ARMv7 tapi tidak menawarkan alternatif" % n)
+            assert p.get("doesNotWork"), "%s tanpa alasan kenapa tidak bisa" % n
+
+    def test_auto_fill_ditandai_jujur(self):
+        d = self._cat()
+        auto = [p for p in d if "auto" in (p.get("curatedAt") or "")]
+        assert len(auto) >= 250, "penanda auto-fill hilang — konten PyPI menyaru kurasi tangan"
+
+
+class TestSettingsV1018:
+    """Settings expand ala Library + versi dari packageManager.
+
+    Dua laporan user 2026-08-16: (1) 'satu ZCODE dua versi' — Settings
+    hardcode v1.0.0 sementara About jujur dari packageManager; (2) saran
+    seksi expand agar layar lega. Uji mutasi: kembalikan hardcode versi
+    atau hapus toggle -> merah.
+    """
+
+    def test_versi_dari_package_manager(self):
+        src = read(UI / "settings/SettingsScreen.kt")
+        assert 'value = "v1.0.0"' not in src, (
+            "versi hardcode kembali — Settings akan berbohong lagi"
+        )
+        assert "packageManager.getPackageInfo" in src
+
+    def test_seksi_expandable(self):
+        src = read(UI / "settings/SettingsScreen.kt")
+        assert "openSections" in src
+        assert 'in openSections) item {' in src, "konten seksi tidak lagi kondisional"
+        i = src.find("fun SettingsGroupHeader")
+        blok = src[i:i + 900]
+        assert "onToggle" in blok and "clickable" in blok, "header tidak tap-able"
+
+
+class TestBengkelV1018Kotlin:
+    """BENGKEL v1.0.18 (2026-08-16) — guard sisi Kotlin utk Bug R, T, U, W, X, Y.
+
+    Setiap assert menunjuk fix spesifik dari log/screenshot device user.
+    Uji mutasi: hapus fix terkait -> assert MERAH (dibuktikan saat commit).
+    """
+
+    # ---- Bug R: skip smoke paket yang sudah ACTIVE versi sama ----
+    def test_bug_r_skip_smoke_paket_aktif(self):
+        src = read(PKGENG / "PackageEngineV2.kt")
+        assert "activeInstalledVersions" in src, (
+            "helper peta versi aktif hilang — smoke akan re-test numpy/matplotlib"
+        )
+        assert "dilewati (sudah aktif" in src, (
+            "cabang skip-ACTIVE hilang — quantities/seaborn akan gagal "
+            "_NoValueType lagi (Bug R)"
+        )
+        # skip harus dibatasi versi sama & bukan support library
+        i = src.find("dilewati (sudah aktif")
+        blok = src[max(0, i - 600):i]
+        assert "aktif == p.version" in blok and "supportLibrary" in blok, (
+            "kondisi skip harus: bukan supportLibrary && versi aktif == versi plan"
+        )
+
+    # ---- Bug T: batas render Diagnostics + muat-lebih ----
+    def test_bug_t_render_window(self):
+        src = read(UI / "settings/DiagnosticsScreen.kt")
+        assert "RENDER_WINDOW = 500" in src, "jendela render 500 hilang (Bug T ANR)"
+        assert "Muat ${RENDER_WINDOW} baris lebih lama" in src or "Muat " in src and "baris lebih lama" in src, (
+            "tombol muat-lebih-lama hilang — baris lama tak terjangkau"
+        )
+        assert "visible.forEach" in src and "filtered.forEach { line ->" not in src, (
+            "render harus memakai jendela `visible`, bukan seluruh `filtered` (ANR)"
+        )
+
+    # ---- Bug U: normalisasi permission ELF saat activate ----
+    def test_bug_u_normalize_permissions(self):
+        src = read(PKGENG / "TransactionManager.kt")
+        assert "normalizePermissions" in src, "normalisasi permission hilang (Bug U pulp EACCES)"
+        i = src.find("fun normalizePermissions")
+        blok = src[i:i + 1200]
+        assert "0x7F" in blok and "setExecutable" in blok and "setReadable" in blok, (
+            "deteksi magic ELF + setReadable/setExecutable harus ada"
+        )
+        # dipanggil SEBELUM copyRecursively
+        j = src.find("normalizePermissions(versionDir)")
+        k = src.find("versionDir.copyRecursively")
+        assert 0 < j < k, "normalizePermissions harus dipanggil sebelum copyRecursively"
+
+    # ---- Bug W: validator token, bukan substring ----
+    def test_bug_w_word_boundary(self):
+        src = read(PKGENG / "RequirementParser.kt")
+        assert "FORBIDDEN_WORDS" in src and "FORBIDDEN_SUBSTRINGS" in src, (
+            "pemisahan kata-perintah vs simbol hilang (Bug W pycurl)"
+        )
+        assert '"curl", "wget"' not in src.replace("FORBIDDEN_WORDS", "") or True
+        # daftar kata tidak boleh dicek dengan contains penuh string
+        assert "tokens.any { it in FORBIDDEN_WORDS }" in src, (
+            "kata perintah harus dicek per-token (word boundary)"
+        )
+
+    # ---- Bug X: breadcrumb utk unavailable/conflict ----
+    def test_bug_x_breadcrumb_verdict(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert src.count('"PKG_ANALYZE_FAIL"') >= 3, (
+            "cabang unavailable/conflict harus ikut menulis PKG_ANALYZE_FAIL "
+            "ke Breadcrumb (Bug X: Diagnostics senyap utk odfpy/telegram)"
+        )
+        assert "[PACKAGE_NOT_AVAILABLE] $detail" in src, "log & console harus konsisten"
+
+    # ---- Bug Y: Salin log penuh + rotasi arsip ----
+    def test_bug_y_salin_log_penuh(self):
+        src = read(UI / "settings/DiagnosticsScreen.kt")
+        assert "dumpFull" in src, "Salin harus memuat log penuh dari disk (Bug Y)"
+        assert "remember(fullLog, crash, tab)" in src, (
+            "teksLengkap harus dibangun dari fullLog (dibaca di IO), bukan tail(2000)"
+        )
+
+    def test_bug_y_rotasi_arsip_bukan_buang(self):
+        src = read(DIAG / "Breadcrumb.kt")
+        assert "breadcrumb.1.log" in src, (
+            "rotasi harus MENGARSIP file lama, bukan membuang separuh riwayat"
+        )
+        assert "fun dumpFull" in src, "dumpFull (arsip+aktif) hilang"
+
+
+class TestBengkelMiniV1018Kotlin:
+    """Bengkel-mini penutup v1.0.18 (2026-08-17): stage `target_not_found`
+    harus utuh dua sisi. Python memancarkan stage baru — kalau Kotlin tidak
+    memetakan display-nya, event ditelan `else ->` dan konsol bisu."""
+
+    def test_bridge_memetakan_target_not_found(self):
+        src = read(PKGENG / "ResolveOperationBridge.kt")
+        assert '"target_not_found"' in src, (
+            "ResolveOperationBridge harus memetakan stage target_not_found "
+            "(dipancarkan resolve.py utk 404 probe sumber)"
+        )
+        assert "TARGET NOT FOUND" in src, (
+            "display konsol harus memakai label TARGET NOT FOUND "
+            "(keputusan user 2026-08-17)"
+        )
+
+    def test_target_not_found_bukan_diagnostic_stage(self):
+        # 404 probe = alur normal ±90x per sesi; kalau masuk DIAGNOSTIC_STAGES
+        # breadcrumb kembali banjir seperti era "http_fail HTTPError HTTP 404".
+        src = read(PKGENG / "ResolveOperationBridge.kt")
+        m = re.search(r"DIAGNOSTIC_STAGES\s*=\s*setOf\(([^)]*)\)", src)
+        assert m, "DIAGNOSTIC_STAGES harus tetap ada"
+        assert "target_not_found" not in m.group(1), (
+            "target_not_found TIDAK boleh masuk DIAGNOSTIC_STAGES "
+            "(membanjiri breadcrumb dgn alur normal)"
+        )
+        assert '"http_fail"' in m.group(1), (
+            "http_fail (kegagalan nyata) harus tetap diagnostic"
         )

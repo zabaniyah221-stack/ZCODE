@@ -27,7 +27,15 @@ data class PackageDetails(
     val license: String,
     val publisher: String,
     val source: String,
-    val sha256: String?
+    val sha256: String?,
+    // ---- Kurasi kartu Detail v1.0.18 (LIBRARY_KURASI_KONTEN_2026_08_15) ----
+    // Semua opsional: entri lama tanpa field ini tetap valid (fallback UI).
+    val longDescription: String = "",   // WHAT IS IT — prosa dari sumber resmi
+    val whyUse: String = "",            // WHY USE IT
+    val example: String = "",           // HOW TO USE — snippet yang jalan di ZCODE
+    val whoMadeIt: String = "",         // WHO MADE IT — asal + lisensi (prosa)
+    val sources: List<SourceRef> = emptyList(), // rujukan tap-able per seksi
+    val curatedAt: String = ""          // tanggal kurasi (kejujuran konten beku)
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject()
@@ -51,6 +59,12 @@ data class PackageDetails(
         o.put("publisher", publisher)
         o.put("source", source)
         o.put("sha256", sha256 ?: JSONObject.NULL)
+        if (longDescription.isNotBlank()) o.put("longDescription", longDescription)
+        if (whyUse.isNotBlank()) o.put("whyUse", whyUse)
+        if (example.isNotBlank()) o.put("example", example)
+        if (whoMadeIt.isNotBlank()) o.put("whoMadeIt", whoMadeIt)
+        if (sources.isNotEmpty()) o.put("sources", JSONArray(sources.map { it.toJson() }))
+        if (curatedAt.isNotBlank()) o.put("curatedAt", curatedAt)
         return o
     }
 
@@ -80,7 +94,41 @@ data class PackageDetails(
                 license = o.optString("license", ""),
                 publisher = o.optString("publisher", ""),
                 source = o.optString("source", ""),
-                sha256 = if (o.isNull("sha256")) null else o.optString("sha256")
+                sha256 = if (o.isNull("sha256")) null else o.optString("sha256"),
+                longDescription = o.optString("longDescription", ""),
+                whyUse = o.optString("whyUse", ""),
+                example = o.optString("example", ""),
+                whoMadeIt = o.optString("whoMadeIt", ""),
+                sources = run {
+                    val arr = o.optJSONArray("sources") ?: return@run emptyList()
+                    (0 until arr.length()).mapNotNull { i ->
+                        arr.optJSONObject(i)?.let { SourceRef.fromJson(it) }
+                    }
+                },
+                curatedAt = o.optString("curatedAt", "")
+            )
+        }
+    }
+}
+
+/**
+ * SourceRef — rujukan sumber kurasi yang TAP-ABLE di kartu Detail.
+ * `untuk`: seksi yang didukung ("what"/"why"/"how"/"where"/"who"/"learn-id"),
+ * `label`: teks pendek yang ditampilkan (domain tanpa https),
+ * `url`  : tujuan penuh saat di-tap (Intent.ACTION_VIEW).
+ */
+data class SourceRef(val untuk: String, val label: String, val url: String) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("untuk", untuk).put("label", label).put("url", url)
+
+    companion object {
+        fun fromJson(o: JSONObject): SourceRef? {
+            val url = o.optString("url", "")
+            if (url.isBlank()) return null
+            return SourceRef(
+                untuk = o.optString("untuk", ""),
+                label = o.optString("label", url.removePrefix("https://").removePrefix("http://").trimEnd('/')),
+                url = url
             )
         }
     }

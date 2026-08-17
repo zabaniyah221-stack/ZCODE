@@ -78,6 +78,33 @@ object SampleLibrary {
                     "Database key-value mini pakai dict Python",
                     "samples/dictionaries_db.py"
                 ),
+                // Batch v1.0.18 (2026-08-16): 5 pelajaran stdlib yang menutup
+                // lubang kurikulum — error handling, OOP, file, JSON, waktu.
+                SampleEntry(
+                    "try_except", "Try / Except",
+                    "Menangkap error tanpa bikin program mati — pelajaran wajib!",
+                    "samples/try_except.py"
+                ),
+                SampleEntry(
+                    "classes_oop", "Classes (OOP)",
+                    "Cetak biru objek: class Siswa + method + __repr__",
+                    "samples/classes_oop.py"
+                ),
+                SampleEntry(
+                    "file_io", "File I/O",
+                    "Tulis & baca file — hasilnya muncul di file manager ZCODE",
+                    "samples/file_io.py"
+                ),
+                SampleEntry(
+                    "json_data", "JSON",
+                    "dict ↔ JSON: bahasa universal pertukaran data",
+                    "samples/json_data.py"
+                ),
+                SampleEntry(
+                    "datetime_random", "Datetime & Random",
+                    "Tanggal, selisih hari, dadu, undian — dua modul paling kepake",
+                    "samples/datetime_random.py"
+                ),
             )
         ),
         SampleCategory(
@@ -93,6 +120,44 @@ object SampleLibrary {
                     "numpy_stats", "Quick Stats",
                     "Mean, median, standar deviasi sekejap — butuh: install numpy dulu",
                     "samples/numpy_stats.py"
+                ),
+            )
+        ),
+        SampleCategory(
+            "paket", "Paket Populer",
+            "Etalase paket TERUJI di HP ARMv7 — install dulu lewat INSTALL MODULES",
+            listOf(
+                // Semua paket di kategori ini berstatus TESTED di katalog —
+                // dibuktikan di device Infinix user (breadcrumb 2026-08-14/16).
+                SampleEntry(
+                    "requests_api", "Requests — API",
+                    "Ambil data GitHub API — butuh: install requests",
+                    "samples/requests_api.py"
+                ),
+                SampleEntry(
+                    "rich_table", "Rich — Tabel Warna",
+                    "Tabel + warna di terminal — butuh: install rich",
+                    "samples/rich_table.py"
+                ),
+                SampleEntry(
+                    "tqdm_progress", "tqdm — Progress Bar",
+                    "Progress bar satu baris di loop — butuh: install tqdm",
+                    "samples/tqdm_progress.py"
+                ),
+                SampleEntry(
+                    "openpyxl_excel", "openpyxl — Excel",
+                    "Bikin file .xlsx beneran dari HP — butuh: install openpyxl",
+                    "samples/openpyxl_excel.py"
+                ),
+                SampleEntry(
+                    "pillow_image", "Pillow — Gambar",
+                    "Generate PNG dari kode — butuh: install pillow",
+                    "samples/pillow_image.py"
+                ),
+                SampleEntry(
+                    "matplotlib_chart", "Matplotlib — Grafik",
+                    "Bar chart ke PNG (backend Agg) — butuh: install matplotlib (±20MB)",
+                    "samples/matplotlib_chart.py"
                 ),
             )
         ),

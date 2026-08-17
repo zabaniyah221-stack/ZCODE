@@ -39,7 +39,10 @@ _NETWORK_TIMEOUT_S = 20
 # v1.0.15 memakai 3 × 20 detik per URL sementara PyCall memotong SELURUH
 # dependency graph pada 90 detik. Dua total attempt cukup untuk satu kegagalan
 # transient tanpa melipatgandakan waktu buta di jaringan seluler.
-_MAX_HTTP_ATTEMPTS = 2
+# 3 sejak v1.0.18-polish: yt-dlp gagal URLError di attempt 2/2 lalu sukses
+# manual (UAT 2026-08-16) — jaringan 4G user sering kedip sesaat. 404 TIDAK
+# ikut retry (lihat _retryable_error): jawaban pasti, bukan gangguan.
+_MAX_HTTP_ATTEMPTS = 3
 _RETRYABLE_HTTP_STATUS = frozenset({408, 429, 500, 502, 503, 504, 520, 527})
 _MAX_DEPTH = 20
 _MAX_PACKAGES = 60
@@ -196,8 +199,20 @@ def _http_get(url: str) -> bytes:
             )
             # Jangan masukkan URL mentah/credential ke Diagnostics.
             last_summary = detail
+            # HTTP 404 pada probe sumber = "toko ini tidak menjual paket itu".
+            # Itu alur NORMAL (probe Chaquopy dulu → fallback PyPI), bukan
+            # kegagalan jaringan. Sebelumnya dicatat "http_fail HTTPError
+            # HTTP 404" — ±90 baris "fail" palsu per sesi UAT menutupi error
+            # sungguhan. Keputusan user 2026-08-17: label TARGET NOT FOUND,
+            # tanpa detail. `http_fail` tetap untuk kegagalan nyata
+            # (timeout/DNS/5xx/koneksi putus).
+            if status == 404:
+                stage = "target_not_found"
+                detail = ""
+            else:
+                stage = "http_retry" if retry else "http_fail"
             _emit_progress(
-                "http_retry" if retry else "http_fail",
+                stage,
                 source=source, attempt=attempt,
                 max_attempts=_MAX_HTTP_ATTEMPTS, detail=detail,
             )
@@ -362,6 +377,40 @@ NATIVE_HOST_DEPS: dict[str, list[str]] = {
     "pillow": ["chaquopy-libjpeg", "chaquopy-freetype"],
     "lxml": ["chaquopy-libxml2", "chaquopy-libxslt"],
     "pyyaml": ["chaquopy-libyaml"],
+    # [dari perangkat] BUG Q (2026-08-16, breadcrumb Infinix): instal PERTAMA
+    # murmurhash/preshed gagal "libc++_shared.so not found: needed by mrmr.so"
+    # karena wheel chaquopy-libcxx belum ada di cache saat smoke. Percobaan
+    # kedua sukses (cache terisi) — pola persis BUG P. Entri ini memastikan
+    # libcxx ikut ter-resolve SEBELUM smoke pada instal pertama.
+    "murmurhash": ["chaquopy-libcxx"],
+    "cymem": ["chaquopy-libcxx"],
+    "preshed": ["chaquopy-libcxx"],
+    # [dari perangkat + arsip mass-test 2026-08-16] kelas Bug Q juga:
+    # pycurl gagal UAT 2026-08-17 "libcurl.so not found" (breadcrumb device);
+    # lameenc/pyproj gagal mass-test bionic311 "libmp3lame.so/libproj.so not
+    # found" (docs/mass-test-armv7-2026-08-16.jsonl). METADATA wheel toko
+    # Chaquopy menyebut host-dep ini, tapi baru terbaca SETELAH wheel masuk
+    # cache — celah instal-pertama. Entri di sini menutupnya.
+    "pycurl": ["chaquopy-curl-openssl-3"],
+    "lameenc": ["chaquopy-lame"],
+    "pyproj": ["chaquopy-proj-openssl-3"],
+    # [dari METADATA wheel + bionic311 2026-08-17] libproj.so menautkan
+    # libtiff.so, dan libtiff.so menautkan libjpeg_chaquopy.so (import
+    # pyproj gagal dlopen berlapis sebelum rantai lengkap). METADATA
+    # chaquopy-proj/libtiff menyebut semuanya, tapi terbaca SETELAH wheel
+    # masuk cache — celah instal-pertama yang sama, dua level lebih dalam.
+    # Preseden pola: chaquopy-openblas -> chaquopy-libgfortran.
+    "chaquopy-proj-openssl-3": [
+        "chaquopy-libcxx", "chaquopy-curl-openssl-3", "chaquopy-libtiff",
+    ],
+    "chaquopy-libtiff": ["chaquopy-libjpeg", "chaquopy-libcxx"],
+    # [dari perangkat, UAT maraton 2026-08-16] hidden-dep murni-Python:
+    # matplotlib-inline mengimpor matplotlib saat dipakai ipython, tapi
+    # METADATA-nya TIDAK menyebut matplotlib (dep opsional runtime).
+    # Bukti dua arah: ipython gagal saat matplotlib belum aktif, sukses
+    # setelah matplotlib terpasang. Peta ini sudah terbukti boleh membawa
+    # paket Python penuh, bukan hanya .so (lihat "pandas": ["numpy"]).
+    "matplotlib-inline": ["matplotlib"],
     "opencv-python": [
         "chaquopy-libgfortran", "chaquopy-libpng", "chaquopy-libjpeg",
         "chaquopy-openblas", "numpy",
@@ -371,6 +420,14 @@ NATIVE_HOST_DEPS: dict[str, list[str]] = {
     "pyzmq": ["chaquopy-libzmq"],
     "shapely": ["chaquopy-geos"],
     "argon2-cffi-bindings": ["cffi"],
+    # [dari perangkat] BUG P (2026-08-16, breadcrumb Infinix): percobaan
+    # argon2-cffi PERTAMA gagal smoke test "libffi.so not found: needed by
+    # _cffi_backend.so" — wheel cffi belum di cache sehingga jaring METADATA
+    # wheel belum bisa membaca kebutuhan chaquopy-libffi (resolve berjalan
+    # SEBELUM download). Percobaan jwt berikutnya sukses karena wheel cffi
+    # sudah di cache dari transaksi yang di-rollback. Entri ini menutup
+    # celah instal-pertama; METADATA wheel tetap jaring kedua.
+    "cffi": ["chaquopy-libffi"],
 }
 
 
@@ -770,6 +827,25 @@ def _resolve_unlocked(
             _latest_info = {}
         if _latest_info.get("version"):
             best["latest_version"] = _latest_info["version"]
+            # BUG S lapis-2 (2026-08-16): warning versi-fosil. Kasus gensim
+            # 0.10.1 (2014) & hyperopt 0.3.0 (2013) — resolver mundur jauh ke
+            # versi purba karena hanya itu yang ber-wheel ARMv7, user tidak
+            # diberi tahu. Tidak memblokir instal; hanya jujur di log.
+            try:
+                from packaging.version import Version as _V
+                _chosen_v = _V(best.get("version") or "0")
+                _latest_v = _V(best["latest_version"])
+                if (not _chosen_v.is_prerelease and not _latest_v.is_prerelease
+                        and _latest_v.release and _chosen_v.release
+                        and _latest_v.release[0] - _chosen_v.release[0] >= 2):
+                    notes.append(
+                        "PERINGATAN: %s terpasang v%s, terbaru v%s — versi jauh "
+                        "tertinggal karena keterbatasan wheel ARMv7; API bisa "
+                        "beda dari tutorial modern." % (
+                            cname, best["version"], best["latest_version"])
+                    )
+            except Exception:  # noqa: BLE001 — warning tidak boleh fatal
+                pass
         try:
             from .wheeldeps import deps_from_wheel
             berkas = best.get("local_path") or ""

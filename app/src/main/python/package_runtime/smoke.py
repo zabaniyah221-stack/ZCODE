@@ -21,6 +21,14 @@ import sys
 import threading
 import time
 
+# Smoke test berjalan di background thread (PyCall). Paket yang memanggil
+# signal.signal() saat import (kelas pycurl 2026-08-17: modul `curl` bonus di
+# wheel-nya SIGPIPE→SIG_IGN; uvicorn; dsb.) akan mati ValueError "main thread"
+# tanpa shim ini. Lihat signalshim.py untuk desain + preseden Chaquopy/rpy2.
+from . import signalshim
+
+signalshim.install()
+
 _IMPORT_TIMEOUT_S = 30
 
 
@@ -258,6 +266,26 @@ def preload_native_libs(dirs: list[str] | None) -> tuple[int, list[str]]:
     return dimuat, catatan
 
 
+def _trace_hint(e: BaseException, max_frames: int = 3) -> str:
+    """Frame terakhir traceback sebagai petunjuk pelaku: ' | jejak: a.py:12 -> b.py:34'.
+
+    Frame internal smoke.py sendiri dibuang (wrapper/_do_import selalu ada di
+    atas dan tidak informatif). Best-effort: kegagalan membaca traceback tidak
+    boleh menutupi error aslinya.
+    """
+    try:
+        import traceback
+        frames = traceback.extract_tb(e.__traceback__)
+        pilih = [
+            "%s:%d" % (os.path.basename(f.filename or "?"), f.lineno or 0)
+            for f in frames
+            if os.path.basename(f.filename or "") != os.path.basename(__file__)
+        ][-max_frames:]
+        return " | jejak: %s" % " -> ".join(pilih) if pilih else ""
+    except Exception:
+        return ""
+
+
 def _run_with_timeout(fn, timeout_s: float) -> tuple[bool, str]:
     """Jalankan fn; batasi durasi. Tidak bisa membunuh thread, tapi UI tetap
     dibatasi waktunya (best-effort, didokumentasikan di SPEC-001)."""
@@ -270,7 +298,14 @@ def _run_with_timeout(fn, timeout_s: float) -> tuple[bool, str]:
             result["err"] = None
         except Exception as e:  # noqa: BLE001
             result["ok"] = False
-            result["err"] = "%s: %s" % (type(e).__name__, e)
+            # Sertakan jejak pemanggil (2026-08-17). Tanpa ini, error seperti
+            # "ValueError: signal only works in main thread" (pycurl, device)
+            # tidak menyebut SIAPA pemanggilnya — diagnosa jadi tebak-tebakan.
+            # Format ringkas file:baris agar muat di breadcrumb (bukan
+            # traceback penuh yang membanjiri log HP).
+            result["err"] = "%s: %s%s" % (
+                type(e).__name__, e, _trace_hint(e)
+            )
 
     t = threading.Thread(target=wrapper, daemon=True)
     t.start()
@@ -479,12 +514,22 @@ def run_smoke(
                     )
                 results.append({"test": name, "type": kind, "ok": ok, "error": err})
             elif kind == "NATIVE_LOAD":
-                # native load terbukti lewat import yang sukses + .so hadir
+                # BUG V (2026-08-16): aturan lama "wajib ada .so di staging"
+                # menggagalkan paket yang importnya SUKSES — coverage 7.15.4
+                # (resolver memilih wheel py3-none-any = murni Python, jelas
+                # tanpa .so) dan pyzbar 0.1.8 (.so-nya dimuat dari pustaka
+                # pendukung, bukan staging paket ini) dibunuh padahal sehat.
+                # Hakim sesungguhnya adalah IMPORT: kalau ekstensi native
+                # benar-benar hilang, import pasti gagal dlopen. Ketiadaan
+                # .so saat import sukses = informasi, bukan kegagalan.
                 ok, err = _run_with_timeout(lambda: _do_import(target), timeout_s)
                 libs = native_info["native_libs"]
-                ok = ok and bool(libs)
-                if not ok and not err:
-                    err = "Import OK tapi tidak ada .so di staging (mungkin butuh .so lain)."
+                if ok and not libs:
+                    native_info["note"] = (
+                        native_info.get("note", "") +
+                        " NATIVE_LOAD: import OK tanpa .so di staging "
+                        "(wheel murni Python / .so dari pustaka pendukung)."
+                    ).strip()
                 results.append({"test": name, "type": kind, "ok": ok, "error": err})
             elif kind in ("BASIC_API", "FILE_OUTPUT"):
                 code = t.get("code")
@@ -503,6 +548,15 @@ def run_smoke(
 
             if not results[-1]["ok"]:
                 return False, results, native_info
+        # Jujur di hasil: bila selama smoke ada handler signal yang di-skip
+        # oleh shim (kelas pycurl 2026-08-17), catat — bukan disembunyikan.
+        if signalshim.skipped_registrations:
+            native_info["note"] = (
+                native_info.get("note", "") +
+                " [signal] handler di-skip (background thread Android): %s."
+                % ", ".join(sorted(set(signalshim.skipped_registrations)))
+            ).strip()
+            signalshim.skipped_registrations.clear()
         return True, results, native_info
     finally:
         sys.path[:] = old_path

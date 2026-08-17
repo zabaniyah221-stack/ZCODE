@@ -193,10 +193,10 @@ fun AboutScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // ---------- Diagnostik (2026-08-12) ----------
-            // User memakai ZCODE tanpa PC, jadi `adb logcat` tidak tersedia. Panel ini
-            // satu-satunya cara membaca jejak langkah & laporan crash dari dalam HP.
-            DiagnosticsCard(context)
+            // Diagnostik dihapus dari About (v1.0.18, laporan user 2026-08-16):
+            // sejak DiagnosticsScreen full-screen lahir (sidebar), panel ini
+            // duplikat yang lebih lemah. Fungsi DiagnosticsCard dibiarkan mati
+            // di bawah? TIDAK — dihapus penuh agar tidak jadi kode zombi.
 
             // Contribute — langsung ke GitHub Issues
             Card(
@@ -243,117 +243,3 @@ fun AboutScreen(
     }
 }
 
-/**
- * DiagnosticsCard — panel jejak & laporan crash (2026-08-12).
- *
- * Dibuat karena user menjalankan ZCODE di HP tanpa PC: tidak ada `adb logcat`,
- * sehingga force close sebelumnya tidak meninggalkan bukti apa pun yang bisa dibaca.
- *
- * Isi:
- * - Breadcrumb 40 baris terakhir — baris TERAKHIR adalah langkah terjauh yang
- *   sempat tercapai sebelum aplikasi mati. Ini bekerja untuk crash Java MAUPUN
- *   crash native / dimatikan sistem karena memori.
- * - Laporan crash Java terakhir (bila ada).
- * - Tombol Salin → clipboard, supaya user bisa menempelkannya saat melapor.
- */
-@Composable
-private fun DiagnosticsCard(context: android.content.Context) {
-    var expanded by remember { mutableStateOf(false) }
-    var text by remember { mutableStateOf("") }
-
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                "Diagnostik",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                "Jejak langkah terakhir aplikasi. Kalau ZCODE pernah menutup sendiri, " +
-                    "buka panel ini dan salin isinya saat melapor.",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.LightGray,
-                textAlign = TextAlign.Center
-            )
-            Button(
-                onClick = {
-                    expanded = !expanded
-                    if (expanded) {
-                        val crash = com.zaba.zcode.core.diagnostics.CrashReporter.lastReport(context)
-                        val crumbs = com.zaba.zcode.core.diagnostics.Breadcrumb.tail(200)
-                        text = buildString {
-                            append("=== BREADCRUMB (200 baris terakhir) ===\n")
-                            append(crumbs)
-                            append("\n\n=== CRASH TERAKHIR ===\n")
-                            append(crash ?: "(belum pernah crash Java — kalau ZCODE tetap menutup sendiri, penyebabnya di luar JVM: lihat baris terakhir breadcrumb di atas)")
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    if (expanded) "Tutup Diagnostik" else "Lihat Diagnostik",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontSize = 12.sp
-                )
-            }
-
-            if (expanded) {
-                // FIX 2026-08-13: tinggi DULU dipaku 220.dp + font 9sp + hanya
-                // 40 baris terakhir — praktis hanya muat beberapa baris, tidak
-                // terbaca, dan memotong jejak justru saat paling dibutuhkan.
-                // Sekarang proporsional terhadap layar (0.6f) dengan 200 baris.
-                // Layar DIAGNOSTICS penuh di sidebar menyusul di build #3.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(0.6f)
-                        .background(Color(0xFF050806), RoundedCornerShape(10.dp))
-                        .verticalScroll(rememberScrollState())
-                        .padding(10.dp)
-                ) {
-                    // BUG I: teks diagnostik harus bisa diseleksi manual, bukan
-                    // hanya lewat tombol Salin.
-                    SelectionContainer {
-                    Text(
-                        text,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp,
-                        fontFamily = FontFamily.Monospace,
-                        color = Color(0xFF9AE6B4)
-                    )
-                    } // SelectionContainer (BUG I)
-                }
-                Button(
-                    onClick = {
-                        try {
-                            val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
-                                as android.content.ClipboardManager
-                            cm.setPrimaryClip(android.content.ClipData.newPlainText("ZCODE diagnostik", text))
-                            android.widget.Toast.makeText(
-                                context, "Diagnostik disalin", android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        } catch (e: Throwable) {
-                            android.widget.Toast.makeText(
-                                context, "Gagal menyalin: ${e.message}", android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Salin", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
-                }
-            }
-        }
-    }
-}

@@ -76,7 +76,8 @@ class TestFase1Files:
         txt = read(UI / "settings/PipScreen.kt")
         assert "pip" in txt.lower()
         assert "isInstalling" in txt
-        assert "scrollState" in txt
+        # v1.0.18: Console+Log digabung — scroll tunggal bernama consoleScroll
+        assert "consoleScroll" in txt
 
     def test_about_screen_exists(self):
         txt = read(UI / "settings/AboutScreen.kt")
@@ -137,8 +138,11 @@ class TestExecutionFase1:
         assert "MAX_OUTPUT_CHARS" in txt, "terminal harus cap output (S-18)"
 
     def test_pip_caps_log(self):
+        # v1.0.18: panel Log berbasis string (MAX_OUTPUT_CHARS) diganti
+        # Console berbasis baris; cap in-memory tetap wajib agar ARMv7 tidak
+        # kehabisan RAM saat instalasi panjang — kini takeLast(400) baris.
         txt = read(UI / "settings/PipScreen.kt")
-        assert "MAX_OUTPUT_CHARS" in txt, "pip log harus di-cap"
+        assert "takeLast(400)" in txt, "console pip harus di-cap (anti-OOM ARMv7)"
 
     def test_no_textstyle_val_bug(self):
         # Bug dari source referensi: `private val TextStyle = androidx...` tidak valid Kotlin

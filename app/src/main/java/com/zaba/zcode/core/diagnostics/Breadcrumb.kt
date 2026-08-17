@@ -24,7 +24,10 @@ import java.util.Locale
  * Lokasi: <filesDir>/logs/diagnostics/breadcrumb.log
  */
 object Breadcrumb {
-    private const val MAX_BYTES = 128 * 1024 // 128KB — cukup untuk ratusan sesi
+    // v1.0.18: 128KB->512KB. Sesi UAT maraton user 2026-08-16 (13 install
+    // beruntun) memotong riwayat via rotasi — user mengira tombol Salin bocor.
+    // 512KB masih receh untuk storage 64GB dan memuat ±4x lebih banyak sesi.
+    private const val MAX_BYTES = 512 * 1024
     private val lock = Any()
     private val tsFormat = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
 
@@ -40,10 +43,19 @@ object Breadcrumb {
                 dir.mkdirs()
                 val f = File(dir, "breadcrumb.log")
                 if (f.exists() && f.length() > MAX_BYTES) {
-                    // rotate: simpan separuh terakhir supaya riwayat sebelumnya tidak hilang total
+                    // BUG Y (2026-08-16): rotasi lama MEMBUANG separuh riwayat —
+                    // sesi UAT pagi user lenyap dari disk dan tombol Salin
+                    // dikira bocor. Sekarang file penuh dipindah jadi ARSIP
+                    // (breadcrumb.1.log, satu generasi) dan file aktif mulai
+                    // kosong: total riwayat di disk ±2x MAX_BYTES, tidak ada
+                    // yang hilang diam-diam.
                     try {
-                        val tail = f.readText().takeLast(MAX_BYTES / 2)
-                        f.writeText(tail)
+                        val arsip = File(dir, "breadcrumb.1.log")
+                        arsip.delete()
+                        if (!f.renameTo(arsip)) {
+                            arsip.writeText(f.readText())
+                            f.writeText("")
+                        }
                     } catch (e: Throwable) {
                         f.delete()
                     }
@@ -110,6 +122,25 @@ object Breadcrumb {
     /** Isi penuh breadcrumb (untuk layar Diagnostik / tombol Salin). */
     fun dump(): String = try {
         file?.takeIf { it.exists() }?.readText() ?: "(breadcrumb kosong)"
+    } catch (e: Throwable) {
+        "(gagal membaca breadcrumb: ${e.message})"
+    }
+
+    /**
+     * BUG Y: isi breadcrumb SELENGKAP yang masih ada di disk — arsip rotasi
+     * (breadcrumb.1.log) + file aktif. Dipakai tombol Salin/Ekspor Diagnostics
+     * supaya pelaporan bug tidak kehilangan sesi yang kena rotasi.
+     */
+    fun dumpFull(): String = try {
+        val aktif = file
+        val arsip = aktif?.parentFile?.let { File(it, "breadcrumb.1.log") }
+        buildString {
+            if (arsip != null && arsip.exists()) {
+                append(arsip.readText())
+                if (isNotEmpty() && last() != '\n') append('\n')
+            }
+            append(aktif?.takeIf { it.exists() }?.readText() ?: "")
+        }.ifBlank { "(breadcrumb kosong)" }
     } catch (e: Throwable) {
         "(gagal membaca breadcrumb: ${e.message})"
     }
