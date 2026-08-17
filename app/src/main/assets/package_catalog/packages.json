@@ -13854,7 +13854,7 @@
   "importName": "pycurl",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "7.45.2",
   "python": [
    "3.11"
@@ -13865,6 +13865,7 @@
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
   "works": [
+   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, v1.0.18-polish) — v7.45.2 instal+smoke OK (13:28) DAN `import pycurl` via script user exit 0 dua kali berturut (13:29). Dua bug ditaklukkan berlapis: (1) host-dep chaquopy-curl-openssl-3 kini tertarik instal-pertama (kelas Bug Q); (2) signalshim melindungi signal.signal di background thread. Kedua gerbang (smoke + zcode_runner) terbukti di device.",
    "FIX v1.0.18-polish babak 2 (2026-08-17): UAT device lolos dlopen tapi gagal 'ValueError: signal only works in main thread' — kelas baru: semua kode Python ZCODE berjalan di background thread Android, paket yang memanggil signal.signal() saat import pasti meledak. Fix: signalshim runtime-wide (pola resmi Chaquopy mem-patch stdlib; desain catch-based ala rpy2#769) — handler di-skip + tercatat, bukan meledak. Smoke pycurl asli lolos di bionic311. Menunggu re-test device.",
    "FIX v1.0.18-polish: host-dep chaquopy-curl-openssl-3 kini tertarik saat instal-pertama (kelas Bug Q; dulu gagal 'libcurl.so not found' di device 2026-08-17). ARMV7-IMPORT-VERIFIED bionic311: PycURL/7.45.2 libcurl/7.76.1 OpenSSL/3.0.18 import OK."
   ],

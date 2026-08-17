@@ -437,3 +437,17 @@ INCOMPATIBLE 10 | COMPATIBLE 10 (total 342, +virtualenv).
 4. docker / diskcache / ruamel.yaml → opsional, sesuai mood
 5. Lirik konsol sekali: baris `TARGET NOT FOUND [chaquopy]` muncul
    menggantikan `http_fail HTTPError HTTP 404`
+
+### §10b. UAT babak-2 pycurl — DEVICE VERIFIED (2026-08-17 13:28-13:30)
+Breadcrumb + screenshot user:
+- 13:28:56 `PKG_INSTALL_OK pycurl -> pycurl,chaquopy-curl-openssl-3` —
+  smoke lolos dgn signalshim (dulu ValueError "signal only works in main
+  thread" tepat di titik ini).
+- 13:29:42 & 13:29:57 script user `import pycurl` → exit code 0 dua kali
+  berturut — gerbang zcode_runner terbukti, bukan hanya smoke.
+- Tidak ada warning [signal] di terminal = benar: import pycurl sendiri
+  tak memanggil signal.signal (hanya modul bonus `curl` yang memanggil);
+  shim hanya bersuara saat benar-benar men-skip.
+Katalog: pycurl → TESTED @7.45.2 (paket ke-230). Checklist PR #21 KOMPLIT:
+semua fix bengkel + bengkel-mini kini DEVICE VERIFIED kecuali Bug U
+(SANDBOX, pulp di-skip user secara sadar).
