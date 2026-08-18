@@ -73,7 +73,10 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
             SamplesScreen(
                 onBack = { nav.navigateUp() },
                 onPick = { entry ->
-                    val (ok, msg) = vm.createSampleFromAsset(entry.assetPath, entry.id)
+                    val (ok, msg) = vm.createSampleFromAsset(
+                        entry.assetPath, entry.id,
+                        companionAssets = entry.companionAssets // A7: file pendamping
+                    )
                     Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
                     if (ok) nav.navigateUp() // balik ke editor — vm.selectFile sudah aktif
                 },

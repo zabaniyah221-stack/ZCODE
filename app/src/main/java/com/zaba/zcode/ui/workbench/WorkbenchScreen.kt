@@ -152,6 +152,8 @@ fun WorkbenchScreen(
     var fileToDelete by remember { mutableStateOf<String?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
     var showPalette by remember { mutableStateOf(false) }
+    // A5 v1.0.19: Reference Card (tombol "?" di terowongan symbol bar)
+    var showReferenceCard by remember { mutableStateOf(false) }
     // Tap nama file aktif di topbar → dialog Rename/Delete (pengganti FILES MANAGER)
     var showFileActions by remember { mutableStateOf(false) }
     // Redesign 2026-08: drawer TOOLS expandable (plugin + settings satu kotak)
@@ -667,10 +669,15 @@ fun WorkbenchScreen(
                 // QuickTools / symbol bar — bisa dimatikan user lewat drawer (EDITOR → Symbol bar)
                 if (vm.symbolBarEnabled) {
                     // EDITOR HANDLE (build #3) — komponen yang sama dipakai di
-                    // terminal. Di editor terowongannya kosong: tidak ada yang
-                    // perlu dihentikan, jadi hanya "kereta"-nya yang tampak.
+                    // terminal. A5 v1.0.19: terowongan (slot yang tak ikut
+                    // scroll) kini diisi tombol "?" → Reference Card. Pas
+                    // secara semantik: referensi = jangkar, bukan penumpang.
                     com.zaba.zcode.ui.common.EditorHandle(
                         keys = com.zaba.zcode.ui.common.pythonEditorKeys(),
+                        tunnelKey = com.zaba.zcode.ui.common.HandleKey(
+                            label = "?",
+                            onClick = { showReferenceCard = true }
+                        ),
                         onInsert = { text ->
                             webViewRef.value?.evaluateJavascript(
                                 "insertText(${escapeJavaScriptString(text)});", null
@@ -784,6 +791,19 @@ fun WorkbenchScreen(
             confirmButton = {
                 TextButton(onClick = { showFileActions = false }) { Text("Batal") }
             }
+        )
+    }
+
+    // ---------- Dialog: Reference Card (A5 v1.0.19) ----------
+    if (showReferenceCard) {
+        com.zaba.zcode.ui.common.ReferenceCardDialog(
+            context = context,
+            onInsert = { text ->
+                webViewRef.value?.evaluateJavascript(
+                    "insertText(${escapeJavaScriptString(text)});", null
+                )
+            },
+            onDismiss = { showReferenceCard = false }
         )
     }
 

@@ -31,6 +31,12 @@ data class SampleEntry(
      * yang membuka gerbong konten: sample paket pip kini aman ditambah.
      */
     val requiresPackage: List<String> = emptyList(),
+    /**
+     * A7 (v1.0.19): asset pendamping yang ditulis ke workspace dgn NAMA
+     * TETAP saat sample dibuka (mis. modul helper yang di-import file
+     * utama). Tidak menimpa file yang sudah ada.
+     */
+    val companionAssets: List<String> = emptyList(),
 )
 
 data class SampleCategory(
@@ -86,6 +92,14 @@ object SampleLibrary {
                     "dictionaries_db", "Dictionaries",
                     "Database key-value mini pakai dict Python",
                     "samples/dictionaries_db.py"
+                ),
+                // A7 v1.0.19: sample multi-file PERTAMA — meresmikan fakta
+                // bahwa import antar file workspace sudah jalan (sys.path).
+                SampleEntry(
+                    "project_mini", "Project Mini (2 file)",
+                    "Dua file, satu program: main mengimpor modul helper di sebelahnya",
+                    "samples/project_mini.py",
+                    companionAssets = listOf("samples/helper_util.py")
                 ),
                 // Batch v1.0.18 (2026-08-16): 5 pelajaran stdlib yang menutup
                 // lubang kurikulum — error handling, OOP, file, JSON, waktu.

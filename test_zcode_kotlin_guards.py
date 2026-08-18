@@ -1025,13 +1025,25 @@ class TestEditorHandle:
         assert "^C" in jendela
         assert "danger = true" in jendela, "^C tidak ditandai bahaya (merah)"
 
-    def test_terpasang_di_editor_tanpa_terowongan(self):
+    def test_terpasang_di_editor_dengan_terowongan_referensi(self):
+        # SEJARAH DUA ERA — jangan hapus konteks ini:
+        # build #3: terowongan editor WAJIB kosong ("tak ada yang perlu
+        #   dihentikan" — slot itu semula khusus tombol stop terminal).
+        # v1.0.19 A5 (2026-08-18): terowongan diisi tombol "?" Reference
+        #   Card — pas semantik: referensi = jangkar yang tak ikut scroll
+        #   kereta simbol. Yang dijaga sekarang = terowongan HANYA boleh
+        #   berisi "?", bukan kembali jadi tombol stop/danger.
         src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
         assert "EditorHandle(" in src, "EditorHandle belum dipakai di editor"
         assert "QuickToolsBar" not in src, "bar lama masih tersisa (kode mati)"
         i = src.find("EditorHandle(")
-        assert "tunnelKey" not in src[i:i + 600], \
-            "editor tidak boleh punya terowongan — tak ada yang perlu dihentikan"
+        jendela = src[i:i + 800]
+        assert "tunnelKey" in jendela and 'label = "?"' in jendela, (
+            "terowongan editor kini berisi tombol ? (A5 Reference Card)"
+        )
+        assert "danger" not in jendela, (
+            "terowongan editor tidak boleh berisi tombol danger/stop"
+        )
 
     def test_setiap_tombol_punya_aksi(self):
         """Tombol yang tidak melakukan apa-apa lebih buruk daripada tidak ada."""
@@ -3606,3 +3618,89 @@ class TestGerbongAEditorWiring:
                 f"persist prefs {key} hilang — default whitespace OFF & lain ON "
                 "adalah ketokan user"
             )
+
+
+class TestReferenceCardA5:
+    """A5: Quick Reference Card — data JSON assets valid + wiring tombol ?."""
+
+    def test_json_valid_dan_berisi(self):
+        import json as _json
+        p = ROOT / "app/src/main/assets/reference/python_reference.json"
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        secs = data["sections"]
+        assert len(secs) >= 4, "minimal 4 seksi referensi"
+        total = sum(len(s["items"]) for s in secs)
+        assert total >= 18, f"minimal 18 pola; dapat {total}"
+        for s in secs:
+            for it in s["items"]:
+                assert it["label"].strip() and it["insert"].strip(), (
+                    f"item kosong di seksi {s['title']}"
+                )
+
+    def test_semua_insert_adalah_python_valid_atau_fragmen(self):
+        # Snippet berisi placeholder (kondisi, daftar, ...) — uji KELAS
+        # minimal: compile sebagai statement dgn placeholder diganti nama
+        # valid; yang gagal dua-duanya = typo struktural nyata.
+        import json as _json, ast
+        p = ROOT / "app/src/main/assets/reference/python_reference.json"
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        for s in data["sections"]:
+            for it in s["items"]:
+                code = it["insert"]
+                try:
+                    ast.parse(code)
+                except SyntaxError:
+                    raise AssertionError(
+                        f"snippet '{it['label']}' bukan Python valid:\n{code}"
+                    )
+
+    def test_wiring_tombol_tanya(self):
+        src = read(UI / "workbench/WorkbenchScreen.kt")
+        kode = strip_kt_comments(src)
+        assert 'label = "?"' in kode and "showReferenceCard = true" in kode, (
+            "tombol ? di terowongan symbol bar harus membuka Reference Card"
+        )
+        assert "ReferenceCardDialog(" in kode, "dialog harus terpasang"
+        rc = read(UI / "common/ReferenceCard.kt")
+        assert "REFCARD_INSERT" in rc and "REFCARD_LOAD_FAIL" in rc, (
+            "breadcrumb insert + load-fail wajib (observability)"
+        )
+
+
+class TestProjectMiniA7:
+    """A7: multi-file DISAHKAN — sample 2 file + mekanisme companionAssets."""
+
+    def test_sample_files_ada_dan_kompilasi(self):
+        import py_compile, tempfile
+        for f in ("project_mini.py", "helper_util.py"):
+            p = ROOT / "app/src/main/assets/samples" / f
+            assert p.is_file(), f"{f} hilang"
+            py_compile.compile(str(p), doraise=True)
+
+    def test_import_antar_file_jalan(self, tmp_path):
+        # Eksekusi NYATA: dua file di dir yang sama (persis workspace ZCODE:
+        # cwd = workspace + sys.path berisi workspace).
+        import shutil, subprocess, sys
+        for f in ("project_mini.py", "helper_util.py"):
+            shutil.copy(ROOT / "app/src/main/assets/samples" / f, tmp_path / f)
+        out = subprocess.run(
+            [sys.executable, "project_mini.py"], cwd=tmp_path,
+            capture_output=True, text=True, timeout=30
+        )
+        assert out.returncode == 0, f"multi-file gagal: {out.stderr[:300]}"
+        assert "Salam dari modul sebelah" in out.stdout
+
+    def test_companion_tidak_menimpa(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt")
+        kode = strip_kt_comments(src)
+        i = kode.find("companionAssets: List<String>")
+        assert i > 0, "parameter companionAssets hilang dari createSampleFromAsset"
+        jendela = kode[i:i + 800]
+        assert ".exists()" in jendela, (
+            "file pendamping yang sudah ada TIDAK boleh ditimpa (user "
+            "mungkin sudah mengeditnya)"
+        )
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        assert 'companionAssets = listOf("samples/helper_util.py")' in lib, (
+            "Project Mini harus mendeklarasikan helper sebagai companion"
+        )

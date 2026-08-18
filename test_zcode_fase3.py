@@ -141,7 +141,14 @@ class TestSamples:
                   "try_except", "classes_oop", "file_io", "json_data",
                   "datetime_random", "requests_api", "rich_table",
                   "tqdm_progress", "openpyxl_excel", "pillow_image",
-                  "matplotlib_chart"]
+                  "matplotlib_chart",
+                  # A7 v1.0.19: sample multi-file pertama (entri katalog).
+                  "project_mini"]
+
+    # A7: file .py di assets yang BUKAN entri katalog — companion yang
+    # ditulis ke workspace dgn nama tetap saat sample induknya dibuka.
+    # Tetap wajib lolos py_compile (glob *.py menangkapnya otomatis).
+    COMPANION_IDS = ["helper_util"]
 
     def test_route_halaman_samples(self):
         assert '"samples"' in read(MAIN), "route samples hilang di MainActivity"
@@ -156,8 +163,16 @@ class TestSamples:
 
     def test_asset_sama_dengan_katalog(self):
         ids_assets = sorted(p.stem for p in (ASSETS / "samples").glob("*.py"))
-        assert ids_assets == sorted(self.SAMPLE_IDS), \
-            f"isian assets/samples tidak sinkron dengan katalog: {ids_assets}"
+        assert ids_assets == sorted(self.SAMPLE_IDS + self.COMPANION_IDS), \
+            f"isian assets/samples tidak sinkron dengan katalog+companion: {ids_assets}"
+
+    def test_companion_terdaftar_di_katalog_sebagai_companion(self):
+        # companion bukan entri, tapi WAJIB direferensikan companionAssets
+        # oleh minimal satu entri — file assets yatim = kode mati.
+        txt = read(CORE / "samples/SampleLibrary.kt")
+        for cid in self.COMPANION_IDS:
+            assert f'samples/{cid}.py' in txt, \
+                f"companion {cid} tidak direferensikan entri katalog mana pun"
 
     def test_semua_sample_lolos_py_compile(self):
         # Rule #2 (meticulous): sample rusak syntax = test merah, bukan crash di HP user

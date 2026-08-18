@@ -653,14 +653,37 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
      * SAMPLES (FASE E): bikin file dari sample di assets/samples/ lalu buka.
      * Return: (sukses, pesan) — pesan berisi nama file final bila sukses.
      */
-    fun createSampleFromAsset(assetPath: String, sampleId: String): Pair<Boolean, String> {
+    fun createSampleFromAsset(
+        assetPath: String,
+        sampleId: String,
+        /**
+         * A7 v1.0.19 (sample multi-file): asset pendamping yang ditulis
+         * dengan NAMA TETAP (bukan uniqueFileName) — `import helper_x` di
+         * file utama wajib menemukan `helper_x.py` persis. File pendamping
+         * yang sudah ada TIDAK ditimpa (user mungkin sudah mengeditnya);
+         * ditulis hanya bila belum ada. Multi-file import sendiri sudah
+         * jalan sejak dulu (workspace di sys.path — zcode_runner line 137).
+         */
+        companionAssets: List<String> = emptyList()
+    ): Pair<Boolean, String> {
         return try {
-            val code = getApplication<Application>().assets.open(assetPath)
+            val app = getApplication<Application>()
+            for (companion in companionAssets) {
+                val cName = companion.substringAfterLast('/')
+                if (!java.io.File(filesDir, cName).exists()) {
+                    val cCode = app.assets.open(companion)
+                        .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    FileManager.saveFile(filesDir, cName, cCode)
+                }
+            }
+            val code = app.assets.open(assetPath)
                 .bufferedReader(Charsets.UTF_8).use { it.readText() }
             val finalName = uniqueFileName(sampleId)
             FileManager.saveFile(filesDir, finalName, code)
             selectFile(finalName)
-            true to "Sample kebuka: $finalName"
+            val note = if (companionAssets.isEmpty()) ""
+            else " (+${companionAssets.size} file pendamping)"
+            true to "Sample kebuka: $finalName$note"
         } catch (e: Exception) {
             false to "Gagal buka sample: ${e.message ?: "asset hilang"}"
         }
