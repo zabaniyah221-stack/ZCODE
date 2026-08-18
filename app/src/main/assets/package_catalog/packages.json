@@ -14382,7 +14382,7 @@
   "importName": "zope.interface",
   "category": "Web / API / Networking",
   "type": "native",
-  "status": "COMPATIBLE",
+  "status": "TESTED",
   "testedVersion": "6.1",
   "python": [
    "3.11"
@@ -14392,7 +14392,9 @@
   ],
   "description": "Paket native tersedia untuk ARMv7 (cp311, indeks Chaquopy).",
   "useCases": [],
-  "works": [],
+  "works": [
+   "DEVICE TESTED 2026-08-18 (Infinix SMART 9 HD, ARMv7, v1.0.19) — v6.1 instal+smoke OK. Sembuh berkat provided-packages: deps setuptools kini terpenuhi runtime v68.2.2 (dulu resolver belanja setuptools 84 dari PyPI → AssertionError distutils, kelas shadowing stdlib)."
+  ],
   "doesNotWork": [],
   "dependencies": [],
   "risks": [],

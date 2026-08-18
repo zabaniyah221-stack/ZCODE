@@ -100,3 +100,22 @@ Keputusan user yang mengikat rencana ini:
    commit menyebut yang TIDAK dikerjakan.
 5. **Angka**: test count naik dari 298 (file utama); katalog tak turun dari
    230 TESTED; nol regresi fungsi v1.0.18.
+
+---
+
+## LOG EKSEKUSI
+
+### 2026-08-18 — Build fondasi C+B: DEVICE VERIFIED
+UAT user (breadcrumb v1.0.19, 11:29-11:36):
+- Gerbong C: zope-interface INSTALL_OK 1 paket (notes "setuptools:
+  disediakan runtime ZCODE v68.2.2"); root `setuptools` → PKG_STDLIB +
+  info ℹ️ di console, 0 network. Katalog: zope-interface → TESTED @6.1
+  (paket ke-231).
+- Gerbong B: SAMPLES_BUTUH_PAKET 5x (numpy×2/openpyxl/pillow/matplotlib)
+  → dialog muncul + tombol ke Install Modules bekerja; web_fetch_json
+  (stdlib) lolos tanpa dialog. Kontrol dua arah terbukti.
+- Keputusan user: branch TIDAK di-merge dulu — Gerbong A menyambung di
+  branch ini juga → satu PR utuh v1.0.19, sekali merge di akhir.
+
+Berikutnya: diskusi mendalam Gerbong A (lint gutter, whitespace guard,
+traceback jump, TOOLS satu-scroll + THEME pinned) sebelum implementasi.
