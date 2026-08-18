@@ -1249,3 +1249,26 @@ menit, RAM stabil <1GB. Hasil diarsipkan: docs/mass-test-armv7-2026-08-16.jsonl.
 **Temuan NYATA dari uji ini:** 16 importName salah di katalog; Bug O baru
 (sympy/mpmath, aiohttp/yarl.Query); lameenc+pyproj = UNAVAILABLE jujur;
 7 paket dependency metadata bolong (docopt, traceback2, dst).
+
+---
+
+## SKILL 17 — Layar statis wajib survive tinggi 360dp (2026-08-18)
+
+**Trigger:** 8 screenshot user landscape Infinix (720x1600 → tinggi ±360dp):
+drawer tak bisa mencapai item bawah, tombol Contribute About di luar layar,
+console Manual Install tersisa ±50dp. Lolos berbulan-bulan karena manifest
+`configChanges=orientation` (rotate tak crash → tak ada log) dan UAT selalu
+portrait.
+
+**Aturan:**
+1. Setiap layar/panel dengan konten TINGGI TETAP wajib salah satu:
+   scroll container di akar, ATAU strategi eksplisit layar-pendek
+   (`BoxWithConstraints` + ambang, pola ManualTab).
+2. `Spacer(weight)` / `weight(1f)` HANYA sah di kolom non-scrollable yang
+   tingginya dijamin; di kolom scrollable weight kolaps jadi 0.
+3. Fix rotate wajib aditif: portrait harus identik piksel dgn sebelum fix
+   (scroll tak aktif bila konten muat).
+4. UAT fitur UI baru = DUA orientasi, selalu.
+5. Guard per titik + audit layar lain saat satu titik ketahuan (kelas,
+   bukan kejadian): korban 2026-08-18 = 3 titik; Settings/Diagnostics/
+   Samples/Terminal diaudit aman.

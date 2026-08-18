@@ -1043,9 +1043,21 @@ private fun ManualTab(
     consoleLines: List<ConsoleLine>,
     consoleScroll: androidx.compose.foundation.ScrollState
 ) {
+    // A0 v1.0.19 (laporan user 2026-08-18, screenshot landscape): di layar
+    // pendek (±360dp) area input+hints (tinggi tetap ±250dp) makan ruang
+    // duluan sehingga console weight(1f) tersisa ±50dp — tampak "rusak".
+    // Strategi: BoxWithConstraints. Layar pendek (<480dp) → seluruh kolom
+    // scrollable + console TINGGI TETAP 220dp (terbaca, bisa discroll ke
+    // dalam). Layar normal → perilaku lama PERSIS (weight isi sisa).
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val layarPendek = maxHeight < 480.dp
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .then(
+                if (layarPendek) Modifier.verticalScroll(rememberScrollState())
+                else Modifier
+            )
             .padding(16.dp)
     ) {
         Row(
@@ -1160,7 +1172,13 @@ private fun ManualTab(
         // yang disengaja, bukan layar navigasi.
         Box(
             modifier = Modifier
-                .weight(1f)
+                // A0: layar pendek → tinggi TETAP 220dp (weight di kolom
+                // scrollable = tinggi 0, console lenyap); layar normal →
+                // weight(1f) isi sisa layar (perilaku lama persis).
+                .then(
+                    if (layarPendek) Modifier.height(220.dp)
+                    else Modifier.weight(1f)
+                )
                 .fillMaxWidth()
                 .background(Color(0xFF050806), shape = RoundedCornerShape(8.dp))
                 .padding(12.dp)
@@ -1188,6 +1206,7 @@ private fun ManualTab(
             } // SelectionContainer (BUG I)
         }
     }
+    } // BoxWithConstraints (A0 rotate resilience)
 }
 
 private fun initialConsole(): List<ConsoleLine> = listOf(

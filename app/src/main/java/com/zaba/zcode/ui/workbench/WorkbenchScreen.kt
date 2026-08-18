@@ -304,6 +304,15 @@ fun WorkbenchScreen(
                 drawerContainerColor = MaterialTheme.colorScheme.background,
                 modifier = Modifier.width(300.dp)
             ) {
+                // A0 v1.0.19 (laporan user 2026-08-18, screenshot landscape):
+                // seluruh isi drawer dibungkus SATU kolom scrollable. Tanpa ini,
+                // di landscape Infinix (tinggi ±360dp) item bawah (TOOLS
+                // expanded, SETTINGS, About) BUKAN sekadar terpotong — tak
+                // terjangkau sama sekali karena Column biasa tidak scroll.
+                // Scroll sumbu Y tidak bentrok dgn gesture swipe-close drawer
+                // (sumbu X). Portrait: konten muat → scroll tak aktif → layout
+                // identik dengan sebelum fix.
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // Header drawer — "ZCODE" + logo app baru di kanan (tanpa subtitle, permintaan user)
                 // EASTER EGG: tap logo 7x (jeda <800ms) → header melar mulus,
                 // wordmark+logo crossfade ke Frieren bawa papan 2.8 dtk, fade out,
@@ -499,6 +508,7 @@ fun WorkbenchScreen(
                 DrawerItem("About & Contribute") {
                     closeDrawerThen { onNavigateToAbout() }
                 }
+                } // penutup Column scrollable A0 (rotate resilience)
             }
         }
     ) {

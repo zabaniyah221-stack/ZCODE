@@ -3384,3 +3384,51 @@ class TestRequiresPackageV1019:
         assert "onGoToInstallModules" in src and 'nav.navigate("pip")' in src, (
             "MainActivity harus menyuntik navigasi nyata ke pip"
         )
+
+
+class TestRotateResilienceA0:
+    """A0 v1.0.19 (laporan user 2026-08-18, 8 screenshot landscape): layar
+    dgn asumsi tinggi portrait rusak di landscape ±360dp. Kelas fix: layar/
+    panel statis wajib survive 360dp. Tiga titik korban + guard per titik."""
+
+    def test_drawer_scrollable(self):
+        src = read(UI / "workbench/WorkbenchScreen.kt")
+        sheet = src.find("ModalDrawerSheet(")
+        assert sheet > 0
+        jendela = src[sheet:sheet + 1500]
+        assert "verticalScroll(rememberScrollState())" in jendela, (
+            "isi ModalDrawerSheet wajib scrollable — landscape: item bawah "
+            "drawer tak terjangkau tanpa ini (laporan user 2026-08-18)"
+        )
+
+    def test_about_root_scrollable(self):
+        src = read(UI / "settings/AboutScreen.kt")
+        # root Column (setelah padding Scaffold) wajib scroll; kotak license
+        # scrollable saja TIDAK cukup (bukti: tombol Contribute terdampar).
+        i = src.find("{ padding ->")
+        assert i > 0
+        jendela = src[i:i + 700]
+        assert "verticalScroll(rememberScrollState())" in jendela, (
+            "root AboutScreen wajib scrollable (landscape: tombol "
+            "Issues/Contribute di luar layar)"
+        )
+        # Spacer weight di kolom scrollable = kolaps 0; wajib sudah diganti.
+        assert "Spacer(modifier = Modifier.weight(1f))" not in src, (
+            "Spacer weight tak bermakna di kolom scrollable — ganti jarak tetap"
+        )
+
+    def test_manual_tab_console_tidak_kelaparan(self):
+        src = read(UI / "settings/PipScreen.kt")
+        assert "BoxWithConstraints" in src and "layarPendek" in src, (
+            "ManualTab wajib sadar tinggi layar (BoxWithConstraints)"
+        )
+        assert "maxHeight < 480.dp" in src, "ambang layar pendek 480dp"
+        assert 'Modifier.height(220.dp)' in src, (
+            "console wajib tinggi TETAP saat layar pendek — weight di kolom "
+            "scrollable = console lenyap (screenshot user: sisa ±50dp)"
+        )
+        # dua cabang harus hidup dua-duanya: layar normal tetap weight(1f)
+        i = src.find("layarPendek) Modifier.height(220.dp)")
+        assert i > 0 and "else Modifier.weight(1f)" in src[i:i + 200], (
+            "layar normal wajib mempertahankan perilaku lama weight(1f)"
+        )

@@ -119,6 +119,12 @@ fun AboutScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
+                // A0 v1.0.19 (laporan user 2026-08-18): root About kini
+                // scrollable. Di landscape ±360dp, logo 92dp + judul + versi
+                // memakan setengah layar dan tombol Issues/Contribute
+                // terdampar di luar layar tanpa jalan masuk. Portrait: konten
+                // muat → scroll tak aktif → identik sebelum fix.
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -191,7 +197,11 @@ fun AboutScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            // A0: dulu Spacer(weight(1f)) "dorong Contribute ke dasar layar".
+            // Di kolom scrollable, weight tak bermakna (tinggi unbounded) dan
+            // spacer kolaps jadi 0 — diganti jarak tetap agar deterministik
+            // di kedua orientasi.
+            Spacer(modifier = Modifier.height(18.dp))
 
             // Diagnostik dihapus dari About (v1.0.18, laporan user 2026-08-16):
             // sejak DiagnosticsScreen full-screen lahir (sidebar), panel ini
