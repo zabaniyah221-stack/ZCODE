@@ -76,7 +76,9 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                     val (ok, msg) = vm.createSampleFromAsset(entry.assetPath, entry.id)
                     Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
                     if (ok) nav.navigateUp() // balik ke editor — vm.selectFile sudah aktif
-                }
+                },
+                // Gerbong B (v1.0.19): dialog "butuh paket X" → INSTALL MODULES
+                onGoToInstallModules = { nav.navigate("pip") }
             )
         }
         composable("output/{filename}") { backStackEntry ->

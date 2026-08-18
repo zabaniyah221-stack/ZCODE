@@ -3323,3 +3323,64 @@ class TestBengkelMiniV1018Kotlin:
         assert '"http_fail"' in m.group(1), (
             "http_fail (kegagalan nyata) harus tetap diagnostic"
         )
+
+
+class TestRequiresPackageV1019:
+    """Gerbong B v1.0.19: jembatan requiresPackage — sample paket pip tidak
+    boleh crash-saat-coba; dialog jujur SEBELUM file dibuat."""
+
+    def test_sample_entry_punya_field(self):
+        src = read(APP / "core/samples/SampleLibrary.kt")
+        assert "requiresPackage" in src and "emptyList()" in src, (
+            "SampleEntry harus punya field requiresPackage default kosong"
+        )
+
+    def test_semua_sample_pip_ditandai(self):
+        # Kelasnya, bukan satu kasus: SEMUA assetPath yang paketnya pip
+        # (numpy/requests/rich/tqdm/openpyxl/pillow/matplotlib) wajib punya
+        # requiresPackage. Sample stdlib tidak boleh ditandai sembarangan.
+        src = read(APP / "core/samples/SampleLibrary.kt")
+        wajib = {
+            "numpy_basics.py": "numpy", "numpy_stats.py": "numpy",
+            "requests_api.py": "requests", "rich_table.py": "rich",
+            "tqdm_progress.py": "tqdm", "openpyxl_excel.py": "openpyxl",
+            "pillow_image.py": "pillow", "matplotlib_chart.py": "matplotlib",
+        }
+        for fname, pkg in wajib.items():
+            i = src.find(fname)
+            assert i > 0, f"{fname} hilang dari SampleLibrary"
+            jendela = src[i:i + 200]
+            assert f'requiresPackage = listOf("{pkg}")' in jendela, (
+                f"{fname} harus requiresPackage listOf(\"{pkg}\")"
+            )
+        # kontrol negatif: hello_world murni stdlib. Pakai kemunculan
+        # TERAKHIR (rfind) — dua jebakan false-positive tertangkap berturut
+        # saat guard ini lahir: (1) "hello_world.py" polos ada di docstring
+        # kelas; (2) path berkutip lengkap pun ada di komentar contoh field
+        # assetPath. Entri data asli selalu yang paling akhir di file.
+        i = src.rfind('"samples/hello_world.py"')
+        assert i > 0, "entri hello_world hilang"
+        assert "requiresPackage" not in src[i:i + 150], (
+            "hello_world stdlib tidak boleh ditandai requiresPackage"
+        )
+
+    def test_installed_packages_reader_ada(self):
+        src = read(PKGENG / "InstalledPackages.kt")
+        assert "installed.json" in src and "fun missingFrom" in src
+        assert "emptySet" in src, "kegagalan baca harus best-effort, bukan crash"
+
+    def test_samples_screen_cek_sebelum_pick(self):
+        src = read(UI / "samples/SamplesScreen.kt")
+        assert "InstalledPackages.missingFrom" in src, (
+            "SamplesScreen harus cek paket SEBELUM onPick"
+        )
+        assert "SAMPLES_BUTUH_PAKET" in src, "breadcrumb dialog wajib ada"
+        assert "Ke Install Modules" in src and "Buka saja" in src, (
+            "dialog harus menawarkan dua jalan jujur"
+        )
+
+    def test_mainactivity_menyuntik_navigasi(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt")
+        assert "onGoToInstallModules" in src and 'nav.navigate("pip")' in src, (
+            "MainActivity harus menyuntik navigasi nyata ke pip"
+        )

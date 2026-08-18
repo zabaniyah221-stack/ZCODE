@@ -22,6 +22,15 @@ data class SampleEntry(
     val description: String,
     /** path relatif di assets/, mis. "samples/hello_world.py" */
     val assetPath: String,
+    /**
+     * requiresPackage (v1.0.19, Gerbong B): canonical name paket pip yang
+     * WAJIB aktif supaya sample ini jalan. Kosong = pure stdlib.
+     * Dipakai SamplesScreen untuk dialog jujur "butuh X, instal dulu?"
+     * SEBELUM file dibuat — sample yang crash saat pertama dicoba adalah
+     * UX terburuk (alasan historis kategori GUI ditolak). Jembatan inilah
+     * yang membuka gerbong konten: sample paket pip kini aman ditambah.
+     */
+    val requiresPackage: List<String> = emptyList(),
 )
 
 data class SampleCategory(
@@ -114,12 +123,14 @@ object SampleLibrary {
                 SampleEntry(
                     "numpy_basics", "Array Basics",
                     "Bikin array & operasi vektor — butuh: install numpy dulu",
-                    "samples/numpy_basics.py"
+                    "samples/numpy_basics.py",
+                    requiresPackage = listOf("numpy")
                 ),
                 SampleEntry(
                     "numpy_stats", "Quick Stats",
                     "Mean, median, standar deviasi sekejap — butuh: install numpy dulu",
-                    "samples/numpy_stats.py"
+                    "samples/numpy_stats.py",
+                    requiresPackage = listOf("numpy")
                 ),
             )
         ),
@@ -132,32 +143,38 @@ object SampleLibrary {
                 SampleEntry(
                     "requests_api", "Requests — API",
                     "Ambil data GitHub API — butuh: install requests",
-                    "samples/requests_api.py"
+                    "samples/requests_api.py",
+                    requiresPackage = listOf("requests")
                 ),
                 SampleEntry(
                     "rich_table", "Rich — Tabel Warna",
                     "Tabel + warna di terminal — butuh: install rich",
-                    "samples/rich_table.py"
+                    "samples/rich_table.py",
+                    requiresPackage = listOf("rich")
                 ),
                 SampleEntry(
                     "tqdm_progress", "tqdm — Progress Bar",
                     "Progress bar satu baris di loop — butuh: install tqdm",
-                    "samples/tqdm_progress.py"
+                    "samples/tqdm_progress.py",
+                    requiresPackage = listOf("tqdm")
                 ),
                 SampleEntry(
                     "openpyxl_excel", "openpyxl — Excel",
                     "Bikin file .xlsx beneran dari HP — butuh: install openpyxl",
-                    "samples/openpyxl_excel.py"
+                    "samples/openpyxl_excel.py",
+                    requiresPackage = listOf("openpyxl")
                 ),
                 SampleEntry(
                     "pillow_image", "Pillow — Gambar",
                     "Generate PNG dari kode — butuh: install pillow",
-                    "samples/pillow_image.py"
+                    "samples/pillow_image.py",
+                    requiresPackage = listOf("pillow")
                 ),
                 SampleEntry(
                     "matplotlib_chart", "Matplotlib — Grafik",
                     "Bar chart ke PNG (backend Agg) — butuh: install matplotlib (±20MB)",
-                    "samples/matplotlib_chart.py"
+                    "samples/matplotlib_chart.py",
+                    requiresPackage = listOf("matplotlib")
                 ),
             )
         ),

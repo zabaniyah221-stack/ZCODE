@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import androidx.compose.runtime.getValue
@@ -47,10 +49,21 @@ import com.zaba.zcode.core.samples.SampleLibrary
 @Composable
 fun SamplesScreen(
     onBack: () -> Unit,
-    onPick: (SampleEntry) -> Unit
+    onPick: (SampleEntry) -> Unit,
+    /**
+     * v1.0.19 Gerbong B (requiresPackage): navigasi ke INSTALL MODULES dari
+     * dialog "butuh paket X". Default no-op demi kompatibilitas pemanggil
+     * lama/test — host (MainActivity) yang menyuntik navigasi nyata.
+     */
+    onGoToInstallModules: () -> Unit = {}
 ) {
     // null = level 1 (kategori); non-null = level 2 (isi kategori)
     var activeCategory by remember { mutableStateOf<SampleCategory?>(null) }
+    // Dialog requiresPackage: entry yang di-tap tapi paketnya belum aktif,
+    // beserta daftar nama paket yang kurang (untuk pesan yang presisi).
+    var pendingEntry by remember { mutableStateOf<SampleEntry?>(null) }
+    var missingPkgs by remember { mutableStateOf<List<String>>(emptyList()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     BackHandler {
         val cat = activeCategory
@@ -114,13 +127,61 @@ fun SamplesScreen(
                         title = entry.title,
                         description = entry.description,
                         onClick = {
-                            Breadcrumb.log("SAMPLES_PILIH", entry.id)
-                            onPick(entry)
+                            // Gerbong B: cek requiresPackage SEBELUM file dibuat.
+                            // Paket kurang → dialog jujur, bukan sample yang
+                            // crash saat pertama di-Run (UX terburuk).
+                            val missing = com.zaba.zcode.core.packageengine
+                                .InstalledPackages.missingFrom(context, entry.requiresPackage)
+                            if (missing.isEmpty()) {
+                                Breadcrumb.log("SAMPLES_PILIH", entry.id)
+                                onPick(entry)
+                            } else {
+                                Breadcrumb.log(
+                                    "SAMPLES_BUTUH_PAKET",
+                                    "${entry.id} -> ${missing.joinToString(",")}"
+                                )
+                                pendingEntry = entry
+                                missingPkgs = missing
+                            }
                         }
                     )
                 }
             }
         }
+    }
+
+    // ---- Dialog requiresPackage (Gerbong B) ----
+    // Dua jalan keluar, dua-duanya sah dan jujur:
+    // - "Ke Install Modules": jalur yang disarankan.
+    // - "Buka saja": user tetap boleh melihat/mengedit kodenya — sample
+    //   dibuat, tapi dia SUDAH tahu akan gagal saat Run sebelum install.
+    pendingEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingEntry = null },
+            title = { Text("Butuh paket dulu", fontSize = 16.sp) },
+            text = {
+                Text(
+                    "Sample \"${entry.title}\" butuh paket yang belum " +
+                        "terpasang: ${missingPkgs.joinToString(", ")}.\n\n" +
+                        "Instal dulu lewat INSTALL MODULES, atau buka saja " +
+                        "kodenya (akan gagal saat Run sebelum paket aktif)."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    Breadcrumb.log("SAMPLES_KE_INSTALL", missingPkgs.joinToString(","))
+                    pendingEntry = null
+                    onGoToInstallModules()
+                }) { Text("Ke Install Modules") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    Breadcrumb.log("SAMPLES_BUKA_SAJA", entry.id)
+                    pendingEntry = null
+                    onPick(entry)
+                }) { Text("Buka saja") }
+            }
+        )
     }
 }
 
