@@ -3432,3 +3432,37 @@ class TestRotateResilienceA0:
         assert i > 0 and "else Modifier.weight(1f)" in src[i:i + 200], (
             "layar normal wajib mempertahankan perilaku lama weight(1f)"
         )
+
+
+class TestLintBundleV1019:
+    """Gerbong A: kontrak bridge lint di bundle CM6 (di-commit, CI tanpa
+    Node). Guard string dua sisi — sisi Kotlin menyusul di commit bridge."""
+
+    BUNDLE = ROOT / "app/src/main/assets/editor/codemirror.bundle.js"
+    SRC = ROOT / "editor-src/src/editor.js"
+
+    def test_bundle_mengekspor_kontrak_lint(self):
+        b = read(self.BUNDLE)
+        for fn in ("setDiagnostics", "setLintEnabled", "setWhitespaceEnabled"):
+            assert f"window.{fn}" in b, (
+                f"bundle harus mengekspor window.{fn} — regenerasi: "
+                "cd editor-src && npm ci && npm run build"
+            )
+
+    def test_source_editor_pakai_compartment(self):
+        s = read(self.SRC)
+        assert "lintCompartment" in s and "whitespaceCompartment" in s, (
+            "toggle lint/whitespace wajib via Compartment (live, tanpa reload)"
+        )
+        assert "whitespaceCompartment.of([])" in s, (
+            "whitespace guard default OFF (keputusan user 2026-08-17)"
+        )
+        assert "lintCompartment.of(lintGutter())" in s, (
+            "lint gutter default ON"
+        )
+
+    def test_pin_eksak_lint(self):
+        pkg = read(ROOT / "editor-src/package.json")
+        assert '"@codemirror/lint": "6.9.7"' in pkg, (
+            "versi lint wajib dipin eksak (prinsip F-09 anti-drift)"
+        )

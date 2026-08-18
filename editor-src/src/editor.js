@@ -40,6 +40,12 @@ import {
 } from "@codemirror/language";
 import { search, searchKeymap, openSearchPanel, highlightSelectionMatches } from "@codemirror/search";
 import { autocompletion, closeBrackets } from "@codemirror/autocomplete";
+// Gerbong A v1.0.19: lint gutter — sumber diagnostik = Checker Kotlin via
+// bridge setDiagnostics(json), BUKAN linter JS (satu sumber kebenaran).
+import { setDiagnostics as cmSetDiagnostics, lintGutter } from "@codemirror/lint";
+// A2: penanda whitespace bawaan @codemirror/view (trailing berbahaya di
+// Python; toggle terpisah, default OFF — keputusan user 2026-08-17).
+import { highlightTrailingWhitespace } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { python } from "@codemirror/lang-python";
 
@@ -275,6 +281,11 @@ const tneHighlight = HighlightStyle.define([
 let view = null;
 let isSettingValue = false; // guard anti echo-loop (sama dengan versi Ace)
 
+// Gerbong A v1.0.19: Compartment lint gutter & whitespace — toggle live via
+// bridge tanpa reload editor (kill-switch: OFF = perilaku lama persis).
+const lintCompartment = new Compartment();
+const whitespaceCompartment = new Compartment();
+
 // F1.7 & F1.8: Compartment untuk toggle closeBrackets & highlightSelectionMatches
 // via bridge Kotlin↔JS (reconfigure tanpa recreate editor — anti jank di HP ampas).
 const closeBracketsCompartment = new Compartment();
@@ -316,6 +327,11 @@ function buildState(doc) {
         maxRenderedOptions: 5, // popup ringkas di layar HP
         optionClass: () => "zcode-completion-option",
       }),
+      // Gerbong A: lint gutter default ON (ikon di gutter + underline merah;
+      // tooltip muncul via tap di CM6 mobile). Data dari Kotlin Checker.
+      lintCompartment.of(lintGutter()),
+      // A2: whitespace guard default OFF (keputusan user 2026-08-17).
+      whitespaceCompartment.of([]),
       // F1.7: Auto-close brackets (CM6) — default ON, toggle via bridge setCloseBrackets().
       closeBracketsCompartment.of(closeBrackets()),
       // F1.8: Selection match highlight (CM6) — default ON, toggle via bridge setHighlightSelectionMatches().
@@ -524,6 +540,62 @@ function setHighlightSelectionMatches(enabled) {
   });
 }
 
+// Gerbong A v1.0.19: terima diagnostik dari Checker Kotlin.
+// json = [{from_line, to_line, column?, severity: "error|warning|info",
+// message}] (1-based line). Konversi ke offset dokumen di sini; baris di
+// luar dokumen di-clamp (kode bisa berubah selama debounce 800ms Kotlin).
+function setDiagnostics(json) {
+  if (!view) return;
+  let items = [];
+  try {
+    items = JSON.parse(json) || [];
+  } catch (e) {
+    return; // JSON rusak = abaikan, jangan matikan editor
+  }
+  const doc = view.state.doc;
+  const diags = [];
+  for (const it of items) {
+    const n = Math.min(Math.max(1, it.from_line || 1), doc.lines);
+    const line = doc.line(n);
+    // Kolom (0-based dari Checker) → offset; default seluruh baris.
+    let from = line.from;
+    let to = line.to;
+    if (typeof it.column === "number" && it.column >= 0) {
+      from = Math.min(line.from + it.column, line.to);
+      // minimal 1 karakter supaya underline terlihat (baris kosong: biarkan 0)
+      to = Math.min(from + 1, line.to);
+      if (to === from) { from = line.from; to = line.to; }
+    }
+    diags.push({
+      from,
+      to,
+      severity: it.severity === "warning" ? "warning" : it.severity === "info" ? "info" : "error",
+      message: String(it.message || ""),
+    });
+  }
+  view.dispatch(cmSetDiagnostics(view.state, diags));
+}
+
+// Gerbong A: toggle lint gutter (kill-switch — OFF = tanpa gutter & tanpa
+// underline, diagnostik dikosongkan supaya tak ada sisa merah).
+function setLintEnabled(enabled) {
+  if (!view) return;
+  view.dispatch({
+    effects: lintCompartment.reconfigure(enabled ? lintGutter() : []),
+  });
+  if (!enabled) view.dispatch(cmSetDiagnostics(view.state, []));
+}
+
+// A2: toggle whitespace guard (trailing whitespace highlight).
+function setWhitespaceEnabled(enabled) {
+  if (!view) return;
+  view.dispatch({
+    effects: whitespaceCompartment.reconfigure(
+      enabled ? highlightTrailingWhitespace() : []
+    ),
+  });
+}
+
 // Audit 2026-08: jenis font (UI & editor) — Kotlin mengirim CSS font-family
 // (mis. "'ZCodeFiraCode', monospace"); @font-face di-inject Kotlin via <style>.
 // Gutter ikut karena berada di dalam .cm-scroller (inherit).
@@ -587,6 +659,9 @@ window.setFontFamily = setFontFamily;
 window.sortLines = sortLines;
 window.changeCase = changeCase;
 window.trimNow = trimNow;
+window.setDiagnostics = setDiagnostics;
+window.setLintEnabled = setLintEnabled;
+window.setWhitespaceEnabled = setWhitespaceEnabled;
 
 // Handshake — dipanggil bahkan jika init gagal, agar Kotlin tidak hang
 // menunggu (setCode dkk. aman sebagai no-op).
