@@ -119,3 +119,13 @@ UAT user (breadcrumb v1.0.19, 11:29-11:36):
 
 Berikutnya: diskusi mendalam Gerbong A (lint gutter, whitespace guard,
 traceback jump, TOOLS satu-scroll + THEME pinned) sebelum implementasi.
+
+### 2026-08-18 — Gerbong A: IMPLEMENTED (6 commit, menunggu CI + UAT)
+- 292ba15 A0 rotate resilience (3 titik + SKILL 17)
+- b6bef70 bundle CM6 + @codemirror/lint 6.9.7 (449→471KB)
+- fb65d22 A2 checker indentasi campuran (WARNING, aturan sempit)
+- 4c79913 A3 traceback jump + A6 hint + A4 TOOLS satu-scroll + bridge
+- ea5f9f8 A5 reference card (22 pola) + A7 Project Mini multi-file
+Transparansi: uji mutasi membongkar 3 guard palsu (kata di komentar/
+parameter) → ditulis ulang strip_kt_comments; 2 guard lama direnovasi
+dgn sejarah dua era (terowongan editor, sinkron assets-katalog).
