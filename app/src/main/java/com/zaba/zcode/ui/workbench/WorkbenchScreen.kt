@@ -214,8 +214,15 @@ fun WorkbenchScreen(
     androidx.compose.runtime.LaunchedEffect(vm.pendingGotoLine) {
         val line = vm.pendingGotoLine
         if (line > 0) {
+            // requestGotoLine dapat memilih helper.py. AndroidView.update sengaja
+            // tidak setCode saat recompose (anti kursor loncat), jadi sinkronkan
+            // file terpilih secara eksplisit sebelum mengirim gotoLine.
+            pushCode()
             kotlinx.coroutines.delay(350)
             gotoLine(line)
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "TRACEBACK_GOTO_DISPATCHED", "${vm.activeFile ?: "-"}:$line"
+            )
             vm.pendingGotoLine = 0
         }
     }
@@ -705,7 +712,18 @@ fun WorkbenchScreen(
             showPythonIndicator = vm.showPythonIndicator,
             terminalOutputLimit = vm.terminalOutputLimit,
             themeType = vm.themeType,
-            terminalFontSize = vm.terminalFontSize
+            terminalFontSize = vm.terminalFontSize,
+            // FAB produksi memakai overlay ini, BUKAN route output lama di
+            // MainActivity. Tanpa wiring berikut, default callback = null dan
+            // syarat parser mematikan link traceback sekaligus fallback chip.
+            onGotoEditorLine = { tracebackFile, line ->
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "TRACEBACK_OVERLAY_CALLBACK", "$tracebackFile:$line"
+                )
+                vm.requestGotoLine(tracebackFile, line)
+                showTerminalOverlay = false
+            },
+            tracebackJumpEnabled = vm.tracebackJumpEnabled
         )
     }
 

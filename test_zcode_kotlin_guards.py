@@ -3586,6 +3586,53 @@ class TestGerbongAEditorWiring:
             "MainActivity harus menyambungkan terminal → VM → editor"
         )
 
+    def test_overlay_aktif_wire_traceback_ke_editor(self):
+        """FAB produksi memakai overlay, bukan route output lama.
+
+        Guard lama hanya memeriksa MainActivity sehingga hijau walau callback
+        overlay null. Ambil blok overlay aktif secara spesifik agar wiring di
+        rumah kosong tidak dapat menyamarkan regresi lagi.
+        """
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        start = src.find("if (showTerminalOverlay)")
+        end = src.find("if (showReferenceCard)", start)
+        assert start > 0 and end > start, "blok terminal overlay aktif tidak ditemukan"
+        blok = src[start:end]
+        assert "onGotoEditorLine =" in blok, (
+            "TerminalScreen overlay aktif wajib menerima callback traceback; "
+            "default null mematikan link DAN fallback chip"
+        )
+        assert "vm.requestGotoLine(tracebackFile, line)" in blok, (
+            "callback overlay wajib mengirim file+line ke VM"
+        )
+        assert "showTerminalOverlay = false" in blok, (
+            "setelah jump, overlay wajib ditutup agar editor terlihat"
+        )
+        assert "tracebackJumpEnabled = vm.tracebackJumpEnabled" in blok, (
+            "kill-switch user wajib diteruskan ke overlay aktif"
+        )
+        assert "TRACEBACK_OVERLAY_CALLBACK" in blok, (
+            "callback wajib meninggalkan breadcrumb yang dapat dibaca tanpa logcat"
+        )
+
+    def test_pending_goto_sinkronkan_file_sebelum_lompat(self):
+        """Traceback dapat menunjuk helper.py, bukan hanya file aktif lama."""
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        start = src.find("LaunchedEffect(vm.pendingGotoLine)")
+        end = src.find("fun pluginAction", start)
+        assert start > 0 and end > start
+        blok = src[start:end]
+        assert "pushCode()" in blok, (
+            "setelah requestGotoLine memilih file lain, isi WebView wajib "
+            "disinkronkan sebelum gotoLine"
+        )
+        assert blok.find("pushCode()") < blok.find("gotoLine(line)"), (
+            "sinkronisasi file harus terjadi SEBELUM lompat baris"
+        )
+        assert "TRACEBACK_GOTO_DISPATCHED" in blok, (
+            "dispatch ke bridge wajib punya breadcrumb observability"
+        )
+
     def test_tools_satu_scroll_theme_pinned(self):
         src = read(UI / "workbench/WorkbenchScreen.kt")
         i = src.find("AnimatedVisibility(visible = toolsExpanded)")
