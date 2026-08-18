@@ -1195,3 +1195,67 @@ class TestSignalShim:
         assert err and "jejak:" in err and "pelaku_signal.py" in err, (
             f"pesan error harus menyebut file pelaku, dapat: {err}"
         )
+
+
+class TestProvidedPackages:
+    """PROVIDED-PACKAGES v1.0.19: setuptools/wheel/pip/packaging dibawa APK
+    (build.gradle.kts pip{}). Membelanjakannya dari PyPI = kelas shadowing
+    stdlib (setuptools 84 AssertionError distutils; zope-interface korban —
+    device 2026-08-17 01:37). Requirement terhadapnya = terpenuhi runtime;
+    specifier yang menolak versi beku = vonis jujur."""
+
+    def test_peta_sinkron_dengan_build_gradle(self):
+        # Guard dua sisi: peta resolver WAJIB sama dgn pip{} di build.gradle.
+        # Drift = provided palsu (resolver bilang ada versi X, APK bawa Y).
+        gradle = open(os.path.join(ROOT, "app/build.gradle.kts")).read()
+        for name, ver in resolve_mod.RUNTIME_PROVIDED.items():
+            assert 'install("%s==%s")' % (name, ver) in gradle, (
+                f"RUNTIME_PROVIDED[{name}]={ver} tidak cocok dgn "
+                "build.gradle.kts pip{} — sinkronkan dua-duanya"
+            )
+
+    def test_deps_provided_terpenuhi_tanpa_download(self, monkeypatch):
+        # zope-interface case: deps 'setuptools' TIDAK boleh memicu network.
+        called = []
+        monkeypatch.setattr(resolve_mod, "_http_get",
+                            lambda url: called.append(url) or (_ for _ in ()).throw(
+                                AssertionError("network tak boleh disentuh")))
+        out = resolve_mod._resolve_unlocked("setuptools") \
+            if hasattr(resolve_mod, "_resolve_unlocked") else None
+        if out is None:
+            import json as _json
+            out = _json.loads(resolve_mod.resolve_json("setuptools"))
+        assert out["packages"] == []
+        hits = out.get("stdlib") or []
+        assert hits and "disediakan runtime ZCODE v68.2.2" in hits[0]["reason"], (
+            f"root provided harus pulang via kontrak stdlib-info; out={out}"
+        )
+        assert not called, "resolve paket provided tidak boleh menyentuh network"
+
+    def test_specifier_menolak_versi_beku_vonis_jujur(self, monkeypatch):
+        monkeypatch.setattr(resolve_mod, "_http_get",
+                            lambda url: (_ for _ in ()).throw(
+                                AssertionError("network tak boleh disentuh")))
+        import json as _json
+        out = _json.loads(resolve_mod.resolve_json("setuptools>=80"))
+        assert out["packages"] == []
+        un = out.get("unavailable") or []
+        assert un and "v68.2.2" in un[0]["reason"] and "tidak terpenuhi" in un[0]["reason"], (
+            f"specifier >=80 harus vonis jujur, bukan pura-pura terpenuhi; out={out}"
+        )
+
+    def test_specifier_cocok_versi_beku_terpenuhi(self, monkeypatch):
+        monkeypatch.setattr(resolve_mod, "_http_get",
+                            lambda url: (_ for _ in ()).throw(
+                                AssertionError("network tak boleh disentuh")))
+        import json as _json
+        out = _json.loads(resolve_mod.resolve_json("packaging>=20"))
+        hits = out.get("stdlib") or []
+        assert hits and "v24.1" in hits[0]["reason"], (
+            f"packaging>=20 terpenuhi oleh 24.1 beku; out={out}"
+        )
+
+    def test_paket_biasa_tidak_kena_provided(self):
+        assert resolve_mod.runtime_provided_version("requests") is None
+        assert resolve_mod.runtime_provided_version("numpy") is None
+        assert resolve_mod.runtime_provided_version("setuptools") == "68.2.2"

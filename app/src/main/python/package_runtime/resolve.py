@@ -487,6 +487,29 @@ def _contains(spec_str: str, version: str) -> bool:
         return False
 
 
+# PROVIDED-PACKAGES (v1.0.19, riset shadowing stdlib 2026-08-17).
+# Paket yang SUDAH dibawa APK secara permanen (app/build.gradle.kts pip{}).
+# Bukti kelasnya: zope-interface deps 'setuptools' → resolver belanja
+# setuptools 84.0.0 dari PyPI → smoke mati AssertionError distutils
+# (stdlib-common.imy menshadow; log device 2026-08-17 01:37). Padahal
+# setuptools 68.2.2 SUDAH terpasang sehat di runtime. Peta ini membuat
+# resolver menganggap requirement terhadap paket-paket ini TERPENUHI oleh
+# runtime — skip download+smoke — kecuali specifier menolak versi beku
+# (→ vonis jujur, bukan pura-pura terpenuhi).
+# SINKRON MANUAL dgn build.gradle.kts; dijaga guard test dua sisi.
+RUNTIME_PROVIDED: dict[str, str] = {
+    "pip": "23.3.1",
+    "setuptools": "68.2.2",
+    "wheel": "0.41.2",
+    "packaging": "24.1",
+}
+
+
+def runtime_provided_version(canonical: str) -> str | None:
+    """Versi beku runtime untuk paket provided; None bila bukan provided."""
+    return RUNTIME_PROVIDED.get((canonical or "").strip().lower())
+
+
 def is_stdlib_module(name: str) -> bool:
     """
     True bila `name` adalah modul bawaan Python (BUG C).
@@ -663,6 +686,42 @@ def _resolve_unlocked(
             }],
         }
 
+    # PROVIDED-PACKAGES sebagai ROOT (user mengetik `setuptools` langsung).
+    # Tanpa cabang ini plan pulang kosong tanpa penjelasan — UX buntu.
+    # Kontrak `stdlib` DIPAKAI ULANG dengan sengaja: Kotlin (DependencyResolver
+    # → PipScreen cabang BUG C) sudah menampilkan `reason` sebagai info ℹ️,
+    # bukan error — persis perilaku yang diinginkan, nol perubahan Kotlin.
+    _root_provided = runtime_provided_version(root_name)
+    if _root_provided is not None:
+        if not spec["specifier"] or _contains(spec["specifier"], _root_provided):
+            return {
+                "packages": [],
+                "conflicts": [],
+                "unavailable": [],
+                "stdlib": [{
+                    "name": spec["name"],
+                    "canonical_name": root_name,
+                    "reason": (
+                        "'%s' sudah disediakan runtime ZCODE v%s (bawaan APK) "
+                        "— tidak perlu dipasang. Langsung 'import %s'."
+                    ) % (spec["name"], _root_provided, spec["name"]),
+                }],
+            }
+        return {
+            "packages": [],
+            "conflicts": [],
+            "unavailable": [{
+                "name": spec["name"], "canonical_name": root_name,
+                "parent": None,
+                "reason": (
+                    "Runtime ZCODE menyediakan %s v%s (bawaan APK, tidak bisa "
+                    "diganti); requirement '%s' tidak terpenuhi. Memasang versi "
+                    "lain memicu bentrok dengan runtime beku (kelas shadowing "
+                    "stdlib — bukti: setuptools 84 AssertionError distutils)."
+                ) % (root_name, _root_provided, requirement_text),
+            }],
+        }
+
     plan: dict[str, dict] = {}
     conflicts: list[dict] = []
     unavailable: list[dict] = []
@@ -693,6 +752,39 @@ def _resolve_unlocked(
         seen.add(key)
 
         _check_cancelled()
+
+        # PROVIDED-PACKAGES (v1.0.19): setuptools/wheel/pip/packaging sudah
+        # dibawa APK. Membelanjakannya dari PyPI = kelas bug shadowing stdlib
+        # (setuptools 84 mati AssertionError distutils; zope-interface ikut
+        # tumbang — device 2026-08-17). Requirement terhadapnya dianggap
+        # terpenuhi runtime, KECUALI specifier menolak versi beku → jujur.
+        provided_v = runtime_provided_version(cname)
+        if provided_v is not None:
+            if not specifier or _contains(specifier, provided_v):
+                notes.append(
+                    "%s: disediakan runtime ZCODE v%s (bawaan APK) — "
+                    "tidak diunduh ulang%s" % (
+                        cname, provided_v,
+                        " (diminta %s)" % parent if parent else "",
+                    )
+                )
+                return
+            # Specifier eksplisit menolak versi beku. Memasang versi lain
+            # berisiko shadowing (bukti: setuptools 84). Vonis jujur.
+            unavailable.append({
+                "name": name, "canonical_name": cname, "parent": parent,
+                "reason": (
+                    "Runtime ZCODE menyediakan %s v%s (bawaan APK, tidak bisa "
+                    "diganti); requirement '%s%s' tidak terpenuhi. Memasang "
+                    "versi lain memicu bentrok dengan runtime beku "
+                    "(kelas shadowing stdlib, lihat kartu setuptools)."
+                ) % (cname, provided_v, cname, specifier),
+            })
+            _emit_progress(
+                "package_unavailable",
+                detail="provided v%s tak memenuhi %s" % (provided_v, specifier),
+            )
+            return
 
         # sudah direncanakan dengan versi lain → konflik. Package context hanya
         # mengurung collect/choose; recursion anak memasang context-nya sendiri.
