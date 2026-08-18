@@ -231,6 +231,49 @@ object Checker {
             list.add(Problem(Severity.ERROR, "Unbalanced brackets: '$open' on line $openLine has no matching closed bracket", openLine))
         }
 
+        // A2 v1.0.19: indentasi campuran tab+spasi — penyebab IndentationError
+        // paling membingungkan pemula karena TIDAK KASAT MATA. Python 3
+        // menolak campuran dalam SATU indent run; deteksi per-baris di sini
+        // (konservatif: hanya bila tab dan spasi bercampur di prefix indent
+        // baris yang sama — pola yang pasti bermasalah, minim false-positive).
+        list.addAll(checkMixedIndent(code))
+
+        return list
+    }
+
+    /**
+     * Deteksi baris berindentasi campuran tab+spasi (A2, Gerbong A v1.0.19).
+     *
+     * Aturan sengaja SEMPIT demi kejujuran (SKILL: jangan sok tahu):
+     * - hanya prefix indentasi (sebelum karakter non-whitespace pertama);
+     * - hanya bila DUA jenis hadir sekaligus di baris yang sama
+     *   (file full-tab atau full-spasi = sah, tidak disentuh);
+     * - baris kosong / hanya-whitespace dilewati (tak dieksekusi Python).
+     * Severity WARNING: Python kadang masih menerima campuran tertentu
+     * (tabsize kebetulan cocok) — kita memberi tahu, bukan memvonis.
+     */
+    fun checkMixedIndent(code: String): List<Problem> {
+        val list = mutableListOf<Problem>()
+        var lineNum = 0
+        for (raw in code.lineSequence()) {
+            lineNum++
+            val indentEnd = raw.indexOfFirst { it != ' ' && it != '\t' }
+            if (indentEnd <= 0) continue // tanpa indent atau baris whitespace-only
+            val indent = raw.substring(0, indentEnd)
+            if (indent.contains(' ') && indent.contains('\t')) {
+                list.add(
+                    Problem(
+                        Severity.WARNING,
+                        "Indentasi campuran tab+spasi pada baris $lineNum — " +
+                            "penyebab IndentationError yang tak terlihat mata. " +
+                            "Samakan: pakai spasi saja (standar Python).",
+                        lineNum,
+                        column = 0,
+                        source = "indent"
+                    )
+                )
+            }
+        }
         return list
     }
 }

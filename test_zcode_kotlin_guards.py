@@ -3466,3 +3466,49 @@ class TestLintBundleV1019:
         assert '"@codemirror/lint": "6.9.7"' in pkg, (
             "versi lint wajib dipin eksak (prinsip F-09 anti-drift)"
         )
+
+
+class TestMixedIndentA2:
+    """A2 Gerbong A: Checker mendeteksi indentasi campuran tab+spasi —
+    IndentationError tak kasat mata, pembunuh pemula #1. Guard string +
+    simulasi semantik (port aturan ke Python; keduanya harus sepakat)."""
+
+    def _port(self, code):
+        # Port 1:1 dari Checker.checkMixedIndent (Kotlin) — kalau semantik
+        # Kotlin diubah tanpa mengubah port ini, guard string di bawah
+        # menjaga strukturnya; port ini menjaga PERILAKUNYA.
+        hits = []
+        for n, raw in enumerate(code.split("\n"), 1):
+            stripped = raw.lstrip(" \t")
+            indent_end = len(raw) - len(stripped)
+            if indent_end <= 0 or not stripped:
+                continue
+            indent = raw[:indent_end]
+            if " " in indent and "\t" in indent:
+                hits.append(n)
+        return hits
+
+    def test_kotlin_punya_aturan(self):
+        src = read(APP / "core/editor/Checker.kt")
+        assert "fun checkMixedIndent" in src, "aturan A2 hilang dari Checker"
+        assert "checkMixedIndent(code)" in src, (
+            "checkSyntaxList harus memanggil checkMixedIndent — aturan yang "
+            "tak dipanggil = aturan mati"
+        )
+        assert "Severity.WARNING" in src.split("fun checkMixedIndent")[1], (
+            "campuran = WARNING bukan ERROR (Python kadang menerimanya; "
+            "kita memberi tahu, bukan memvonis — klausul kejujuran user)"
+        )
+
+    def test_semantik_deteksi(self):
+        # positif: campuran di satu baris
+        assert self._port("def f():\n\t    return 1") == [2]
+        # negatif: full-tab sah
+        assert self._port("def f():\n\treturn 1") == []
+        # negatif: full-spasi sah
+        assert self._port("def f():\n    return 1") == []
+        # negatif: file campuran ANTAR baris (tab di baris 2, spasi baris 3)
+        # TIDAK ditandai — aturan sengaja sempit, hanya campuran SE-baris
+        assert self._port("def f():\n\tx = 1\n    return x") == []
+        # negatif: baris whitespace-only dilewati
+        assert self._port("def f():\n \t \n    return 1") == []
