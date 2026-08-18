@@ -205,6 +205,19 @@ fun WorkbenchScreen(
         webViewRef.value?.evaluateJavascript("gotoLine($n);", null)
     }
 
+    // A3 v1.0.19: konsumsi pendingGotoLine dari traceback tap (terminal →
+    // navigateUp → sini). LaunchedEffect pada nilai pending; delay singkat
+    // memberi WebView waktu selesai load (kelas BUG H about:blank) — best
+    // effort: kalau tetap kalah cepat, user tinggal tap lagi di terminal.
+    androidx.compose.runtime.LaunchedEffect(vm.pendingGotoLine) {
+        val line = vm.pendingGotoLine
+        if (line > 0) {
+            kotlinx.coroutines.delay(350)
+            gotoLine(line)
+            vm.pendingGotoLine = 0
+        }
+    }
+
     // Eksekusi satu plugin (drawer tap & palette — satu logika, dua pintu).
     // Semantik S2: tap = eksekusi manual; toggle = ketersediaan/behavior.
     fun pluginAction(plugin: PluginInfo): () -> Unit = {
@@ -433,13 +446,20 @@ fun WorkbenchScreen(
                             .border(1.dp, Color(0xFF1B4D2E), RoundedCornerShape(10.dp))
                             .padding(vertical = 2.dp)
                     ) {
-                        // Plugin di area scroll sendiri; Symbol bar/THEME/Clear All
-                        // selalu terlihat di luar scroll (anti scroll-dalam-scroll).
+                        // A4 v1.0.19 (keputusan user 2026-08-18): SATU kotak
+                        // scroll utk PLUGINS + EDITOR (dulu: plugin scroll
+                        // sendiri, Symbol bar dipaku — sah saat penghuni pinned
+                        // cuma 2; dgn 3 toggle editor baru, area pinned akan
+                        // makan setengah drawer 720p). THEME TETAP dipaku di
+                        // dasar kotak (ketokan user: ganti tema tanpa scroll).
+                        // Drawer induk sudah scrollable (A0) — heightIn menjaga
+                        // kotak ini tidak menelan seluruh drawer.
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 176.dp) // ≈3 baris — sisanya scroll di dalam
+                                .heightIn(max = 300.dp)
                         ) {
+                            item { ToolsSectionLabel("PLUGINS") }
                             items(PluginRegistry.plugins) { plugin ->
                                 PluginRow(
                                     plugin = plugin,
@@ -448,27 +468,35 @@ fun WorkbenchScreen(
                                     onRun = { pluginAction(plugin)() }
                                 )
                             }
-                        }
-                        Divider(color = Color.White.copy(alpha = 0.06f))
-
-                        // Toggle Symbol bar (QuickTools) — persist SharedPreferences via VM
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { vm.setSymbolBar(!vm.symbolBarEnabled) }
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Symbol bar",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Switch(
-                                checked = vm.symbolBarEnabled,
-                                onCheckedChange = { vm.setSymbolBar(it) }
-                            )
+                            item { ToolsSectionLabel("EDITOR") }
+                            item {
+                                ToolsToggleRow(
+                                    "Lint gutter",
+                                    "Garis merah di baris yang bermasalah",
+                                    vm.lintGutterEnabled
+                                ) { vm.setLintGutter(it) }
+                            }
+                            item {
+                                ToolsToggleRow(
+                                    "Whitespace guard",
+                                    "Sorot spasi buntut & campuran tab/spasi",
+                                    vm.whitespaceGuardEnabled
+                                ) { vm.setWhitespaceGuard(it) }
+                            }
+                            item {
+                                ToolsToggleRow(
+                                    "Traceback jump",
+                                    "Tap error di terminal → lompat ke barisnya",
+                                    vm.tracebackJumpEnabled
+                                ) { vm.setTracebackJump(it) }
+                            }
+                            item {
+                                ToolsToggleRow(
+                                    "Symbol bar",
+                                    "Baris simbol cepat di bawah editor",
+                                    vm.symbolBarEnabled
+                                ) { vm.setSymbolBar(it) }
+                            }
                         }
                         Divider(color = Color.White.copy(alpha = 0.06f))
 
@@ -1261,6 +1289,46 @@ private fun PaletteModeChip(label: String, active: Boolean, onClick: () -> Unit)
 // =====================================================================
 // Komponen PLUGINS drawer (batch anti-sepi S1/S2)
 // =====================================================================
+
+// A4 v1.0.19: label seksi tipis di dalam kotak TOOLS satu-scroll —
+// pemisah visual PLUGINS/EDITOR, bukan header collapsible.
+@Composable
+private fun ToolsSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+    )
+}
+
+// A4: baris toggle seragam utk seksi EDITOR (judul + deskripsi 1 baris + switch).
+@Composable
+private fun ToolsToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!checked) }
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                description,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onToggle)
+    }
+}
 
 @Composable
 private fun PluginRow(

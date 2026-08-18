@@ -92,7 +92,13 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 terminalOutputLimit = vm.terminalOutputLimit,
                 themeType = vm.themeType,
                 // Audit 2026-08: ukuran font setting kini khusus terminal.
-                terminalFontSize = vm.terminalFontSize
+                terminalFontSize = vm.terminalFontSize,
+                // A3 v1.0.19: tap traceback → balik ke editor di baris salah.
+                onGotoEditorLine = { tracebackFile, line ->
+                    vm.requestGotoLine(tracebackFile, line)
+                    nav.navigateUp()
+                },
+                tracebackJumpEnabled = vm.tracebackJumpEnabled
             )
         }
         composable("pip") {

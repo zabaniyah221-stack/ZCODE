@@ -73,6 +73,35 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var symbolBarEnabled by mutableStateOf(true)
         private set
 
+    /** Gerbong A v1.0.19: lint gutter (merah di baris salah) — default ON. */
+    var lintGutterEnabled by mutableStateOf(true)
+        private set
+
+    /** A3: tap traceback di terminal → lompat ke baris editor — default ON. */
+    var tracebackJumpEnabled by mutableStateOf(true)
+        private set
+
+    /**
+     * A3: baris tujuan yang menunggu editor siap. Terminal → navigasi balik →
+     * WorkbenchScreen mengonsumsi ini SEKALI setelah editor ready (WebView
+     * butuh waktu; gotoLine langsung saat navigasi = ditelan about:blank,
+     * kelas BUG H). Nol = tidak ada yang pending.
+     */
+    var pendingGotoLine by mutableStateOf(0)
+
+    fun requestGotoLine(fileName: String, line: Int) {
+        // buka file yang benar dulu (traceback bisa menunjuk file lain di
+        // workspace — multi-file import sudah jalan sejak dulu, A7).
+        val ada = FileManager.listFiles(filesDir).any { it["name"] == fileName }
+        if (fileName != activeFile && ada) selectFile(fileName)
+        pendingGotoLine = line
+    }
+
+    /** A2: whitespace guard (trailing WS + campuran tab/spasi di gutter) —
+     *  default OFF (keputusan user 2026-08-17: highlight bisa berisik). */
+    var whitespaceGuardEnabled by mutableStateOf(false)
+        private set
+
     /** F1.7: Auto-close brackets (CM6) — toggle user, persist di SharedPreferences. */
     var closeBracketsEnabled by mutableStateOf(true)
         private set
@@ -291,6 +320,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
         activeCode = activeFile?.let { FileManager.readFile(filesDir, it).getOrDefault("") } ?: ""
         symbolBarEnabled = prefs.getBoolean("symbol_bar", true)
+        lintGutterEnabled = prefs.getBoolean("lint_gutter", true)
+        whitespaceGuardEnabled = prefs.getBoolean("whitespace_guard", false)
+        tracebackJumpEnabled = prefs.getBoolean("traceback_jump", true)
         closeBracketsEnabled = prefs.getBoolean("close_brackets", true)
         highlightSelectionMatchesEnabled = prefs.getBoolean("highlight_selection_matches", true)
         // F2.4: Load preferensi indikator Python (default ON)
@@ -313,6 +345,25 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     fun setSymbolBar(enabled: Boolean) {
         symbolBarEnabled = enabled
         prefs.edit().putBoolean("symbol_bar", enabled).apply()
+    }
+
+    /** Gerbong A: toggle lint gutter — persist antar sesi (pola setSymbolBar,
+     *  nama tidak berakhiran Enabled: anti platform declaration clash). */
+    fun setLintGutter(enabled: Boolean) {
+        lintGutterEnabled = enabled
+        prefs.edit().putBoolean("lint_gutter", enabled).apply()
+    }
+
+    /** A3: toggle traceback tap-to-jump — persist antar sesi. */
+    fun setTracebackJump(enabled: Boolean) {
+        tracebackJumpEnabled = enabled
+        prefs.edit().putBoolean("traceback_jump", enabled).apply()
+    }
+
+    /** A2: toggle whitespace guard — persist antar sesi. */
+    fun setWhitespaceGuard(enabled: Boolean) {
+        whitespaceGuardEnabled = enabled
+        prefs.edit().putBoolean("whitespace_guard", enabled).apply()
     }
 
     /** F1.7: Toggle auto-close brackets (CM6) — persist antar sesi. */

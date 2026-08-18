@@ -83,6 +83,34 @@ fun EditorScreen(
             val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
             wv.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
             wv.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
+            // Gerbong A v1.0.19: lint gutter + whitespace guard + diagnostik.
+            // Satu sumber kebenaran: vm.problems (Checker, debounce 800ms) —
+            // VPP dan lint gutter membaca data yang sama. Guard typeof sisi
+            // JS + runCatching sisi Kotlin (pola BUG H yang sudah teruji).
+            val lintOn = vm?.lintGutterEnabled ?: true
+            val wsOn = vm?.whitespaceGuardEnabled ?: false
+            wv.evaluateJavascript("if(typeof setLintEnabled==='function')setLintEnabled($lintOn);", null)
+            wv.evaluateJavascript("if(typeof setWhitespaceEnabled==='function')setWhitespaceEnabled($wsOn);", null)
+            if (lintOn) {
+                val diagJson = org.json.JSONArray().apply {
+                    (vm?.problems ?: emptyList()).forEach { p ->
+                        put(org.json.JSONObject().apply {
+                            put("from_line", p.line)
+                            p.column?.let { put("column", it) }
+                            put("severity", when (p.severity) {
+                                com.zaba.zcode.core.editor.Severity.ERROR -> "error"
+                                com.zaba.zcode.core.editor.Severity.WARNING -> "warning"
+                                else -> "info"
+                            })
+                            put("message", p.message)
+                        })
+                    }
+                }.toString()
+                wv.evaluateJavascript(
+                    "if(typeof setDiagnostics==='function')setDiagnostics(${escapeJavaScriptString(diagJson)});",
+                    null
+                )
+            }
             applyEditorFontFamily(wv, vm?.appFontFamily ?: "Monospace")
         }.onFailure {
             com.zaba.zcode.core.diagnostics.Breadcrumb.log("WEBVIEW_APPLY_FAIL", it.message ?: "")

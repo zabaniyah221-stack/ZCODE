@@ -115,7 +115,15 @@ fun TerminalScreen(
     // Audit 2026-08: ukuran font setting kini KHUSUS terminal (label UI "Ukuran
     // Font Terminal"); keluarga font terminal SELALU Monospace (console wajib
     // alignment) — jenis font pilihan user berlaku untuk UI & editor saja.
-    terminalFontSize: Int = 14
+    terminalFontSize: Int = 14,
+    /**
+     * A3 Gerbong A v1.0.19: tap baris traceback `File "main.py", line N` →
+     * host navigasi balik ke editor + gotoLine(N). Default no-op demi
+     * kompatibilitas pemanggil lama; null-safe (fitur mati = terminal lama
+     * persis). Toggle user: tracebackJumpEnabled.
+     */
+    onGotoEditorLine: ((fileName: String, line: Int) -> Unit)? = null,
+    tracebackJumpEnabled: Boolean = true
 ) {
     val buffer = remember { TerminalBuffer(maxLines = 10_000) }
     val ansiCache = remember(themeType) { AnsiLineCache(getTerminalPalette(themeType)) }
@@ -551,12 +559,64 @@ fun TerminalScreen(
                     val abs = firstAbs + rel
                     val lineText = lines[rel]
                     if (lineText.isNotEmpty()) {
-                        Text(
-                            text = ansiCache.render(abs, lineText),
-                            fontFamily = resolvedFontFamily,
-                            fontSize = fontSizeSp,
-                            lineHeight = lineHeightSp
-                        )
+                        // A3: baris traceback yang menunjuk file workspace jadi
+                        // tappable (underline halus sebagai affordance). Regex
+                        // ketat + verifikasi file exist = kelas jebakan "user
+                        // print string mirip traceback" tertutup dua lapis.
+                        val hit = if (tracebackJumpEnabled && onGotoEditorLine != null)
+                            com.zaba.zcode.core.editor.TracebackParser.parse(lineText)
+                                ?.takeIf {
+                                    com.zaba.zcode.core.editor.TracebackParser
+                                        .isWorkspaceFile(it, filesDir)
+                                }
+                        else null
+                        if (hit != null) {
+                            Text(
+                                text = ansiCache.render(abs, lineText),
+                                fontFamily = resolvedFontFamily,
+                                fontSize = fontSizeSp,
+                                lineHeight = lineHeightSp,
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                modifier = Modifier.clickable {
+                                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                        "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
+                                    )
+                                    onGotoEditorLine.invoke(hit.fileName, hit.line)
+                                }
+                            )
+                        } else {
+                            Text(
+                                text = ansiCache.render(abs, lineText),
+                                fontFamily = resolvedFontFamily,
+                                fontSize = fontSizeSp,
+                                lineHeight = lineHeightSp
+                            )
+                        }
+                        // A6: hint NameError — satu baris "Mungkin maksudmu…",
+                        // tidak pernah klaim pasti (klausul kejujuran user).
+                        com.zaba.zcode.core.editor.TracebackParser
+                            .nameErrorHint(lineText)?.let { hintText ->
+                                val rootMod = com.zaba.zcode.core.editor
+                                    .TracebackParser.rootModuleForAlias(lineText)
+                                val installedNote = rootMod?.let { moduleName ->
+                                    val aktif = com.zaba.zcode.core.packageengine
+                                        .InstalledPackages.activeNames(context)
+                                    val bawaan = setOf("json", "os", "sys", "math",
+                                        "random", "re", "time", "datetime")
+                                    when {
+                                        moduleName in bawaan -> "" // stdlib selalu ada
+                                        moduleName in aktif -> ""
+                                        else -> " (paket $moduleName belum terpasang — lihat INSTALL MODULES)"
+                                    }
+                                } ?: ""
+                                Text(
+                                    text = hintText + installedNote,
+                                    color = Color(0xFF8A9BB0),
+                                    fontFamily = resolvedFontFamily,
+                                    fontSize = fontSizeSp,
+                                    lineHeight = lineHeightSp
+                                )
+                            }
                     }
                 }
                 // current line (output yang belum diakhiri newline) + input + cursor.

@@ -3512,3 +3512,97 @@ class TestMixedIndentA2:
         assert self._port("def f():\n\tx = 1\n    return x") == []
         # negatif: baris whitespace-only dilewati
         assert self._port("def f():\n \t \n    return 1") == []
+
+
+class TestGerbongAEditorWiring:
+    """Gerbong A: bridge lint (EditorScreen), traceback jump (A3), TOOLS
+    satu-scroll (A4). Kontrak string dua sisi + semantik parser via port."""
+
+    def test_editor_screen_mengirim_diagnostik(self):
+        src = read(UI / "editor/EditorScreen.kt")
+        assert "setLintEnabled(" in src and "setWhitespaceEnabled(" in src, (
+            "EditorScreen harus apply toggle lint/whitespace ke bridge"
+        )
+        # Anti-jebakan-komentar (SKILLS): pakai strip komentar dulu, lalu
+        # cek pola pemakaian NYATA (bukan sekadar kata muncul di file).
+        kode = strip_kt_comments(src)
+        assert "setDiagnostics(" in kode, "panggilan setDiagnostics hilang"
+        assert "(vm?.problems ?: emptyList())" in kode, (
+            "vm.problems harus jadi SUMBER data setDiagnostics — satu sumber "
+            "kebenaran utk VPP & lint gutter (uji mutasi putaran 1: guard "
+            "lama palsu, kata itu tinggal di komentar)"
+        )
+        assert "typeof setLintEnabled==='function'" in src, (
+            "guard typeof wajib (kelas BUG H: WebView about:blank)"
+        )
+
+    def test_traceback_parser_semantik(self):
+        # port semantik regex ke Python — Kotlin & port harus sepakat
+        import re as _re
+        pat = _re.compile(r'File "([^"]+)", line (\d+)')
+        ok = pat.search('  File "/data/user/0/x/files/main.py", line 12, in <module>')
+        assert ok and ok.group(2) == "12"
+        assert pat.search('File "helper.py", line 3')
+        # jebakan: string user yang mirip tapi tak lengkap TIDAK cocok
+        assert not pat.search('print("File main.py line 5")')
+        assert not pat.search('File main.py, line 5')
+
+    def test_terminal_wire_traceback(self):
+        src = read(UI / "terminal/TerminalScreen.kt")
+        assert "TracebackParser.parse" in src and "isWorkspaceFile" in src, (
+            "terminal wajib verifikasi dua lapis: regex + file exist di workspace"
+        )
+        assert "TRACEBACK_JUMP" in src, "breadcrumb jejak tap wajib ada"
+        kode_t = strip_kt_comments(src)
+        assert "if (tracebackJumpEnabled && onGotoEditorLine != null)" in kode_t, (
+            "kill-switch A3 wajib DIPAKAI di kondisi parse (bukan sekadar "
+            "dideklarasikan sebagai parameter — uji mutasi putaran 1: guard "
+            "lama palsu, nama param lolos walau kondisi dicabut)"
+        )
+        assert "nameErrorHint" in src, "hint NameError (A6) harus terpasang"
+
+    def test_hint_tidak_sok_tahu(self):
+        src = read(APP / "core/editor/TracebackParser.kt")
+        assert "Mungkin maksudmu" in src, (
+            "bahasa hint wajib 'Mungkin maksudmu' — tidak pernah klaim pasti "
+            "(klausul kejujuran user 2026-08-18)"
+        )
+
+    def test_mainactivity_wire_goto(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt")
+        assert "onGotoEditorLine" in src and "requestGotoLine" in src, (
+            "MainActivity harus menyambungkan terminal → VM → editor"
+        )
+
+    def test_tools_satu_scroll_theme_pinned(self):
+        src = read(UI / "workbench/WorkbenchScreen.kt")
+        i = src.find("AnimatedVisibility(visible = toolsExpanded)")
+        assert i > 0
+        blok = src[i:i + 4000]
+        # satu LazyColumn berisi PLUGINS + EDITOR
+        assert blok.count("LazyColumn(") == 1, "TOOLS wajib SATU kotak scroll"
+        assert 'ToolsSectionLabel("PLUGINS")' in blok and 'ToolsSectionLabel("EDITOR")' in blok
+        blok_kode = strip_kt_comments(blok)
+        for t in ("Lint gutter", "Whitespace guard", "Traceback jump", "Symbol bar"):
+            assert f'ToolsToggleRow(\n                                    "{t}"' in blok or \
+                   f'"{t}",' in blok_kode, (
+                f"toggle '{t}' hilang dari seksi EDITOR (cek KODE, bukan "
+                "komentar — uji mutasi putaran 1 membongkar guard lama "
+                "palsu: 'Symbol bar' juga ada di komentar A4)"
+            )
+        # THEME tetap DI LUAR LazyColumn (pinned di dasar kotak — ketokan user)
+        lazy_end = blok.find("Divider", blok.find("LazyColumn("))
+        theme_pos = blok.find('"THEME"')
+        assert theme_pos > lazy_end > 0, (
+            "THEME wajib dipaku di dasar kotak, di luar area scroll"
+        )
+
+    def test_vm_persist_toggle_baru(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt")
+        for key, default in (('"lint_gutter", true', None),
+                             ('"whitespace_guard", false', None),
+                             ('"traceback_jump", true', None)):
+            assert key in src, (
+                f"persist prefs {key} hilang — default whitespace OFF & lain ON "
+                "adalah ketokan user"
+            )
