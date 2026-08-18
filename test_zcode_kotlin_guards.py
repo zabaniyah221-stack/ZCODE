@@ -3735,3 +3735,22 @@ class TestTracebackTapFixUAT0818:
             "warna link biru = affordance + diagnosa (tak biru = kondisi "
             "hit gagal, lapisan lain)"
         )
+
+
+class TestTracebackSessionGuard:
+    """Diskusi user 2026-08-18: tap link traceback saat script MASIH hidup
+    (except+print_exc lalu input()) = navigateUp = sendKill tanpa peringatan.
+    Guard: terminal state → lompat langsung; non-terminal → dialog jujur."""
+
+    def test_tap_dibedakan_berdasar_session_state(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "sessionState.isTerminal()" in src, (
+            "tap traceback wajib cek isTerminal() — script hidup tidak boleh "
+            "dibunuh tanpa peringatan"
+        )
+        assert "TRACEBACK_JUMP_GUARD" in src and "TRACEBACK_JUMP_CONFIRM" in src, (
+            "breadcrumb dua cabang wajib (guard muncul / user konfirmasi)"
+        )
+        assert "Hentikan & Lompat" in src and "MENGHENTIKAN" in src, (
+            "dialog wajib jujur soal konsekuensi sendKill"
+        )

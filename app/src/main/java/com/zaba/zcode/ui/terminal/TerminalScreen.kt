@@ -133,6 +133,11 @@ fun TerminalScreen(
     // bisa 1-3 dtk; tanpa ini layar terlihat kosong/diam seolah tap Run telat.
     var startingPython by remember { mutableStateOf(true) }
     var sessionState by remember { mutableStateOf(SessionState.START) }
+    // Guard tap-traceback saat script hidup (diskusi user 2026-08-18):
+    // navigateUp men-dispose layar → onDispose sendKill → script yang lagi
+    // nunggu input() mati TANPA peringatan. Back = niat eksplisit; tap link
+    // bisa tak sadar konsekuensi. Dialog ini = kejujuran konsekuensi.
+    var pendingJump by remember { mutableStateOf<Pair<String, Int>?>(null) }
     var logBytes by remember { mutableStateOf(0L) }
     var memChars by remember { mutableLongStateOf(0L) }
     // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
@@ -362,6 +367,34 @@ fun TerminalScreen(
         animationSpec = infiniteRepeatable(tween(520), RepeatMode.Reverse),
         label = "cursorAlpha"
     )
+
+    // Dialog guard tap-traceback saat script hidup (2026-08-18).
+    pendingJump?.let { (jumpFile, jumpLine) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingJump = null },
+            title = { Text("Script masih jalan", fontSize = 16.sp) },
+            text = {
+                Text(
+                    "Lompat ke editor akan MENGHENTIKAN script yang sedang " +
+                        "berjalan (termasuk yang menunggu input). Lanjut?"
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "TRACEBACK_JUMP_CONFIRM", "$jumpFile:$jumpLine"
+                    )
+                    pendingJump = null
+                    onGotoEditorLine?.invoke(jumpFile, jumpLine)
+                }) { Text("Hentikan & Lompat") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingJump = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 
     // Terminal selalu Monospace (keputusan audit 2026-08).
     val resolvedFontFamily = FontFamily.Monospace
@@ -602,12 +635,24 @@ fun TerminalScreen(
                                     lineHeight = lineHeightSp,
                                     textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
                                     modifier = Modifier.clickable {
-                                        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
-                                            "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
-                                        )
-                                        // ?.invoke: parameter nullable; smart-cast
-                                        // TIDAK berlaku (CI 32107733402).
-                                        onGotoEditorLine?.invoke(hit.fileName, hit.line)
+                                        if (sessionState.isTerminal()) {
+                                            // kasus umum: script sudah mati →
+                                            // lompat langsung tanpa drama.
+                                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                                "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
+                                            )
+                                            // ?.invoke: parameter nullable; smart-cast
+                                            // TIDAK berlaku (CI 32107733402).
+                                            onGotoEditorLine?.invoke(hit.fileName, hit.line)
+                                        } else {
+                                            // script MASIH hidup (mis. except+
+                                            // print_exc lalu input()) → jujur
+                                            // dulu soal konsekuensi sendKill.
+                                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                                "TRACEBACK_JUMP_GUARD", "${hit.fileName}:${hit.line} state=$sessionState"
+                                            )
+                                            pendingJump = hit.fileName to hit.line
+                                        }
                                     }
                                 )
                             }
