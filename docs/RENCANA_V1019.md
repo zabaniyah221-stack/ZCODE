@@ -129,3 +129,19 @@ traceback jump, TOOLS satu-scroll + THEME pinned) sebelum implementasi.
 Transparansi: uji mutasi membongkar 3 guard palsu (kata di komentar/
 parameter) → ditulis ulang strip_kt_comments; 2 guard lama direnovasi
 dgn sejarah dua era (terowongan editor, sinkron assets-katalog).
+
+### 2026-08-19 — Traceback jump: DEVICE VERIFIED setelah koreksi jalur overlay
+UAT Infinix SMART 9 HD, ARMv7, APK v1.0.19 commit `6fa90f5`:
+- SyntaxError `main.py:3` menghasilkan frame workspace inline yang dapat ditap.
+- Chip fallback `Ke baris error → main.py:3` muncul pada state `FAILED`.
+- Jump kembali ke editor berfungsi. Akar regresi sebelumnya bukan API
+  CodeMirror: FAB produksi memakai `TerminalScreen` overlay di
+  `WorkbenchScreen`, sedangkan callback hanya terpasang pada route output lama
+  di `MainActivity`; overlay menerima default `onGotoEditorLine = null` dan
+  mematikan inline link sekaligus chip.
+- Fix menyambungkan callback + toggle pada overlay aktif, menutup overlay,
+  memilih file traceback, menyinkronkan isi CodeMirror, lalu dispatch
+  `gotoLine`. Guard baru terbukti merah saat callback/pushCode dimutasi.
+- Dua pintu dipertahankan dengan fungsi berbeda: chip = sumber error workspace
+  terdalam (jalur utama ramah jempol), inline = navigator frame traceback
+  multi-file. Label chip akan dipoles bersama batch glyph, bukan build tunggal.
