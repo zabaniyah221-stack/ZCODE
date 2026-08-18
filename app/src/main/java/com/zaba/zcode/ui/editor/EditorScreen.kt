@@ -125,8 +125,15 @@ fun EditorScreen(
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        // Editor memuat HTML/bundle/font milik APK dari file://,
+                        // tetapi JavaScript-nya tidak boleh membaca file lain,
+                        // content://, atau origin internet. blockNetworkLoads
+                        // adalah lapis native di samping CSP connect-src 'none'.
                         allowFileAccess = true
-                        allowContentAccess = true
+                        allowContentAccess = false
+                        allowFileAccessFromFileURLs = false
+                        allowUniversalAccessFromFileURLs = false
+                        blockNetworkLoads = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
                     layoutParams = android.view.ViewGroup.LayoutParams(
@@ -169,8 +176,25 @@ fun EditorScreen(
                     }
 
                     webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: android.webkit.WebResourceRequest?
+                        ): Boolean {
+                            val trusted = isTrustedEditorUrl(request?.url?.toString())
+                            if (!trusted) {
+                                // Jangan log URL penuh: query dapat memuat data
+                                // sensitif. Scheme cukup untuk diagnosis.
+                                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                    "WEBVIEW_NAV_BLOCKED",
+                                    request?.url?.scheme ?: "unknown"
+                                )
+                            }
+                            return !trusted
+                        }
+
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
+                            if (!isTrustedEditorUrl(url)) return
                             view?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
                             view?.post {
                                 view.requestLayout()
@@ -191,6 +215,10 @@ fun EditorScreen(
         )
     }
 }
+
+/** Hanya dokumen editor bundled yang boleh hidup di WebView ber-EditorBridge. */
+private fun isTrustedEditorUrl(url: String?): Boolean =
+    url != null && url.startsWith("file:///android_asset/editor/")
 
 /**
  * Audit 2026-08: jenis font editor mengikuti pilihan user (Settings → UI & editor).
@@ -220,11 +248,11 @@ private const val FONT_FACE_JS =
     "(function(){if(document.getElementById('zcode-fontfaces'))return;" +
         "var s=document.createElement('style');s.id='zcode-fontfaces';" +
         "s.textContent=\"@font-face{font-family:'ZCodeJetBrainsMono';" +
-        "src:url('file:///android_asset/editor/fonts/jetbrains_mono.ttf')}" +
+        "src:url('fonts/jetbrains_mono.ttf')}" +
         "@font-face{font-family:'ZCodeFiraCode';" +
-        "src:url('file:///android_asset/editor/fonts/fira_code.ttf')}" +
+        "src:url('fonts/fira_code.ttf')}" +
         "@font-face{font-family:'ZCodeSourceCodePro';" +
-        "src:url('file:///android_asset/editor/fonts/source_code_pro.ttf')}\";" +
+        "src:url('fonts/source_code_pro.ttf')}\";" +
         "document.head.appendChild(s);})();"
 
 /** Escape string ke JS string literal yang aman (baris baru, kutip, backslash, unicode). */
