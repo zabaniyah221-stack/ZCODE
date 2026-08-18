@@ -146,6 +146,16 @@ fun TerminalScreen(
     var errorJump by remember {
         mutableStateOf<com.zaba.zcode.core.editor.TracebackParser.Hit?>(null)
     }
+    var logBytes by remember { mutableStateOf(0L) }
+    var memChars by remember { mutableLongStateOf(0L) }
+    // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
+    // jadi tanpa ini renderer tidak punya alasan untuk disusun ulang.
+    var bufferVersion by remember { mutableIntStateOf(0) }
+    // Scan chip 'Ke baris error' (UAT babak-2). DIPINDAH ke SETELAH deklarasi
+    // bufferVersion: CI 32121414855 merah karena LaunchedEffect merujuk
+    // bufferVersion 30 baris SEBELUM deklarasinya — Kotlin menolak forward
+    // reference variabel lokal (beda dgn property kelas). Kelas bug urutan
+    // deklarasi; kotlin_sanity (lexical) tak bisa menangkapnya.
     LaunchedEffect(sessionState, bufferVersion) {
         if (sessionState == SessionState.FAILED &&
             tracebackJumpEnabled && onGotoEditorLine != null
@@ -164,20 +174,15 @@ fun TerminalScreen(
                     }?.let { found = it }
             }
             errorJump = found
-            if (found != null) {
+            found?.let { f ->
                 com.zaba.zcode.core.diagnostics.Breadcrumb.log(
-                    "TRACEBACK_CHIP", "${found!!.fileName}:${found!!.line}"
+                    "TRACEBACK_CHIP", "${f.fileName}:${f.line}"
                 )
             }
         } else if (sessionState == SessionState.RUNNING) {
             errorJump = null // run baru = chip lama tidak relevan
         }
     }
-    var logBytes by remember { mutableStateOf(0L) }
-    var memChars by remember { mutableLongStateOf(0L) }
-    // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
-    // jadi tanpa ini renderer tidak punya alasan untuk disusun ulang.
-    var bufferVersion by remember { mutableIntStateOf(0) }
     var runId by remember { mutableStateOf(RunId.newId("run")) }
     var logger by remember { mutableStateOf<RunLogger?>(null) }
     val listState: LazyListState = rememberLazyListState()
