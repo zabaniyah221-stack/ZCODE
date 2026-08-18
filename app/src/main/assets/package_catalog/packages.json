@@ -2565,7 +2565,7 @@
   "sha256": null,
   "longDescription": "Matplotlib is a comprehensive library for creating static, animated, and interactive visualizations in Python.",
   "whyUse": "Standar visualisasi Python: line/bar/scatter/histogram, kontrol penuh atas setiap elemen plot; fondasi seaborn dkk.",
-  "example": "import matplotlib\nmatplotlib.use(\"Agg\")  # WAJIB di ZCODE (tanpa layar GUI)\nimport matplotlib.pyplot as plt\nplt.plot([1, 2, 3, 4], [1, 4, 9, 16])\nplt.title(\"Kuadrat\")\nplt.savefig(\"plot.png\")\nprint(\"tersimpan: plot.png\")",
+  "example": "import matplotlib\nmatplotlib.use(\"Agg\")  # wajib di ZCODE (tanpa layar GUI)\nimport matplotlib.pyplot as plt\nplt.bar([\"A\", \"B\", \"C\"], [3, 7, 5])\nplt.savefig(\"grafik.png\")\nprint(\"tersimpan: grafik.png (buka via file manager)\")",
   "whoMadeIt": "John D. Hunter (2003); kini tim Matplotlib/NumFOCUS. Lisensi berbasis PSF.",
   "sources": [
    {
@@ -2873,7 +2873,7 @@
   "sha256": null,
   "longDescription": "Fundamental package for array computing in Python.",
   "whyUse": "The fundamental building block for scientific computing: N-dimensional array, vectorized math jauh lebih cepat dari loop Python, fondasi pandas/matplotlib.",
-  "example": "import numpy as np\nnilai = np.array([72, 85, 60, 91, 77])\nprint(\"rata-rata:\", np.mean(nilai))\nprint(\"di atas 75:\", nilai[nilai > 75])",
+  "example": "import numpy as np\na = np.array([1, 2, 3, 4, 5])\nprint(\"mean:\", a.mean())\nprint(\"kuadrat:\", a ** 2)",
   "whoMadeIt": "Travis Oliphant et al.; komunitas NumPy/NumFOCUS. BSD-3-Clause.",
   "sources": [
    {
@@ -2937,7 +2937,7 @@
   "sha256": null,
   "longDescription": "A Python library to read/write Excel 2010 xlsx/xlsm files.",
   "whyUse": "Buat dan baca file Excel asli langsung dari HP: laporan, rekap nilai, data kiriman orang — tanpa Microsoft Office.",
-  "example": "from openpyxl import Workbook\nwb = Workbook()\nws = wb.active\nws.append([\"Nama\", \"Nilai\"])\nws.append([\"Andi\", 85]); ws.append([\"Citra\", 91])\nwb.save(\"rekap.xlsx\")\nprint(\"tersimpan: rekap.xlsx\")",
+  "example": "from openpyxl import Workbook\nwb = Workbook()\nws = wb.active\nws.append([\"Nama\", \"Nilai\"])\nws.append([\"Ani\", 85])\nwb.save(\"data.xlsx\")\nprint(\"tersimpan: data.xlsx\")",
   "whoMadeIt": "Eric Gazoni, Charlie Clark & kontributor. MIT.",
   "sources": [
    {
@@ -3036,7 +3036,7 @@
   "sha256": null,
   "longDescription": "Powerful data structures for data analysis, time series, and statistics. pandas aims to be the fundamental high-level building block for doing practical, real world data analysis in Python.",
   "whyUse": "A fast and efficient DataFrame object; tools for reading and writing data between in-memory structures and CSV, Excel, SQL. Used in Finance, Neuroscience, Economics, Statistics, Web Analytics.",
-  "example": "import pandas as pd\ndf = pd.DataFrame({\"nama\": [\"Andi\", \"Budi\", \"Citra\"],\n                   \"nilai\": [85, 72, 91]})\nprint(df.describe())\nprint(df[df[\"nilai\"] >= 80])",
+  "example": "import pandas as pd\ndf = pd.DataFrame({\"nama\": [\"Ani\", \"Budi\"], \"nilai\": [85, 92]})\nprint(df)\nprint(\"rata-rata:\", df[\"nilai\"].mean())",
   "whoMadeIt": "Dimulai di AQR Capital Management (2008), open source 2009, kini proyek NumFOCUS. BSD-3-Clause.",
   "sources": [
    {
@@ -3691,7 +3691,8 @@
    }
   ],
   "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "whoMadeIt": "Michael Waskom (peneliti neurosains; dibangun di atas matplotlib)"
+  "whoMadeIt": "Michael Waskom (peneliti neurosains; dibangun di atas matplotlib)",
+  "example": "import matplotlib\nmatplotlib.use(\"Agg\")\nimport seaborn as sns\nimport matplotlib.pyplot as plt\ntips = sns.load_dataset(\"tips\")  # butuh internet sekali\nsns.histplot(tips[\"total_bill\"])\nplt.savefig(\"histogram.png\")\nprint(\"tersimpan: histogram.png\")"
  },
  {
   "name": "simpy",
@@ -3851,7 +3852,8 @@
     "url": "https://sympy.org"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from sympy import symbols, solve, expand\nx = symbols(\"x\")\nprint(\"ekspansi:\", expand((x + 2) ** 3))\nprint(\"akar    :\", solve(x**2 - 5*x + 6, x))"
  },
  {
   "name": "tabulate",
@@ -3892,7 +3894,8 @@
     "url": "https://github.com/astanin/python-tabulate"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from tabulate import tabulate\ndata = [[\"Ani\", 85], [\"Budi\", 92]]\nprint(tabulate(data, headers=[\"Nama\", \"Nilai\"], tablefmt=\"grid\"))"
  },
  {
   "name": "tslearn",
@@ -4302,7 +4305,8 @@
     "url": "http://www.grantjenks.com/docs/diskcache/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import diskcache\ncache = diskcache.Cache(\"cache_dir\")\ncache[\"skor\"] = {\"ani\": 85}\nprint(cache[\"skor\"])  # bertahan walau app ditutup"
  },
  {
   "name": "fabric",
@@ -4588,7 +4592,8 @@
    }
   ],
   "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI)."
+  "whoMadeIt": "Komunitas open-source (lihat sumber PyPI).",
+  "example": "from peewee import SqliteDatabase, Model, CharField, IntegerField\ndb = SqliteDatabase(\"sekolah.db\")\n\nclass Siswa(Model):\n    nama = CharField()\n    nilai = IntegerField()\n    class Meta:\n        database = db\n\ndb.connect()\ndb.create_tables([Siswa])\nSiswa.create(nama=\"Ani\", nilai=85)\nfor s in Siswa.select():\n    print(s.nama, s.nilai)"
  },
  {
   "name": "pickledb",
@@ -4832,7 +4837,8 @@
     "url": "https://redis.readthedocs.io/en/latest/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import redis\n# butuh server Redis remote (HP tidak menjalankan server)\nr = redis.Redis(host=\"alamat-server\", port=6379, socket_timeout=5)\nr.set(\"kunci\", \"nilai\")\nprint(r.get(\"kunci\"))"
  },
  {
   "name": "sqlalchemy",
@@ -4874,7 +4880,8 @@
     "url": "https://docs.sqlalchemy.org"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from sqlalchemy import create_engine, text\neng = create_engine(\"sqlite:///data.db\")\nwith eng.connect() as c:\n    c.execute(text(\"CREATE TABLE IF NOT EXISTS siswa (nama TEXT, nilai INT)\"))\n    c.execute(text(\"INSERT INTO siswa VALUES ('Ani', 85)\"))\n    c.commit()\n    for row in c.execute(text(\"SELECT * FROM siswa\")):\n        print(row)"
  },
  {
   "name": "sqlitedict",
@@ -5426,7 +5433,8 @@
     "url": "https://Python-Markdown.github.io/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import markdown\nmd = \"# Judul\\n\\nParagraf **tebal** dan *miring*.\"\nhtml = markdown.markdown(md)\nprint(html)"
  },
  {
   "name": "markdownify",
@@ -5803,7 +5811,8 @@
     "url": "https://pypdf.readthedocs.io/en/latest/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from pypdf import PdfReader\n# taruh file PDF di workspace dulu (import dari file manager)\nr = PdfReader(\"dokumen.pdf\")\nprint(\"halaman:\", len(r.pages))\nprint(r.pages[0].extract_text()[:200])"
  },
  {
   "name": "python-docx",
@@ -5845,7 +5854,8 @@
     "url": "https://python-docx.readthedocs.org/en/latest/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from docx import Document\ndoc = Document()\ndoc.add_heading(\"Laporan ZCODE\", 0)\ndoc.add_paragraph(\"Dokumen Word dibuat dari HP.\")\ndoc.save(\"laporan.docx\")\nprint(\"tersimpan: laporan.docx\")"
  },
  {
   "name": "python-magic",
@@ -5970,7 +5980,8 @@
     "url": "https://github.com/danifus/pyzipper"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import pyzipper\nwith pyzipper.AESZipFile(\"rahasia.zip\", \"w\", encryption=pyzipper.WZ_AES) as z:\n    z.setpassword(b\"sandi123\")\n    z.writestr(\"catatan.txt\", \"isi rahasia\")\nprint(\"zip terkunci sandi dibuat: rahasia.zip\")"
  },
  {
   "name": "rarfile",
@@ -7482,7 +7493,7 @@
   "sha256": null,
   "longDescription": "Python Imaging Library (fork). Image processing: buka/olah/simpan puluhan format gambar.",
   "whyUse": "Resize, crop, konversi format, filter, watermark, generate gambar — semua dari script.",
-  "example": "from PIL import Image, ImageDraw\nimg = Image.new(\"RGB\", (200, 100), \"navy\")\nd = ImageDraw.Draw(img)\nd.text((20, 40), \"Halo ZCODE!\", fill=\"white\")\nimg.save(\"halo.png\")\nprint(\"tersimpan: halo.png\")",
+  "example": "from PIL import Image, ImageDraw\nimg = Image.new(\"RGB\", (200, 100), \"navy\")\nd = ImageDraw.Draw(img)\nd.text((20, 40), \"ZCODE!\", fill=\"cyan\")\nimg.save(\"hasil.png\")\nprint(\"tersimpan: hasil.png\")",
   "whoMadeIt": "Fork PIL (Fredrik Lundh) oleh Jeffrey A. Clark & kontributor. MIT-CMU.",
   "sources": [
    {
@@ -7778,7 +7789,8 @@
     "url": "https://github.com/lincolnloop/python-qrcode"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import qrcode\nimg = qrcode.make(\"https://github.com/muzape28-blip/ZCODE\")\nimg.save(\"qr.png\")\nprint(\"tersimpan: qr.png\")"
  },
  {
   "name": "soundfile",
@@ -8107,7 +8119,8 @@
     "url": "https://cryptography.io/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from cryptography.fernet import Fernet\nkey = Fernet.generate_key()\nf = Fernet(key)\nrahasia = f.encrypt(b\"pesan rahasia\")\nprint(\"terenkripsi:\", rahasia[:30], \"...\")\nprint(\"dibuka:\", f.decrypt(rahasia).decode())"
  },
  {
   "name": "hashids",
@@ -8683,7 +8696,8 @@
     "url": "http://faker.rtfd.org/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "from faker import Faker\nf = Faker(\"id_ID\")  # data dummy rasa Indonesia\nfor _ in range(3):\n    print(f.name(), \"-\", f.city())"
  },
  {
   "name": "flake8",
@@ -9174,7 +9188,8 @@
     "url": "https://docs.pytest.org/en/latest/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "# simpan sebagai test_hitung.py lalu jalankan lewat script lain:\n# import pytest; pytest.main([\"-q\", \"test_hitung.py\"])\ndef tambah(a, b):\n    return a + b\n\ndef test_tambah():\n    assert tambah(2, 3) == 5"
  },
  {
   "name": "pytest-asyncio",
@@ -10134,7 +10149,8 @@
     "url": "https://pendulum.eustace.io/docs"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import pendulum\nnow = pendulum.now(\"Asia/Jakarta\")\nprint(\"sekarang:\", now.format(\"dddd, D MMMM YYYY HH:mm\"))\nprint(\"besok :\", now.add(days=1).diff_for_humans())"
  },
  {
   "name": "platformdirs",
@@ -10584,7 +10600,7 @@
   "sha256": null,
   "longDescription": "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal.",
   "whyUse": "Output terminal jadi hidup dengan satu-dua baris: tabel rapi, warna, panel, markdown — cocok dengan terminal ANSI ZCODE.",
-  "example": "from rich.console import Console\nfrom rich.table import Table\nc = Console()\nt = Table(title=\"Nilai\")\nt.add_column(\"Nama\"); t.add_column(\"Skor\")\nt.add_row(\"Andi\", \"85\"); t.add_row(\"Citra\", \"91\")\nc.print(t)",
+  "example": "from rich.console import Console\nfrom rich.table import Table\nc = Console()\nt = Table(title=\"Nilai\")\nt.add_column(\"Nama\"); t.add_column(\"Skor\")\nt.add_row(\"Ani\", \"85\"); t.add_row(\"Budi\", \"92\")\nc.print(t)",
   "whoMadeIt": "Will McGugan (Textualize). MIT.",
   "sources": [
    {
@@ -11139,7 +11155,7 @@
   "sha256": null,
   "longDescription": "Screen-scraping library: parse HTML/XML menjadi pohon yang mudah dijelajahi dan dicari.",
   "whyUse": "Cara tercepat mengekstrak data dari halaman web: cari tag, class, atribut tanpa regex; toleran terhadap HTML berantakan.",
-  "example": "import requests\nfrom bs4 import BeautifulSoup\nhtml = requests.get(\"https://example.com\", timeout=10).text\nsoup = BeautifulSoup(html, \"html.parser\")\nprint(\"judul:\", soup.title.string)\nfor a in soup.find_all(\"a\"):\n    print(\"link:\", a.get(\"href\"))",
+  "example": "from bs4 import BeautifulSoup\nhtml = \"<html><h1>Judul</h1><p>Isi</p></html>\"\nsoup = BeautifulSoup(html, \"html.parser\")\nprint(soup.h1.text)\nprint(soup.p.text)",
   "whoMadeIt": "Leonard Richardson. MIT.",
   "sources": [
    {
@@ -11370,7 +11386,7 @@
   "sha256": null,
   "longDescription": "A simple framework for building complex web applications.",
   "whyUse": "Micro-framework web paling populer: route + fungsi = API/web server dalam belasan baris; ekosistem extension luas.",
-  "example": "from flask import Flask, jsonify\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return jsonify(pesan=\"Halo dari ZCODE!\")\n\napp.run(host=\"127.0.0.1\", port=5000)\n# buka browser HP: http://127.0.0.1:5000",
+  "example": "from flask import Flask, jsonify\napp = Flask(__name__)\n\n@app.route(\"/\")\ndef home():\n    return jsonify(pesan=\"Halo dari ZCODE!\")\n\n# app.run() memblokir terminal — jalankan lalu hentikan dgn ^C\napp.run(host=\"127.0.0.1\", port=5000)",
   "whoMadeIt": "Armin Ronacher / Pallets Projects. BSD-3-Clause.",
   "sources": [
    {
@@ -11513,7 +11529,7 @@
   "sha256": null,
   "longDescription": "The next generation HTTP client.",
   "whyUse": "API mirip requests tapi mendukung async/await dan HTTP/2 — pilihan modern bila butuh banyak request paralel.",
-  "example": "import httpx\nr = httpx.get(\"https://api.github.com\", timeout=10)\nprint(r.status_code)\nprint(list(r.json())[:5])",
+  "example": "import httpx\nr = httpx.get(\"https://httpbin.org/get\", timeout=10)\nprint(r.status_code, r.json()[\"url\"])",
   "whoMadeIt": "Tom Christie / Encode. BSD-3-Clause.",
   "sources": [
    {
@@ -11831,7 +11847,7 @@
   "sha256": null,
   "longDescription": "Python HTTP for Humans. An elegant and simple HTTP library for Python.",
   "whyUse": "Standar de-facto HTTP di Python: sintaks paling sederhana untuk GET/POST, session, header, JSON. Hampir semua tutorial API memakai ini.",
-  "example": "import requests\nr = requests.get(\"https://api.github.com/repos/python/cpython\",\n                 timeout=10)\ndata = r.json()\nprint(r.status_code, \"-\", data[\"description\"])",
+  "example": "import requests\nr = requests.get(\"https://httpbin.org/get\", timeout=10)\nprint(r.status_code)\nprint(r.json()[\"url\"])",
   "whoMadeIt": "Kenneth Reitz; kini dikelola Python Software Foundation. Apache-2.0.",
   "sources": [
    {
@@ -12230,7 +12246,7 @@
   "sha256": null,
   "longDescription": "Fast, Extensible Progress Meter. Instantly make your loops show a smart progress meter.",
   "whyUse": "Bungkus iterable apa pun dengan tqdm(...) dan dapatkan progress bar; overhead sangat kecil.",
-  "example": "from tqdm import tqdm\nimport time\ntotal = 0\nfor i in tqdm(range(50), desc=\"menghitung\"):\n    total += i\n    time.sleep(0.05)\nprint(\"selesai:\", total)",
+  "example": "import time\nfrom tqdm import tqdm\nfor i in tqdm(range(50), desc=\"proses\"):\n    time.sleep(0.05)\nprint(\"selesai!\")",
   "whoMadeIt": "Casper da Costa-Luis & kontributor. MPL-2.0 + MIT.",
   "sources": [
    {
@@ -12500,7 +12516,8 @@
     "url": "https://websockets.readthedocs.io/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import asyncio\nimport websockets\n\nasync def main():\n    uri = \"wss://echo.websocket.org\"\n    async with websockets.connect(uri) as ws:\n        await ws.send(\"halo dari ZCODE\")\n        print(\"balasan:\", await ws.recv())\n\nasyncio.run(main())"
  },
  {
   "name": "werkzeug",
@@ -12626,7 +12643,8 @@
     "url": "https://github.com/yt-dlp/yt-dlp#readme"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import yt_dlp\n# info video TANPA download (hemat kuota)\nopts = {\"quiet\": True}\nwith yt_dlp.YoutubeDL(opts) as ydl:\n    info = ydl.extract_info(\"https://www.youtube.com/watch?v=jNQXAC9IVRw\", download=False)\n    print(\"judul :\", info[\"title\"])\n    print(\"durasi:\", info[\"duration\"], \"detik\")"
  },
  {
   "name": "argon2-cffi-bindings",
@@ -13891,7 +13909,8 @@
     "url": "http://pycurl.io/docs/latest/"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
+  "example": "import io\nimport pycurl\nbuf = io.BytesIO()\nc = pycurl.Curl()\nc.setopt(c.URL, \"https://httpbin.org/get\")\nc.setopt(c.WRITEDATA, buf)\nc.perform()\nprint(\"HTTP\", c.getinfo(c.RESPONSE_CODE))\nc.close()"
  },
  {
   "name": "pyerfa",

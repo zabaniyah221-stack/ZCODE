@@ -3754,3 +3754,66 @@ class TestTracebackSessionGuard:
         assert "Hentikan & Lompat" in src and "MENGHENTIKAN" in src, (
             "dialog wajib jujur soal konsekuensi sendKill"
         )
+
+
+class TestGerbongDKonten:
+    """Gerbong D v1.0.19: example 30 TESTED + deskripsi 11 kategori +
+    6 sample baru. Semua konten harus valid — konten rusak di 720p HP user
+    lebih buruk dari tidak ada."""
+
+    def test_example_python_valid(self):
+        import json as _json, ast
+        cat = _json.loads((ROOT / "app/src/main/assets/package_catalog/packages.json").read_text(encoding="utf-8"))
+        pkgs = cat["packages"] if isinstance(cat, dict) else cat
+        n = 0
+        for p in pkgs:
+            ex = p.get("example") or ""
+            if not ex:
+                continue
+            n += 1
+            try:
+                ast.parse(ex)
+            except SyntaxError as e:
+                raise AssertionError(f"example {p['name']} bukan Python valid: {e}")
+        assert n >= 35, f"minimal 35 example terisi; dapat {n}"
+
+    def test_example_hanya_untuk_yang_bisa_jalan(self):
+        # klausul kejujuran: paket UNAVAILABLE/INCOMPATIBLE tidak boleh
+        # punya example menggoda — kartunya kartu batu-sandungan.
+        import json as _json
+        cat = _json.loads((ROOT / "app/src/main/assets/package_catalog/packages.json").read_text(encoding="utf-8"))
+        pkgs = cat["packages"] if isinstance(cat, dict) else cat
+        for p in pkgs:
+            if p.get("example") and p["status"] in ("UNAVAILABLE", "INCOMPATIBLE"):
+                raise AssertionError(
+                    f"{p['name']} ({p['status']}) punya example — menggoda user "
+                    "menjalankan yang mustahil"
+                )
+
+    def test_deskripsi_kategori_lengkap(self):
+        import json as _json
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "fun categoryDescription" in src
+        cat = _json.loads((ROOT / "app/src/main/assets/package_catalog/packages.json").read_text(encoding="utf-8"))
+        pkgs = cat["packages"] if isinstance(cat, dict) else cat
+        kategori = {p["category"] for p in pkgs}
+        kategori.discard("Dev Tools / Testing")  # 1 paket (virtualenv), belum layak seksi
+        for c in sorted(kategori):
+            assert f'"{c}" ->' in src, f"deskripsi kategori '{c}' hilang"
+
+    def test_sample_baru_semua_terdaftar_dgn_requires(self):
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        wajib = {"docx_laporan": "python-docx", "qr_generator": "qrcode",
+                 "crypto_pesan": "cryptography", "pandas_nilai": "pandas",
+                 "sympy_aljabar": "sympy"}
+        for sid, pkg in wajib.items():
+            i = lib.find(f'"{sid}"')
+            assert i > 0, f"sample {sid} hilang"
+            assert f'requiresPackage = listOf("{pkg}")' in lib[i:i + 400], (
+                f"{sid} wajib requiresPackage {pkg} (jembatan Gerbong B)"
+            )
+        # sqlite_catatan stdlib — TIDAK boleh ditandai
+        i = lib.find('"sqlite_catatan"')
+        assert i > 0 and "requiresPackage" not in lib[i:i + 250], (
+            "sqlite_catatan pakai sqlite3 bawaan — tanpa requiresPackage"
+        )

@@ -143,7 +143,10 @@ class TestSamples:
                   "tqdm_progress", "openpyxl_excel", "pillow_image",
                   "matplotlib_chart",
                   # A7 v1.0.19: sample multi-file pertama (entri katalog).
-                  "project_mini"]
+                  "project_mini",
+                  # Gerbong D v1.0.19: 6 sample baru (5 paket TESTED + 1 stdlib)
+                  "docx_laporan", "qr_generator", "crypto_pesan",
+                  "sqlite_catatan", "pandas_nilai", "sympy_aljabar"]
 
     # A7: file .py di assets yang BUKAN entri katalog — companion yang
     # ditulis ke workspace dgn nama tetap saat sample induknya dibuka.

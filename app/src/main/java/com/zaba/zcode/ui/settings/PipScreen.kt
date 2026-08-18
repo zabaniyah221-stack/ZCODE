@@ -695,6 +695,18 @@ private fun LibraryTab(
                         Divider(color = Color.White.copy(alpha = 0.05f))
                     }
                     if (expandedCategories.contains(cat)) {
+                        // Gerbong D v1.0.19: deskripsi kategori — satu kalimat
+                        // orientasi saat kategori dibuka (data statis, offline).
+                        categoryDescription(cat)?.let { desc ->
+                            item {
+                                Text(
+                                    desc,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                         items(allItems.filter { it.category == cat }) { item ->
                             CatalogRow(
                                 item = item,
@@ -1215,3 +1227,32 @@ private fun initialConsole(): List<ConsoleLine> = listOf(
     ConsoleLine("Instalasi transaksional: verifikasi + smoke test + rollback otomatis.", ConsoleKind.LOG),
     ConsoleLine("Flow: Parse → Resolve → Download → Verify → Extract → Smoke → Activate", ConsoleKind.LOG),
 )
+
+// Gerbong D v1.0.19: deskripsi 11 kategori Library — satu kalimat orientasi
+// "buat apa kategori ini" saat dibuka. Bahasa santai-jelas, jujur soal batas
+// ARMv7 di kategori yang memang berat.
+private fun categoryDescription(cat: String): String? = when (cat) {
+    "Web / API / Networking" ->
+        "Ngobrol sama internet: ambil data API, scraping, bikin server mini. Mulai dari: requests."
+    "Data / Math / Science" ->
+        "Hitung, olah tabel, gambar grafik. Trio andalan: numpy + pandas + matplotlib (grafik jadi PNG)."
+    "Files / Office / Document" ->
+        "Bikin & baca Word, Excel, PDF, PowerPoint langsung dari HP. Mulai dari: python-docx / openpyxl."
+    "Image / Audio / Media" ->
+        "Edit gambar, bikin QR, proses audio. Mulai dari: pillow. (Video render butuh ffmpeg — tidak tersedia.)"
+    "Database / Storage" ->
+        "Simpan data yang awet: SQLite bawaan, ORM (peewee/sqlalchemy), key-value (diskcache)."
+    "AI / ML / NLP" ->
+        "Teks & kecerdasan buatan. Jujur: model besar (torch/tensorflow) mustahil di ARMv7 — yang jalan: nltk, openai API, sympy."
+    "Security / Cryptography" ->
+        "Enkripsi, hash, tanda tangan digital. Mulai dari: cryptography / pycryptodome."
+    "Utilities / CLI / Terminal" ->
+        "Pemanis & pembantu terminal: rich (tabel warna), tqdm (progress bar), tabulate."
+    "Automation / Scripting" ->
+        "Otomasi tugas: jadwal (apscheduler), unduh video (yt_dlp), kirim email (yagmail)."
+    "Testing / Quality / Debugging" ->
+        "Uji kodemu sendiri: pytest + coverage. (tox/virtualenv tidak jalan — butuh subprocess python.)"
+    "GUI / Games / App Framework" ->
+        "Jujur: GUI native (kivy/pygame/tkinter) tidak didukung runtime ZCODE. Alternatif tercatat di kartu masing-masing."
+    else -> null
+}

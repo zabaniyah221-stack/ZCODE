@@ -96,6 +96,11 @@ object SampleLibrary {
                 // A7 v1.0.19: sample multi-file PERTAMA — meresmikan fakta
                 // bahwa import antar file workspace sudah jalan (sys.path).
                 SampleEntry(
+                    "sqlite_catatan", "SQLite — Catatan Persisten",
+                    "Database bawaan Python: catatan awet walau app ditutup",
+                    "samples/sqlite_catatan.py"
+                ),
+                SampleEntry(
                     "project_mini", "Project Mini (2 file)",
                     "Dua file, satu program: main mengimpor modul helper di sebelahnya",
                     "samples/project_mini.py",
@@ -183,6 +188,38 @@ object SampleLibrary {
                     "Generate PNG dari kode — butuh: install pillow",
                     "samples/pillow_image.py",
                     requiresPackage = listOf("pillow")
+                ),
+                // Gerbong D v1.0.19: 5 sample baru dari paket TESTED —
+                // office, kripto, QR, data, matematika (semua teruji sandbox).
+                SampleEntry(
+                    "docx_laporan", "python-docx — Word",
+                    "Bikin laporan .docx bertabel dari HP — butuh: install python-docx",
+                    "samples/docx_laporan.py",
+                    requiresPackage = listOf("python-docx")
+                ),
+                SampleEntry(
+                    "qr_generator", "qrcode — QR Generator",
+                    "QR code offline dari teks/link apa pun — butuh: install qrcode",
+                    "samples/qr_generator.py",
+                    requiresPackage = listOf("qrcode")
+                ),
+                SampleEntry(
+                    "crypto_pesan", "cryptography — Enkripsi",
+                    "Kunci & buka pesan rahasia (Fernet) — butuh: install cryptography",
+                    "samples/crypto_pesan.py",
+                    requiresPackage = listOf("cryptography")
+                ),
+                SampleEntry(
+                    "pandas_nilai", "pandas — Tabel Nilai",
+                    "Olah nilai ala spreadsheet: rata-rata, ranking — butuh: install pandas",
+                    "samples/pandas_nilai.py",
+                    requiresPackage = listOf("pandas")
+                ),
+                SampleEntry(
+                    "sympy_aljabar", "sympy — Aljabar",
+                    "PR matematika: ekspansi, faktor, akar, turunan — butuh: install sympy",
+                    "samples/sympy_aljabar.py",
+                    requiresPackage = listOf("sympy")
                 ),
                 SampleEntry(
                     "matplotlib_chart", "Matplotlib — Grafik",
