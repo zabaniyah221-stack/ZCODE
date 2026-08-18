@@ -3715,7 +3715,9 @@ class TestTracebackTapFixUAT0818:
 
     def test_baris_link_keluar_dari_arena_seleksi(self):
         src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
-        i = src.find("TracebackParser.parse")
+        # jangkar = blok render inline (parse(lineText)) — BUKAN kemunculan
+        # pertama parse() yang kini milik scan chip babak-2 (LaunchedEffect).
+        i = src.find("TracebackParser.parse(lineText)")
         assert i > 0
         jendela = src[i:i + 2500]
         assert "DisableSelection" in jendela, (
@@ -3816,4 +3818,37 @@ class TestGerbongDKonten:
         i = lib.find('"sqlite_catatan"')
         assert i > 0 and "requiresPackage" not in lib[i:i + 250], (
             "sqlite_catatan pakai sqlite3 bawaan — tanpa requiresPackage"
+        )
+
+
+class TestTracebackChipBabak2:
+    """UAT babak-2 2026-08-18: link inline TIDAK render di device (baris
+    putih polos = alat diagnosa warna bekerja: kondisi hit gagal di lapisan
+    render inline). Jalur kedua: chip 'Ke baris error' saat FAILED — scan
+    buffer via LaunchedEffect, UI terpisah total dari baris & seleksi."""
+
+    def test_chip_terpasang(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "TRACEBACK_CHIP" in src, "breadcrumb saat chip dibuat wajib"
+        assert "Ke baris error" in src, "chip harus terlihat jelas"
+        assert 'via=chip' in src, (
+            "breadcrumb jump wajib menyebut jalur (chip vs inline) — "
+            "UAT berikutnya harus bisa membedakan jalur mana yang hidup"
+        )
+
+    def test_chip_scan_hit_terakhir(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = src.find("SessionState.FAILED &&")
+        assert i > 0, "chip hanya untuk state FAILED"
+        jendela = src[i:i + 1200]
+        assert "found = it" in jendela, (
+            "scan wajib ambil hit TERAKHIR (frame terdalam = baris salah "
+            "sebenarnya, bukan frame runner)"
+        )
+        assert "total - 80" in jendela, "scan dibatasi 80 baris terakhir (hemat)"
+
+    def test_chip_reset_saat_run_baru(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "errorJump = null" in src, (
+            "chip run lama wajib hilang saat RUNNING baru — chip basi = bohong"
         )

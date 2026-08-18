@@ -138,6 +138,41 @@ fun TerminalScreen(
     // nunggu input() mati TANPA peringatan. Back = niat eksplisit; tap link
     // bisa tak sadar konsekuensi. Dialog ini = kejujuran konsekuensi.
     var pendingJump by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    // UAT babak-2 (2026-08-18): link inline TIDAK render di device (baris
+    // putih polos = hit null; screenshot user). Jalur kedua yang kebal
+    // masalah pointer/seleksi/render inline: CHIP "Ke baris error" di atas
+    // output saat script FAILED — target tap besar, ramah jempol 720p.
+    // Sumber data sama (TracebackParser), UI beda jalur total.
+    var errorJump by remember {
+        mutableStateOf<com.zaba.zcode.core.editor.TracebackParser.Hit?>(null)
+    }
+    LaunchedEffect(sessionState, bufferVersion) {
+        if (sessionState == SessionState.FAILED &&
+            tracebackJumpEnabled && onGotoEditorLine != null
+        ) {
+            // scan mundur maks 80 baris terakhir; hit TERAKHIR yang menunjuk
+            // file workspace = frame paling dalam = baris salah sebenarnya.
+            var found: com.zaba.zcode.core.editor.TracebackParser.Hit? = null
+            val total = buffer.totalLines
+            val start = maxOf(buffer.startOffset, total - 80)
+            for (absIdx in start until total) {
+                val t = buffer.get(absIdx) ?: continue
+                com.zaba.zcode.core.editor.TracebackParser.parse(t)
+                    ?.takeIf {
+                        com.zaba.zcode.core.editor.TracebackParser
+                            .isWorkspaceFile(it, filesDir)
+                    }?.let { found = it }
+            }
+            errorJump = found
+            if (found != null) {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "TRACEBACK_CHIP", "${found!!.fileName}:${found!!.line}"
+                )
+            }
+        } else if (sessionState == SessionState.RUNNING) {
+            errorJump = null // run baru = chip lama tidak relevan
+        }
+    }
     var logBytes by remember { mutableStateOf(0L) }
     var memChars by remember { mutableLongStateOf(0L) }
     // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
@@ -524,6 +559,30 @@ fun TerminalScreen(
                 .clickable { focusRequester.requestFocus() }
                 .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)
         ) {
+            // Chip "Ke baris error" (UAT babak-2 2026-08-18) — jalur tap
+            // alternatif yang tak bergantung render/pointer baris inline.
+            errorJump?.let { ej ->
+                Row(
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .background(Color(0xFF15304D), RoundedCornerShape(8.dp))
+                        .clickable {
+                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                "TRACEBACK_JUMP", "${ej.fileName}:${ej.line} via=chip"
+                            )
+                            onGotoEditorLine?.invoke(ej.fileName, ej.line)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "\u26A1 Ke baris error \u2192 ${ej.fileName}:${ej.line}",
+                        color = Color(0xFF6FB1FF),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp
+                    )
+                }
+            }
             if (startingPython && showPythonIndicator) {
                 Row(
                     modifier = Modifier.padding(top = 4.dp),
