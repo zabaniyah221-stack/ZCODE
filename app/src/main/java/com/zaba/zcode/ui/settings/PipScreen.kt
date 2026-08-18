@@ -16,8 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -32,6 +36,7 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import android.widget.Toast
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -68,6 +73,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private enum class PipTab { LIBRARY, MANUAL }
+
 /**
  * PipScreen — INSTALL MODULES (SPEC-001).
  * - LIBRARY  : katalog curated (100→300) + stdlib index; Package Details 18 field
@@ -77,6 +84,7 @@ import kotlinx.coroutines.withContext
  *              Confirm kalau risky → Install via PackageEngineV2.
  * Semua tombol install terhubung ke PackageEngineV2 (Rule 7 — satu backend).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PipScreen(
     context: android.content.Context,
@@ -86,8 +94,27 @@ fun PipScreen(
     val repository = remember { PackageRepository(context) }
     val engine = remember { PackageEngineV2(context) }
     val compat = remember { CompatibilityEngine(context) }
+    val focusManager = LocalFocusManager.current
 
-    var activeTab by remember { mutableStateOf("LIBRARY") }
+    // Satu sumber kebenaran untuk tap DAN swipe. PagerState punya Saver,
+    // sehingga page aktif bertahan rotate; string activeTab lama dihapus agar
+    // tidak ada dua state yang dapat berbeda.
+    val pagerState = rememberPagerState(pageCount = { PipTab.values().size })
+    val libraryListState = rememberLazyListState()
+    val manualPageScroll = rememberScrollState()
+
+    fun selectPipTab(tab: PipTab) {
+        focusManager.clearFocus(force = true)
+        scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        focusManager.clearFocus(force = true)
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+            "PIP_TAB", PipTab.values()[pagerState.currentPage].name
+        )
+    }
+
     var searchQuery by remember { mutableStateOf("") }
     var expandedCategories by remember { mutableStateOf(setOf<String>()) }
 
@@ -371,7 +398,7 @@ fun PipScreen(
 
     fun installFromLibrary(req: String) {
         if (isInstalling) return
-        activeTab = "MANUAL"
+        selectPipTab(PipTab.MANUAL)
         packageName = req
         analyzeThenInstall(req)
     }
@@ -459,21 +486,26 @@ fun PipScreen(
                         )
                     }
                     Row(modifier = Modifier.fillMaxWidth().height(40.dp)) {
-                        TabBox("LIBRARY", activeTab == "LIBRARY") { activeTab = "LIBRARY" }
-                        TabBox("MANUAL INSTALL", activeTab == "MANUAL") { activeTab = "MANUAL" }
+                        TabBox("LIBRARY", pagerState.currentPage == PipTab.LIBRARY.ordinal) {
+                            selectPipTab(PipTab.LIBRARY)
+                        }
+                        TabBox("MANUAL INSTALL", pagerState.currentPage == PipTab.MANUAL.ordinal) {
+                            selectPipTab(PipTab.MANUAL)
+                        }
                     }
                 }
             }
         }
     ) { padding ->
-        Column(
+        HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
-        ) {
-            if (activeTab == "LIBRARY") {
-                LibraryTab(
+        ) { page ->
+            when (PipTab.values()[page]) {
+                PipTab.LIBRARY -> LibraryTab(
                     repository = repository,
                     searchQuery = searchQuery,
                     onSearchChange = { searchQuery = it },
@@ -485,6 +517,7 @@ fun PipScreen(
                     installedMap = installedMap,
                     runtimeInfo = runtimeInfo,
                     compat = compat,
+                    listState = libraryListState,
                     onSelect = { pkg ->
                         selectedPackage = pkg
                         val installed = installedMap[pkg.name.lowercase().replace("_", "-")]
@@ -496,8 +529,7 @@ fun PipScreen(
                         }
                     }
                 )
-            } else {
-                ManualTab(
+                PipTab.MANUAL -> ManualTab(
                     packageName = packageName,
                     onPackageNameChange = { packageName = it },
                     isInstalling = isInstalling,
@@ -513,7 +545,8 @@ fun PipScreen(
                         appendLog("\nℹ️ ${lines.size} requirement masuk antrian. Tap Install untuk memulai.\n")
                     },
                     consoleLines = consoleLines,
-                    consoleScroll = consoleScroll
+                    consoleScroll = consoleScroll,
+                    pageScroll = manualPageScroll
                 )
             }
         }
@@ -613,6 +646,7 @@ private fun LibraryTab(
     installedMap: Map<String, String>,
     runtimeInfo: RuntimeProbe.RuntimeInfo?,
     compat: CompatibilityEngine,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     onSelect: (PackageDetails) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -645,7 +679,10 @@ private fun LibraryTab(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        ) {
             val filtered = if (searchQuery.isNotBlank()) {
                 repository.search(searchQuery)
             } else allItems
@@ -1053,7 +1090,8 @@ private fun ManualTab(
     onRequirementsTxt: () -> Unit,
     onQueueLines: (List<String>) -> Unit,
     consoleLines: List<ConsoleLine>,
-    consoleScroll: androidx.compose.foundation.ScrollState
+    consoleScroll: androidx.compose.foundation.ScrollState,
+    pageScroll: androidx.compose.foundation.ScrollState
 ) {
     // A0 v1.0.19 (laporan user 2026-08-18, screenshot landscape): di layar
     // pendek (±360dp) area input+hints (tinggi tetap ±250dp) makan ruang
@@ -1067,7 +1105,7 @@ private fun ManualTab(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (layarPendek) Modifier.verticalScroll(rememberScrollState())
+                if (layarPendek) Modifier.verticalScroll(pageScroll)
                 else Modifier
             )
             .padding(16.dp)

@@ -3899,3 +3899,45 @@ class TestTracebackChipBabak2:
         assert "errorJump = null" in src, (
             "chip run lama wajib hilang saat RUNNING baru — chip basi = bohong"
         )
+
+
+class TestPipSwipeTabsV1019:
+    """Swipe hanya untuk dua sibling page INSTALL MODULES; tap tetap hidup."""
+
+    def _src(self) -> str:
+        return strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+
+    def test_pager_satu_sumber_state_dan_dua_page(self):
+        src = self._src()
+        assert "rememberPagerState" in src and "HorizontalPager" in src
+        assert "pageCount = { PipTab.values().size }" in src
+        assert 'mutableStateOf("LIBRARY")' not in src, (
+            "activeTab string lama membuat sumber state kedua"
+        )
+        assert "pagerState.currentPage" in src
+
+    def test_tap_tab_tetap_menggerakkan_pager(self):
+        src = self._src()
+        assert 'TabBox("LIBRARY"' in src and "selectPipTab(PipTab.LIBRARY)" in src
+        assert 'TabBox("MANUAL INSTALL"' in src and "selectPipTab(PipTab.MANUAL)" in src
+        assert "animateScrollToPage(tab.ordinal)" in src
+
+    def test_mapping_page_tidak_tertukar(self):
+        src = self._src()
+        pager = src[src.find("HorizontalPager"):]
+        assert "PipTab.values()[page]" in pager
+        assert "PipTab.LIBRARY -> LibraryTab(" in pager
+        assert "PipTab.MANUAL -> ManualTab(" in pager
+
+    def test_state_scroll_dipertahankan_di_parent(self):
+        src = self._src()
+        assert "val libraryListState = rememberLazyListState()" in src
+        assert "val manualPageScroll = rememberScrollState()" in src
+        assert "listState = libraryListState" in src
+        assert "state = listState" in src
+        assert "pageScroll = manualPageScroll" in src
+        assert "verticalScroll(pageScroll)" in src
+
+    def test_pager_tidak_bocor_ke_editor_atau_diagnostics(self):
+        assert "HorizontalPager" not in read(UI / "workbench/WorkbenchScreen.kt")
+        assert "HorizontalPager" not in read(UI / "settings/DiagnosticsScreen.kt")
