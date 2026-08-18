@@ -581,7 +581,12 @@ fun TerminalScreen(
                                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                                         "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
                                     )
-                                    onGotoEditorLine.invoke(hit.fileName, hit.line)
+                                    // ?.invoke: parameter nullable; smart-cast
+                                    // TIDAK berlaku (cek null terjadi di
+                                    // ekspresi `val hit` — compiler tak melacak
+                                    // korelasi antar variabel). CI merah
+                                    // 32107733402 = pelajaran kelas ini.
+                                    onGotoEditorLine?.invoke(hit.fileName, hit.line)
                                 }
                             )
                         } else {
