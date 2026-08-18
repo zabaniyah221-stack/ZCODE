@@ -140,7 +140,7 @@ fun TerminalScreen(
     var pendingJump by remember { mutableStateOf<Pair<String, Int>?>(null) }
     // UAT babak-2 (2026-08-18): link inline TIDAK render di device (baris
     // putih polos = hit null; screenshot user). Jalur kedua yang kebal
-    // masalah pointer/seleksi/render inline: CHIP "Ke baris error" di atas
+    // masalah pointer/seleksi/render inline: CHIP "Ke sumber error utama" di atas
     // output saat script FAILED — target tap besar, ramah jempol 720p.
     // Sumber data sama (TracebackParser), UI beda jalur total.
     var errorJump by remember {
@@ -151,7 +151,7 @@ fun TerminalScreen(
     // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
     // jadi tanpa ini renderer tidak punya alasan untuk disusun ulang.
     var bufferVersion by remember { mutableIntStateOf(0) }
-    // Scan chip 'Ke baris error' (UAT babak-2). DIPINDAH ke SETELAH deklarasi
+    // Scan chip 'Ke sumber error utama' (UAT babak-2). DIPINDAH ke SETELAH deklarasi
     // bufferVersion: CI 32121414855 merah karena LaunchedEffect merujuk
     // bufferVersion 30 baris SEBELUM deklarasinya — Kotlin menolak forward
     // reference variabel lokal (beda dgn property kelas). Kelas bug urutan
@@ -340,7 +340,7 @@ fun TerminalScreen(
         logger = rl
         Breadcrumb.log("LOGGER_OK", runId)
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
-        if (showPythonIndicator) appendToTerminal("sys", "\u2699 Menyalakan Python\u2026\n")
+        if (showPythonIndicator) appendToTerminal("sys", "\u2026 Menyalakan Python\n")
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
         Breadcrumb.log("SESSION_START_CALL")
         val activeSession = ExecutionEngine.startInteractiveSession(
@@ -455,7 +455,7 @@ fun TerminalScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "◀ Back",
+                        "← Back",
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                         modifier = Modifier
@@ -564,7 +564,7 @@ fun TerminalScreen(
                 .clickable { focusRequester.requestFocus() }
                 .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)
         ) {
-            // Chip "Ke baris error" (UAT babak-2 2026-08-18) — jalur tap
+            // Chip "Ke sumber error utama" (UAT babak-2 2026-08-18) — jalur tap
             // alternatif yang tak bergantung render/pointer baris inline.
             errorJump?.let { ej ->
                 Row(
@@ -581,7 +581,7 @@ fun TerminalScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "\u26A1 Ke baris error \u2192 ${ej.fileName}:${ej.line}",
+                        "\u2192 Ke sumber error utama \u00B7 ${ej.fileName}:${ej.line}",
                         color = Color(0xFF6FB1FF),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 12.sp

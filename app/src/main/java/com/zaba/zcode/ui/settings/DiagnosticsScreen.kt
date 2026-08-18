@@ -179,7 +179,7 @@ fun DiagnosticsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "◀ Back",
+                            "← Back",
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 14.sp,
                             modifier = Modifier

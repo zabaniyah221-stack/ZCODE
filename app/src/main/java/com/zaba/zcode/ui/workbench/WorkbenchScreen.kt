@@ -1179,9 +1179,9 @@ private fun PaletteDialog(
     fun attemptJump() {
         val target = filter.toIntOrNull()
         lineError = when {
-            filter.isBlank() -> "Ketik nomor barisnya dulu ya 😅"
+            filter.isBlank() -> "Ketik nomor barisnya dulu."
             target == null -> "Itu bukan angka — isi nomor baris ya (1..$totalLines)"
-            target !in 1..totalLines -> "Baris $target nggak ada njiir — file lo cuma $totalLines baris 😭"
+            target !in 1..totalLines -> "Baris $target tidak tersedia — file ini hanya memiliki $totalLines baris."
             else -> {
                 onGotoLine(target)
                 onDismiss()
@@ -1410,10 +1410,10 @@ private fun TodoResultsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("✅ TODO / FIXME / HACK (${items.size})", fontSize = 14.sp) },
+        title = { Text("TODO / FIXME / HACK (${items.size})", fontSize = 14.sp) },
         text = {
             if (items.isEmpty()) {
-                Text("Tidak ada penanda TODO/FIXME/HACK di file aktif 🎉", fontSize = 12.sp, color = Color.Gray)
+                Text("Tidak ada penanda TODO/FIXME/HACK di file aktif.", fontSize = 12.sp, color = Color.Gray)
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth().height(240.dp)) {
                     items(items) { item ->
@@ -1455,7 +1455,7 @@ private fun SnippetsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("📜 Snippet Pack — pilih template", fontSize = 14.sp) },
+        title = { Text("SNIPPET PACK — pilih template", fontSize = 14.sp) },
         text = {
             Column(
                 modifier = Modifier
@@ -1515,7 +1515,7 @@ private fun ProblemsBanner(
 
     val bgColor = Color(0x1AFF4B4B)
     val textColor = Color(0xFFFFB4AB)
-    val icon = "❌"
+    val icon = "×"
 
     Surface(
         color = bgColor,
@@ -1594,7 +1594,7 @@ private fun ProblemsBanner(
                                 .padding(vertical = 4.dp)
                         ) {
                             Text(
-                                text = "❌ Baris ${problem.line}: ",
+                                text = "× Baris ${problem.line}: ",
                                 fontSize = 11.sp,
                                 color = textColor,
                                 fontWeight = FontWeight.Bold
@@ -1628,17 +1628,17 @@ fun OutlineDialog(
         title = { Text("Outline / Symbols", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
         text = {
             if (items.isEmpty()) {
-                Text("Tidak ada kelas atau fungsi ditemukan njiir 🤷", fontSize = 13.sp)
+                Text("Tidak ada kelas atau fungsi yang ditemukan.", fontSize = 13.sp)
             } else {
                 Column(modifier = Modifier.heightIn(max = 280.dp)) {
                     Text("Pilih simbol untuk lompat ke baris:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(items) { item ->
                             val icon = when (item.type) {
-                                "CLASS" -> "🗂️"
-                                "FUNC" -> "λ"
-                                "METHOD" -> "⚙️"
-                                else -> "⚓"
+                                "CLASS" -> "C"
+                                "FUNC" -> "ƒ"
+                                "METHOD" -> "m"
+                                else -> "·"
                             }
                             Row(
                                 modifier = Modifier

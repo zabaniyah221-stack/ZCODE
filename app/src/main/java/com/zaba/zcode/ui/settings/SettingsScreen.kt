@@ -65,7 +65,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "◀ Back",
+                        "← Back",
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                         modifier = Modifier
@@ -98,9 +98,9 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             // ===========================================================
-            // 🎨 Tampilan / Appearance
+            // Tampilan / Appearance
             // ===========================================================
-            item { SettingsGroupHeader("🎨 Tampilan / Appearance", expanded = "tampilan" in openSections, onToggle = { toggle("tampilan") }) }
+            item { SettingsGroupHeader("Tampilan / Appearance", expanded = "tampilan" in openSections, onToggle = { toggle("tampilan") }) }
 
             // F1.5: Pemilih tema yang jelas (RETRO/DRACULA/TOKYO_NIGHT)
             if ("tampilan" in openSections) item {
@@ -127,9 +127,9 @@ fun SettingsScreen(
             item { SettingsDivider() }
 
             // ===========================================================
-            // ⌨️ Editor
+            // Editor
             // ===========================================================
-            item { SettingsGroupHeader("⌨️ Editor", expanded = "editor" in openSections, onToggle = { toggle("editor") }) }
+            item { SettingsGroupHeader("Editor", expanded = "editor" in openSections, onToggle = { toggle("editor") }) }
 
             // F1.6: Cerminkan toggle Symbol bar
             if ("editor" in openSections) item {
@@ -164,9 +164,9 @@ fun SettingsScreen(
             item { SettingsDivider() }
 
             // ===========================================================
-            // ▶️ Run & Terminal
+            // Run & Terminal
             // ===========================================================
-            item { SettingsGroupHeader("▶️ Run & Terminal", expanded = "run" in openSections, onToggle = { toggle("run") }) }
+            item { SettingsGroupHeader("Run & Terminal", expanded = "run" in openSections, onToggle = { toggle("run") }) }
 
             // F1.6: Cerminkan toggle Auto Trim on Run
             if ("run" in openSections) item {
@@ -199,9 +199,9 @@ fun SettingsScreen(
             item { SettingsDivider() }
 
             // ===========================================================
-            // 🔒 Privasi & Data
+            // Privasi & Data
             // ===========================================================
-            item { SettingsGroupHeader("🔒 Privasi & Data", expanded = "privasi" in openSections, onToggle = { toggle("privasi") }) }
+            item { SettingsGroupHeader("Privasi & Data", expanded = "privasi" in openSections, onToggle = { toggle("privasi") }) }
 
             // F1.4: Clear All dipindah dari TOOLS ke sini (destruktif, bukan tool)
             if ("privasi" in openSections) item {
@@ -215,9 +215,9 @@ fun SettingsScreen(
             item { SettingsDivider() }
 
             // ===========================================================
-            // ℹ️ Tentang
+            // Tentang
             // ===========================================================
-            item { SettingsGroupHeader("ℹ️ Tentang", expanded = "tentang" in openSections, onToggle = { toggle("tentang") }) }
+            item { SettingsGroupHeader("Tentang", expanded = "tentang" in openSections, onToggle = { toggle("tentang") }) }
 
             if ("tentang" in openSections) item {
                 // v1.0.18: JANGAN hardcode versi — layar ini sempat berbohong

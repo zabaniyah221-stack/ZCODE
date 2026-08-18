@@ -3877,7 +3877,7 @@ class TestTracebackChipBabak2:
     def test_chip_terpasang(self):
         src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
         assert "TRACEBACK_CHIP" in src, "breadcrumb saat chip dibuat wajib"
-        assert "Ke baris error" in src, "chip harus terlihat jelas"
+        assert "Ke sumber error utama" in src, "chip harus menjelaskan fungsi frame terdalam"
         assert 'via=chip' in src, (
             "breadcrumb jump wajib menyebut jalur (chip vs inline) — "
             "UAT berikutnya harus bisa membedakan jalur mana yang hidup"

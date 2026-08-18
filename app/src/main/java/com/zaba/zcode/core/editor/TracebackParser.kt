@@ -70,7 +70,7 @@ object TracebackParser {
         val m = NAME_ERROR.find(line) ?: return null
         val name = m.groupValues[1]
         val imp = IMPORT_ALIASES[name] ?: return null
-        return "\uD83D\uDCA1 Mungkin maksudmu: $imp"
+        return "i Mungkin maksudmu: $imp"
     }
 
     /** Nama modul akar dari hint (utk cek terpasang): "plt" -> "matplotlib". */

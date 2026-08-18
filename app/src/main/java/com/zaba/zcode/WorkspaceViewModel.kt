@@ -505,19 +505,19 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         val resolver = getApplication<Application>().contentResolver
         return try {
             val input = resolver.openInputStream(uri)
-                ?: return false to "File tidak bisa dibaca 😢"
+                ?: return false to "File tidak bisa dibaca."
             val bytes = input.use { readCapped(it, FileManager.MAX_FILE_BYTES) }
                 ?: return false to "File terlalu besar (maks 512 KB)"
             if (bytes.isEmpty()) return false to "File kosong — tidak ada yang diimport"
             if (bytes.contains(0.toByte())) {
-                return false to "Itu file biner, bukan file teks 🙈"
+                return false to "File biner tidak dapat dibuka sebagai teks."
             }
             val text = String(bytes, Charsets.UTF_8)
             // UTF-8 decode Kotlin tidak melempar error tapi menyisipkan U+FFFD
             // untuk byte rusak — tolak agar source code tidak corrupt diam-diam.
             // Char(0xFFFD) eksplisit (bukan literal U+FFFD mentah di source) agar
             // tahan editor/tooling yang bisa merusak karakter replacement di file.
-            if (text.contains('\uFFFD')) return false to "Encoding file bukan UTF-8 🙈"
+            if (text.contains('\uFFFD')) return false to "Encoding file bukan UTF-8."
 
             val displayName = resolver.query(uri, null, null, null, null)?.use { cursor ->
                 val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -592,13 +592,13 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     fun saveActiveToSource(): Pair<Boolean, String> {
         val name = activeFile ?: return false to "Tidak ada file aktif"
         val uriStr = externalOrigins[name]
-            ?: return false to "File internal tersimpan otomatis di workspace 🙂"
+            ?: return false to "File internal tersimpan otomatis di workspace."
         return try {
             val resolver = getApplication<Application>().contentResolver
             resolver.openOutputStream(Uri.parse(uriStr), "wt")?.use { out ->
                 out.write(activeCode.toByteArray(Charsets.UTF_8))
             } ?: return false to "Gagal membuka stream tulis"
-            true to "Disimpan ke file asli ✔"
+            true to "Disimpan ke file asli."
         } catch (e: SecurityException) {
             false to "Izin tulis dicabut Android — pakai Save as"
         } catch (e: Exception) {
@@ -628,7 +628,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             }
             externalOrigins[name] = uri.toString()
             persistExternalOrigins()
-            true to "Disimpan sebagai file device ✔"
+            true to "Disimpan sebagai file device."
         } catch (e: Exception) {
             false to "Gagal save as: ${e.message ?: "error tidak dikenal"}"
         }

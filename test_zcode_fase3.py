@@ -120,8 +120,9 @@ class TestPaletteRedesign:
     def test_validasi_go_to_line(self):
         txt = read(WORKBENCH)
         assert "attemptJump" in txt and "lineError" in txt
-        # Pesan receh hasil diskusi (tone playful disepakati user)
-        assert "Baris $target nggak ada njiir" in txt, "pesan receh go-to-line hilang"
+        # Batch glyph v1.0.19: pesan tetap jelas tetapi tanpa emoji/dekorasi OEM.
+        assert "Baris $target tidak tersedia" in txt
+        assert "file ini hanya memiliki $totalLines baris" in txt
 
     def test_mode_rahasia_tetap_hidup(self):
         txt = read(WORKBENCH)
