@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -179,6 +180,10 @@ fun AboutScreen(
             )
             Box(
                 modifier = Modifier
+                    // Kerapian landscape (UAT 2026-08-18): tanpa batas ini,
+                    // kotak license melar 1600px — pita teks panjang canggung.
+                    // Portrait (±360dp) tak pernah menyentuh batas 480dp.
+                    .widthIn(max = 480.dp)
                     .fillMaxWidth()
                     .height(150.dp)
                     .background(
@@ -212,7 +217,9 @@ fun AboutScreen(
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                // Kerapian landscape (UAT 2026-08-18): batas lebar sama dgn
+                // kotak license — kolom rapi di tengah, portrait tak berubah.
+                modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth()
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),

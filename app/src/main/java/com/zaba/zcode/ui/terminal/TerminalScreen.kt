@@ -571,24 +571,46 @@ fun TerminalScreen(
                                 }
                         else null
                         if (hit != null) {
-                            Text(
-                                text = ansiCache.render(abs, lineText),
-                                fontFamily = resolvedFontFamily,
-                                fontSize = fontSizeSp,
-                                lineHeight = lineHeightSp,
-                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                                modifier = Modifier.clickable {
-                                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
-                                        "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
-                                    )
-                                    // ?.invoke: parameter nullable; smart-cast
-                                    // TIDAK berlaku (cek null terjadi di
-                                    // ekspresi `val hit` — compiler tak melacak
-                                    // korelasi antar variabel). CI merah
-                                    // 32107733402 = pelajaran kelas ini.
-                                    onGotoEditorLine?.invoke(hit.fileName, hit.line)
-                                }
-                            )
+                            // UAT 2026-08-18: tap tidak pernah sampai (keyboard
+                            // malah terbuka = tap jatuh ke lantai terminal).
+                            // Dua tersangka, dua penangkal + satu mata-mata:
+                            // (1) DisableSelection — baris link keluar dari
+                            //     arena gesture SelectionContainer (kelas
+                            //     Compose: handler seleksi berebut pointer dgn
+                            //     clickable anak). Harga jujur: baris ini tak
+                            //     bisa diseleksi manual — tombol Salin/Bagikan
+                            //     tetap menyalin semuanya.
+                            // (2) warna link biru + underline — affordance
+                            //     sekaligus alat diagnosa: kalau baris TIDAK
+                            //     biru di device berarti kondisi hit gagal
+                            //     (bukan soal tap), lapisan lain.
+                            // (3) breadcrumb TRACEBACK_LINK saat baris DIRENDER
+                            //     (sekali per baris via remember) — memisahkan
+                            //     "link tak pernah ada" dari "tap tak sampai".
+                            androidx.compose.runtime.remember(abs, lineText) {
+                                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                    "TRACEBACK_LINK", "${hit.fileName}:${hit.line}"
+                                )
+                                true
+                            }
+                            androidx.compose.foundation.text.selection.DisableSelection {
+                                Text(
+                                    text = ansiCache.render(abs, lineText),
+                                    color = Color(0xFF6FB1FF),
+                                    fontFamily = resolvedFontFamily,
+                                    fontSize = fontSizeSp,
+                                    lineHeight = lineHeightSp,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                    modifier = Modifier.clickable {
+                                        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                            "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
+                                        )
+                                        // ?.invoke: parameter nullable; smart-cast
+                                        // TIDAK berlaku (CI 32107733402).
+                                        onGotoEditorLine?.invoke(hit.fileName, hit.line)
+                                    }
+                                )
+                            }
                         } else {
                             Text(
                                 text = ansiCache.render(abs, lineText),

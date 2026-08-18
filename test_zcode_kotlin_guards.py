@@ -3704,3 +3704,34 @@ class TestProjectMiniA7:
         assert 'companionAssets = listOf("samples/helper_util.py")' in lib, (
             "Project Mini harus mendeklarasikan helper sebagai companion"
         )
+
+
+class TestTracebackTapFixUAT0818:
+    """UAT 2026-08-18: tap baris traceback tidak pernah sampai — tap ditelan
+    SelectionContainer (handler seleksi berebut pointer dgn clickable anak;
+    gejala di device: keyboard terbuka = tap tembus ke lantai fokus).
+    Penangkal: DisableSelection utk baris link + warna link (affordance +
+    alat diagnosa) + breadcrumb TRACEBACK_LINK saat render."""
+
+    def test_baris_link_keluar_dari_arena_seleksi(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = src.find("TracebackParser.parse")
+        assert i > 0
+        jendela = src[i:i + 2500]
+        assert "DisableSelection" in jendela, (
+            "baris traceback tappable WAJIB dibungkus DisableSelection — "
+            "di dalam SelectionContainer, clickable anak kalah rebutan "
+            "pointer (bukti UAT: tap membuka keyboard, bukan jump)"
+        )
+
+    def test_link_terlihat_dan_terlacak(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "TRACEBACK_LINK" in src, (
+            "breadcrumb saat RENDER wajib — memisahkan 'link tak pernah "
+            "dibuat' dari 'tap tak sampai' pada UAT berikutnya"
+        )
+        i = src.find("DisableSelection")
+        assert "Color(0xFF6FB1FF)" in src[i - 1500:i + 1500], (
+            "warna link biru = affordance + diagnosa (tak biru = kondisi "
+            "hit gagal, lapisan lain)"
+        )
