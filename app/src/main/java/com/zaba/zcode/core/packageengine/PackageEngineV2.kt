@@ -4,6 +4,7 @@ import android.content.Context
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.logging.SemanticLog
 import com.zaba.zcode.core.logging.SemanticLogKind
 import org.json.JSONArray
 import org.json.JSONObject
@@ -799,7 +800,10 @@ class PackageEngineV2(private val context: Context) {
     // UNINSTALL / SUPPORT / INSTALLED
     // ------------------------------------------------------------------
 
-    fun uninstall(canonicalName: String, onLog: (String) -> Unit): Pair<Boolean, String> {
+    fun uninstall(
+        canonicalName: String,
+        onLog: (SemanticLog) -> Unit
+    ): Pair<Boolean, String> {
         val tx = TransactionManager(context)
         val result = tx.uninstall(canonicalName, onLog)
         if (result.first) {

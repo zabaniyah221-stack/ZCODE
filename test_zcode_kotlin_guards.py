@@ -4466,3 +4466,63 @@ class TestSemanticPackageLogsV1019:
         skills = read(ROOT / "docs/SKILLS.md")
         assert "SKILL 19 — Makna log harus bertipe" in skills
         assert "STOP` berbeda dari `FAIL" in skills
+
+
+class TestUninstallHardeningV1019:
+    """Uninstall tetap sederhana, tetapi jujur, serial, dan terobservasi."""
+
+    def test_telemetry_tepat_satu_owner(self):
+        engine = strip_kt_comments(read(APP / "core/packageengine/PackageEngineV2.kt"))
+        tx = strip_kt_comments(read(APP / "core/packageengine/TransactionManager.kt"))
+        assert engine.count('TelemetryStore.increment("uninstall_count")') == 1, (
+            "owner luar PackageEngine harus mencatat tepat satu uninstall sukses"
+        )
+        assert 'TelemetryStore.increment("uninstall_count")' not in tx, (
+            "TransactionManager dulu menggandakan telemetry uninstall"
+        )
+
+    def test_uninstall_log_typed_bukan_string(self):
+        engine = strip_kt_comments(read(APP / "core/packageengine/PackageEngineV2.kt"))
+        tx = strip_kt_comments(read(APP / "core/packageengine/TransactionManager.kt"))
+        assert "onLog: (SemanticLog) -> Unit" in engine
+        assert "onLog: (SemanticLog) -> Unit" in tx
+        assert 'SemanticLogKind.INFO' in tx
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "appendMessage(event.text, event.kind)" in pip
+        assert "appendLegacyLog(line)" not in pip
+
+    def test_dialog_jujur_reverse_dependency_belum_ada(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "pendingUninstall" in pip
+        assert 'Text("Uninstall ${target.displayName}?"' in pip
+        assert "belum memeriksa reverse dependency" in pip
+        assert "mungkin berhenti bekerja" in pip
+        assert 'Text("Batal")' in pip
+        assert 'Text("Uninstall", color = Color(' in pip
+        # Tap tombol detail hanya membuka konfirmasi; tidak boleh langsung hapus.
+        start = pip.index("onUninstall = {")
+        block = pip[start:pip.index("onSupport =", start)]
+        assert "pendingUninstall = pkg" in block
+        assert "doUninstall" not in block
+
+    def test_breadcrumb_request_ok_fail(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        for event in ("PKG_UNINSTALL_REQUEST", "PKG_UNINSTALL_OK", "PKG_UNINSTALL_FAIL"):
+            assert f'"{event}"' in pip, f"breadcrumb uninstall hilang: {event}"
+
+    def test_uninstall_tidak_balapan_dengan_operasi_package(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        start = pip.index("fun doUninstall(")
+        block = pip[start:pip.index("fun doSupportRequest", start)]
+        assert "isInstalling || isAnalyzing || PackageEngineV2.isBusy()" in block
+        assert "Tunggu operasi package" in block
+        assert "return" in block
+
+    def test_tidak_ada_auto_clean_dependency(self):
+        tx = strip_kt_comments(read(APP / "core/packageengine/TransactionManager.kt"))
+        start = tx.index("fun uninstall(")
+        block = tx[start:]
+        for dangerous in ("orphan", "reverseDependencies", "removeUnused"):
+            assert dangerous not in block, (
+                "v1.0.19 belum punya ownership graph; jangan auto-clean dependency"
+            )

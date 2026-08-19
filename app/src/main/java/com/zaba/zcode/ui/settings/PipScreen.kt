@@ -131,6 +131,7 @@ fun PipScreen(
     var detailsAnalysis by remember { mutableStateOf<CompatibilityEngine.Analysis?>(null) }
     var pendingSample by remember { mutableStateOf<SampleEntry?>(null) }
     var missingSamplePackages by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingUninstall by remember { mutableStateOf<PackageDetails?>(null) }
 
     // Manual install
     var packageName by remember { mutableStateOf("") }
@@ -421,11 +422,28 @@ fun PipScreen(
     }
 
     fun doUninstall(canonical: String) {
+        if (isInstalling || isAnalyzing || PackageEngineV2.isBusy()) {
+            appendMessage(
+                "Tunggu operasi package yang sedang berjalan sebelum uninstall.",
+                SemanticLogKind.WARN
+            )
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "PKG_UNINSTALL_FAIL", "$canonical: engine busy"
+            )
+            return
+        }
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+            "PKG_UNINSTALL_REQUEST", canonical
+        )
         scope.launch(Dispatchers.Default) {
-            val (ok, msg) = engine.uninstall(canonical) { line ->
-                scope.launch { appendLegacyLog(line) }
+            val (ok, msg) = engine.uninstall(canonical) { event ->
+                scope.launch { appendMessage(event.text, event.kind) }
             }
             withContext(Dispatchers.Main) {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    if (ok) "PKG_UNINSTALL_OK" else "PKG_UNINSTALL_FAIL",
+                    if (ok) canonical else "$canonical: $msg"
+                )
                 appendMessage(
                     if (ok) "Uninstall $canonical berhasil." else msg,
                     if (ok) SemanticLogKind.OK else SemanticLogKind.FAIL
@@ -495,8 +513,7 @@ fun PipScreen(
                 installFromLibrary(pkg.name)
             },
             onUninstall = {
-                selectedPackage = null
-                doUninstall(pkg.name.lowercase().replace("_", "-"))
+                pendingUninstall = pkg
             },
             onSupport = {
                 selectedPackage = null
@@ -529,6 +546,35 @@ fun PipScreen(
                     pendingSample = null
                     selectedPackage = null
                     onOpenSample(entry)
+                }
+            )
+        }
+        pendingUninstall?.let { target ->
+            val canonical = target.name.lowercase().replace("_", "-")
+            AlertDialog(
+                onDismissRequest = { pendingUninstall = null },
+                title = { Text("Uninstall ${target.displayName}?", fontSize = 16.sp) },
+                text = {
+                    Text(
+                        "Package ini akan dihapus dari environment ZCODE.\n\n" +
+                            "ZCODE belum memeriksa reverse dependency. Package lain " +
+                            "yang masih membutuhkannya mungkin berhenti bekerja sampai " +
+                            "dependency ini dipasang kembali."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingUninstall = null
+                        selectedPackage = null
+                        doUninstall(canonical)
+                    }) {
+                        Text("Uninstall", color = Color(0xFFFF6B6B))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingUninstall = null }) {
+                        Text("Batal")
+                    }
                 }
             )
         }
