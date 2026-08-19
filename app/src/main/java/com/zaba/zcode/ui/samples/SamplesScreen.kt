@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import androidx.compose.runtime.getValue
@@ -150,36 +148,22 @@ fun SamplesScreen(
         }
     }
 
-    // ---- Dialog requiresPackage (Gerbong B) ----
-    // Dua jalan keluar, dua-duanya sah dan jujur:
-    // - "Ke Install Modules": jalur yang disarankan.
-    // - "Buka saja": user tetap boleh melihat/mengedit kodenya — sample
-    //   dibuat, tapi dia SUDAH tahu akan gagal saat Run sebelum install.
+    // Dependency gate dipakai bersama Detail Library: pesan dan tiga keputusan
+    // user tidak boleh berbeda hanya karena pintu masuknya berbeda.
     pendingEntry?.let { entry ->
-        AlertDialog(
-            onDismissRequest = { pendingEntry = null },
-            title = { Text("Butuh paket dulu", fontSize = 16.sp) },
-            text = {
-                Text(
-                    "Sample \"${entry.title}\" butuh paket yang belum " +
-                        "terpasang: ${missingPkgs.joinToString(", ")}.\n\n" +
-                        "Instal dulu lewat INSTALL MODULES, atau buka saja " +
-                        "kodenya (akan gagal saat Run sebelum paket aktif)."
-                )
+        SampleRequirementDialog(
+            entry = entry,
+            missingPackages = missingPkgs,
+            onDismiss = { pendingEntry = null },
+            onInstallFirst = {
+                Breadcrumb.log("SAMPLES_KE_INSTALL", missingPkgs.joinToString(","))
+                pendingEntry = null
+                onGoToInstallModules()
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    Breadcrumb.log("SAMPLES_KE_INSTALL", missingPkgs.joinToString(","))
-                    pendingEntry = null
-                    onGoToInstallModules()
-                }) { Text("Ke Install Modules") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    Breadcrumb.log("SAMPLES_BUKA_SAJA", entry.id)
-                    pendingEntry = null
-                    onPick(entry)
-                }) { Text("Buka saja") }
+            onOpenAnyway = {
+                Breadcrumb.log("SAMPLES_BUKA_SAJA", entry.id)
+                pendingEntry = null
+                onPick(entry)
             }
         )
     }

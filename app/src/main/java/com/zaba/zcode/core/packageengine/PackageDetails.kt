@@ -32,8 +32,10 @@ data class PackageDetails(
     // Semua opsional: entri lama tanpa field ini tetap valid (fallback UI).
     val longDescription: String = "",   // WHAT IS IT — prosa dari sumber resmi
     val whyUse: String = "",            // WHY USE IT
-    val example: String = "",           // HOW TO USE — snippet yang jalan di ZCODE
-    val whoMadeIt: String = "",         // WHO MADE IT — asal + lisensi (prosa)
+    val example: String = "",           // HOW TO USE — snippet pendek yang jalan di ZCODE
+    /** ID SampleEntry untuk tombol "Coba contoh lengkap"; null = belum ada. */
+    val sampleId: String? = null,
+    val whoMadeIt: String = "",          // WHO MADE IT — asal + lisensi (prosa)
     val sources: List<SourceRef> = emptyList(), // rujukan tap-able per seksi
     val curatedAt: String = ""          // tanggal kurasi (kejujuran konten beku)
 ) {
@@ -62,6 +64,7 @@ data class PackageDetails(
         if (longDescription.isNotBlank()) o.put("longDescription", longDescription)
         if (whyUse.isNotBlank()) o.put("whyUse", whyUse)
         if (example.isNotBlank()) o.put("example", example)
+        if (!sampleId.isNullOrBlank()) o.put("sampleId", sampleId)
         if (whoMadeIt.isNotBlank()) o.put("whoMadeIt", whoMadeIt)
         if (sources.isNotEmpty()) o.put("sources", JSONArray(sources.map { it.toJson() }))
         if (curatedAt.isNotBlank()) o.put("curatedAt", curatedAt)
@@ -98,6 +101,8 @@ data class PackageDetails(
                 longDescription = o.optString("longDescription", ""),
                 whyUse = o.optString("whyUse", ""),
                 example = o.optString("example", ""),
+                sampleId = if (o.isNull("sampleId")) null
+                    else o.optString("sampleId", "").takeIf { it.isNotBlank() },
                 whoMadeIt = o.optString("whoMadeIt", ""),
                 sources = run {
                     val arr = o.optJSONArray("sources") ?: return@run emptyList()

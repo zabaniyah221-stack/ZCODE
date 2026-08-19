@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.samples.SampleEntry
 import com.zaba.zcode.ui.samples.SamplesScreen
 import com.zaba.zcode.ui.settings.AboutScreen
 import com.zaba.zcode.ui.settings.DiagnosticsScreen
@@ -52,6 +53,19 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
     // FIX: `applicationContext` tidak resolvable di scope composable —
     // ambil dari LocalContext.current (compile error sebelumnya: unresolved reference)
     val appContext = LocalContext.current.applicationContext
+
+    fun openSampleInEditor(entry: SampleEntry) {
+        val (ok, msg) = vm.createSampleFromAsset(
+            entry.assetPath,
+            entry.id,
+            companionAssets = entry.companionAssets
+        )
+        Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
+        if (ok && !nav.popBackStack("editor", inclusive = false)) {
+            nav.navigate("editor") { launchSingleTop = true }
+        }
+    }
+
     NavHost(navController = nav, startDestination = "editor") {
         composable("editor") {
             WorkbenchScreen(
@@ -72,14 +86,7 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
         composable("samples") {
             SamplesScreen(
                 onBack = { nav.navigateUp() },
-                onPick = { entry ->
-                    val (ok, msg) = vm.createSampleFromAsset(
-                        entry.assetPath, entry.id,
-                        companionAssets = entry.companionAssets // A7: file pendamping
-                    )
-                    Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
-                    if (ok) nav.navigateUp() // balik ke editor — vm.selectFile sudah aktif
-                },
+                onPick = ::openSampleInEditor,
                 // Gerbong B (v1.0.19): dialog "butuh paket X" → INSTALL MODULES
                 onGoToInstallModules = { nav.navigate("pip") }
             )
@@ -107,7 +114,8 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
         composable("pip") {
             PipScreen(
                 context = appContext,
-                onBack = { nav.navigateUp() }
+                onBack = { nav.navigateUp() },
+                onOpenSample = ::openSampleInEditor
             )
         }
         // DIAGNOSTICS (build #3): layar penuh sendiri, bukan kotak kecil di About.

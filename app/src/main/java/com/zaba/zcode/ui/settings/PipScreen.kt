@@ -69,6 +69,9 @@ import com.zaba.zcode.core.packageengine.PackageStatus
 import com.zaba.zcode.core.packageengine.RuntimeProbe
 import com.zaba.zcode.core.packageengine.SourceRef
 import com.zaba.zcode.core.packageengine.TelemetryStore
+import com.zaba.zcode.core.samples.SampleEntry
+import com.zaba.zcode.core.samples.SampleLibrary
+import com.zaba.zcode.ui.samples.SampleRequirementDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,7 +91,8 @@ private enum class PipTab { LIBRARY, MANUAL }
 @Composable
 fun PipScreen(
     context: android.content.Context,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenSample: (SampleEntry) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val repository = remember { PackageRepository(context) }
@@ -124,6 +128,8 @@ fun PipScreen(
     // Library details
     var selectedPackage by remember { mutableStateOf<PackageDetails?>(null) }
     var detailsAnalysis by remember { mutableStateOf<CompatibilityEngine.Analysis?>(null) }
+    var pendingSample by remember { mutableStateOf<SampleEntry?>(null) }
+    var missingSamplePackages by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Manual install
     var packageName by remember { mutableStateOf("") }
@@ -420,6 +426,33 @@ fun PipScreen(
         appendLog("\n${if (ok) "✅" else "❌"} $msg\n")
     }
 
+    fun requestOpenSample(sampleId: String) {
+        val entry = SampleLibrary.findSample(sampleId)
+        if (entry == null) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "LIBRARY_SAMPLE_MISSING", sampleId
+            )
+            Toast.makeText(context, "Contoh lengkap belum tersedia", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val missing = com.zaba.zcode.core.packageengine.InstalledPackages
+            .missingFrom(context, entry.requiresPackage)
+        if (missing.isEmpty()) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "LIBRARY_SAMPLE_OPEN", entry.id
+            )
+            selectedPackage = null
+            onOpenSample(entry)
+        } else {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "LIBRARY_SAMPLE_NEEDS_PACKAGE",
+                "${entry.id} -> ${missing.joinToString(",")}"
+            )
+            pendingSample = entry
+            missingSamplePackages = missing
+        }
+    }
+
     LaunchedEffect(Unit) {
         TelemetryStore.init(context)
         refreshInstalled()
@@ -454,8 +487,37 @@ fun PipScreen(
             onSupport = {
                 selectedPackage = null
                 doSupportRequest(pkg.name.lowercase().replace("_", "-"))
-            }
+            },
+            onOpenSample = ::requestOpenSample
         )
+        pendingSample?.let { entry ->
+            SampleRequirementDialog(
+                entry = entry,
+                missingPackages = missingSamplePackages,
+                onDismiss = { pendingSample = null },
+                onInstallFirst = {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "LIBRARY_SAMPLE_TO_INSTALL",
+                        missingSamplePackages.joinToString(",")
+                    )
+                    // Field Manual hanya menerima satu requirement. Untuk
+                    // sample multi-package, mulai dari paket pertama; setelah
+                    // aktif, gate akan menunjukkan sisanya saat sample dibuka lagi.
+                    packageName = missingSamplePackages.firstOrNull().orEmpty()
+                    pendingSample = null
+                    selectedPackage = null
+                    selectPipTab(PipTab.MANUAL)
+                },
+                onOpenAnyway = {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "LIBRARY_SAMPLE_OPEN_ANYWAY", entry.id
+                    )
+                    pendingSample = null
+                    selectedPackage = null
+                    onOpenSample(entry)
+                }
+            )
+        }
         return
     }
 
@@ -846,7 +908,8 @@ private fun PackageDetailScreen(
     onInstallTested: () -> Unit,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
-    onSupport: () -> Unit
+    onSupport: () -> Unit,
+    onOpenSample: (String) -> Unit,
 ) {
     val ctx = LocalContext.current
     fun openUrl(url: String) {
@@ -935,7 +998,14 @@ private fun PackageDetailScreen(
                     )
                 }
                 SourceChips(pkg.sources.filter { it.untuk == "how" }, ::openUrl)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
+            }
+
+            pkg.sampleId?.takeIf { it.isNotBlank() }?.let { sampleId ->
+                TextButton(onClick = { onOpenSample(sampleId) }) {
+                    Text("Coba contoh lengkap →", fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(8.dp))
             }
 
             // WHERE — milik kita, dirakit dari works/doesNotWork/risks + analysis

@@ -3387,9 +3387,12 @@ class TestRequiresPackageV1019:
             "SamplesScreen harus cek paket SEBELUM onPick"
         )
         assert "SAMPLES_BUTUH_PAKET" in src, "breadcrumb dialog wajib ada"
-        assert "Ke Install Modules" in src and "Buka saja" in src, (
-            "dialog harus menawarkan dua jalan jujur"
+        assert "SampleRequirementDialog(" in src, (
+            "SamplesScreen wajib memakai dependency gate bersama"
         )
+        dialog = read(UI / "samples/SampleRequirementDialog.kt")
+        for pilihan in ("Install dulu", "Buka kode", "Batal"):
+            assert pilihan in dialog, f"dialog kehilangan pilihan jujur: {pilihan}"
 
     def test_mainactivity_menyuntik_navigasi(self):
         src = read(ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt")
@@ -3941,3 +3944,102 @@ class TestPipSwipeTabsV1019:
     def test_pager_tidak_bocor_ke_editor_atau_diagnostics(self):
         assert "HorizontalPager" not in read(UI / "workbench/WorkbenchScreen.kt")
         assert "HorizontalPager" not in read(UI / "settings/DiagnosticsScreen.kt")
+
+
+class TestLibrarySampleBridgeV1019:
+    """Detail Library → sample lengkap: satu relasi, satu dependency gate.
+
+    Kelas regresi yang dijaga: sampleId yatim, link ke paket mustahil,
+    requiresPackage tidak cocok, JSON membuang relasi, dua layar kembali punya
+    dialog berbeda, atau callback tidak kembali ke editor.
+    """
+
+    def _catalog(self):
+        import json as _json
+        return _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+
+    def _sample_blocks(self):
+        lib = strip_kt_comments(read(APP / "core/samples/SampleLibrary.kt"))
+        found = list(re.finditer(r'\bSampleEntry\(\s*"([^"]+)"', lib))
+        blocks = {}
+        for i, match in enumerate(found):
+            end = found[i + 1].start() if i + 1 < len(found) else len(lib)
+            blocks[match.group(1)] = lib[match.start():end]
+        assert len(blocks) == len(found), "ID SampleEntry duplikat"
+        return blocks
+
+    def test_schema_sample_id_roundtrip(self):
+        src = strip_kt_comments(read(APP / "core/packageengine/PackageDetails.kt"))
+        assert "val sampleId: String? = null" in src
+        assert 'o.put("sampleId", sampleId)' in src, "toJson membuang sampleId"
+        assert 'o.isNull("sampleId")' in src
+        assert 'o.optString("sampleId", "").takeIf { it.isNotBlank() }' in src, (
+            "fromJson harus mengubah field hilang/kosong menjadi null"
+        )
+
+    def test_semua_link_valid_dan_requires_cocok(self):
+        blocks = self._sample_blocks()
+        linked = [p for p in self._catalog() if p.get("sampleId")]
+        assert len(linked) >= 11, f"minimal 11 sample lama terhubung; dapat {len(linked)}"
+        for pkg in linked:
+            sid = pkg["sampleId"]
+            assert sid in blocks, f"{pkg['name']}: sampleId yatim {sid}"
+            req_match = re.search(
+                r'requiresPackage\s*=\s*listOf\((.*?)\)', blocks[sid], re.S)
+            requires = set(re.findall(r'"([^"]+)"', req_match.group(1))) if req_match else set()
+            canonical = pkg["name"].lower().replace("_", "-").replace(".", "-")
+            assert canonical in requires, (
+                f"{pkg['name']} → {sid}, tetapi requiresPackage={sorted(requires)}"
+            )
+            assert pkg["status"] not in ("UNAVAILABLE", "INCOMPATIBLE"), (
+                f"{pkg['name']} {pkg['status']} tidak boleh menawarkan sample runnable"
+            )
+
+    def test_cryptography_belum_diklaim_dari_kartu(self):
+        by_name = {p["name"]: p for p in self._catalog()}
+        assert by_name["cryptography"]["status"] == "COMPATIBLE"
+        assert not by_name["cryptography"].get("sampleId"), (
+            "bukti device cryptography belum ditemukan — jangan klaim dari kartu"
+        )
+
+    def test_dependency_gate_dipakai_dua_pintu(self):
+        dialog = read(UI / "samples/SampleRequirementDialog.kt")
+        samples = strip_kt_comments(read(UI / "samples/SamplesScreen.kt"))
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        for text in ("Install dulu", "Buka kode", "Batal"):
+            assert text in dialog, f"keputusan '{text}' hilang dari dependency gate"
+        assert "SampleRequirementDialog(" in samples
+        assert "SampleRequirementDialog(" in pip
+        assert "AlertDialog(" not in samples, "SamplesScreen membuat dialog kedua lagi"
+        assert "LIBRARY_SAMPLE_NEEDS_PACKAGE" in pip
+        assert "InstalledPackages" in pip and ".missingFrom(context" in pip
+
+    def test_detail_dan_navigation_wired(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        main = strip_kt_comments(read(
+            ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt"))
+        assert 'Text("Coba contoh lengkap →"' in pip
+        assert "pkg.sampleId" in pip and "onOpenSample(sampleId)" in pip
+        assert "fun openSampleInEditor(entry: SampleEntry)" in main
+        assert "onOpenSample = ::openSampleInEditor" in main
+        assert 'popBackStack("editor", inclusive = false)' in main
+
+    def test_generator_menjaga_link(self):
+        src = read(ROOT / "tools/generate_catalog.py")
+        assert '"sampleId": SAMPLE_LINKS.get(c)' in src
+        start = src.index("SAMPLE_LINKS = {")
+        end = src.index("\n\n\ndef canonical", start)
+        block = src[start:end]
+        expected = {
+            "numpy": "numpy_basics", "requests": "requests_api",
+            "rich": "rich_table", "tqdm": "tqdm_progress",
+            "openpyxl": "openpyxl_excel", "pillow": "pillow_image",
+            "python-docx": "docx_laporan", "qrcode": "qr_generator",
+            "pandas": "pandas_nilai", "sympy": "sympy_aljabar",
+            "matplotlib": "matplotlib_chart",
+        }
+        for name, sid in expected.items():
+            assert f'"{name}": "{sid}"' in block, (
+                f"generator kehilangan link {name} → {sid}"
+            )

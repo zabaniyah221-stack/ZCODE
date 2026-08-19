@@ -933,6 +933,23 @@ TESTED_MANIFEST = {
 }
 
 
+# Satu sample utama per kartu Library. Sample lengkap tetap hidup di
+# SampleLibrary/assets; snippet `example` hanya contoh pendek.
+SAMPLE_LINKS = {
+    "numpy": "numpy_basics",
+    "requests": "requests_api",
+    "rich": "rich_table",
+    "tqdm": "tqdm_progress",
+    "openpyxl": "openpyxl_excel",
+    "pillow": "pillow_image",
+    "python-docx": "docx_laporan",
+    "qrcode": "qr_generator",
+    "pandas": "pandas_nilai",
+    "sympy": "sympy_aljabar",
+    "matplotlib": "matplotlib_chart",
+}
+
+
 def canonical(name: str) -> str:
     return name.lower().replace("_", "-").replace(".", "-")
 
@@ -992,6 +1009,7 @@ def main():
             "publisher": rich.get("publisher", ""),
             "source": rich.get("source", "https://pypi.org/project/%s/" % name),
             "sha256": rich.get("sha256"),
+            "sampleId": SAMPLE_LINKS.get(c),
         })
     packages.sort(key=lambda p: (p["category"], p["name"].lower()))
     (OUT / "packages.json").write_text(json.dumps(packages, indent=1, ensure_ascii=False), encoding="utf-8")

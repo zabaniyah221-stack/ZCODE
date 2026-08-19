@@ -2584,7 +2584,8 @@
     "url": "https://matplotlib.org/stable/users/explain/quick_start.html"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "matplotlib_chart"
  },
  {
   "name": "mpmath",
@@ -2897,7 +2898,8 @@
     "url": "https://www.petanikode.com/python-numpy/"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "numpy_basics"
  },
  {
   "name": "openpyxl",
@@ -2951,7 +2953,8 @@
     "url": "https://openpyxl.readthedocs.io/en/stable/"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "openpyxl_excel"
  },
  {
   "name": "optuna",
@@ -3060,7 +3063,8 @@
     "url": "https://belajarpython.com/tutorial/data-analytics-pandas-numpy-python/"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "pandas_nilai"
  },
  {
   "name": "peakutils",
@@ -3853,7 +3857,8 @@
    }
   ],
   "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "example": "from sympy import symbols, solve, expand\nx = symbols(\"x\")\nprint(\"ekspansi:\", expand((x + 2) ** 3))\nprint(\"akar    :\", solve(x**2 - 5*x + 6, x))"
+  "example": "from sympy import symbols, solve, expand\nx = symbols(\"x\")\nprint(\"ekspansi:\", expand((x + 2) ** 3))\nprint(\"akar    :\", solve(x**2 - 5*x + 6, x))",
+  "sampleId": "sympy_aljabar"
  },
  {
   "name": "tabulate",
@@ -5855,7 +5860,8 @@
    }
   ],
   "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "example": "from docx import Document\ndoc = Document()\ndoc.add_heading(\"Laporan ZCODE\", 0)\ndoc.add_paragraph(\"Dokumen Word dibuat dari HP.\")\ndoc.save(\"laporan.docx\")\nprint(\"tersimpan: laporan.docx\")"
+  "example": "from docx import Document\ndoc = Document()\ndoc.add_heading(\"Laporan ZCODE\", 0)\ndoc.add_paragraph(\"Dokumen Word dibuat dari HP.\")\ndoc.save(\"laporan.docx\")\nprint(\"tersimpan: laporan.docx\")",
+  "sampleId": "docx_laporan"
  },
  {
   "name": "python-magic",
@@ -7507,7 +7513,8 @@
     "url": "https://pillow.readthedocs.io"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "pillow_image"
  },
  {
   "name": "pyaudio",
@@ -7790,7 +7797,8 @@
    }
   ],
   "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "example": "import qrcode\nimg = qrcode.make(\"https://github.com/muzape28-blip/ZCODE\")\nimg.save(\"qr.png\")\nprint(\"tersimpan: qr.png\")"
+  "example": "import qrcode\nimg = qrcode.make(\"https://github.com/muzape28-blip/ZCODE\")\nimg.save(\"qr.png\")\nprint(\"tersimpan: qr.png\")",
+  "sampleId": "qr_generator"
  },
  {
   "name": "soundfile",
@@ -10619,7 +10627,8 @@
     "url": "https://github.com/Textualize/rich"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "rich_table"
  },
  {
   "name": "schedule",
@@ -11871,7 +11880,8 @@
     "url": "https://github.com/psf/requests"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "requests_api"
  },
  {
   "name": "requests_html",
@@ -12265,7 +12275,8 @@
     "url": "https://github.com/tqdm/tqdm"
    }
   ],
-  "curatedAt": "2026-08-15"
+  "curatedAt": "2026-08-15",
+  "sampleId": "tqdm_progress"
  },
  {
   "name": "tweepy",
