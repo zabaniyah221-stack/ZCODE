@@ -475,6 +475,23 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         validateSyntaxDebounced(newCode)
     }
 
+    /**
+     * Callback editor membawa ID dokumen agar event WebView yang sempat antre
+     * tidak menimpa file baru setelah user cepat berpindah tab.
+     */
+    fun updateCodeForFile(filename: String, newCode: String) {
+        if (filename == activeFile) {
+            updateCode(newCode)
+            return
+        }
+        if (filename !in openedFiles) return
+        if (fileDrafts[filename] == newCode) return
+        fileDrafts[filename] = newCode
+        scope.launch(Dispatchers.IO) {
+            runCatching { FileManager.saveFile(filesDir, filename, newCode) }
+        }
+    }
+
     fun createNewFile() {
         val existing = FileManager.listFiles(filesDir).map { it["name"] as String }.toSet()
         var index = 1

@@ -35,24 +35,31 @@ import com.zaba.zcode.WorkspaceViewModel
 @SuppressLint("ClickableViewAccessibility")
 @Composable
 fun EditorScreen(
+    documentId: String,
     code: String,
-    onCodeChange: (String) -> Unit,
+    onCodeChange: (documentId: String, code: String) -> Unit,
+    onHistoryStateChange: (canUndo: Boolean, canRedo: Boolean) -> Unit = { _, _ -> },
     webViewRef: MutableState<WebView?> = remember { mutableStateOf(null) },
     vm: WorkspaceViewModel? = null // F1.7 & F1.8: untuk apply editor settings ke CM6 bridge
 ) {
     // Menghindari stale state capture pada factory blok AndroidView
     val bridge = androidx.compose.runtime.remember {
         EditorBridge(
-            onChange = { onCodeChange(it) },
+            onChange = { id, changedCode -> onCodeChange(id, changedCode) },
+            onHistoryStateChange = { undo, redo -> onHistoryStateChange(undo, redo) },
             onReady = {}
         )
     }
 
     // Perbarui callback dan nilai code pada bridge setiap kali recomposition terjadi
     bridge.onChange = onCodeChange
+    bridge.onHistoryStateChange = onHistoryStateChange
     bridge.onReady = {
         webViewRef.value?.post {
-            webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+            webViewRef.value?.evaluateJavascript(
+                "openDocument(${escapeJavaScriptString(documentId)},${escapeJavaScriptString(code)});",
+                null
+            )
             applyEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
             webViewRef.value?.requestLayout()
             webViewRef.value?.invalidate()
@@ -195,7 +202,10 @@ fun EditorScreen(
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             if (!isTrustedEditorUrl(url)) return
-                            view?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+                            view?.evaluateJavascript(
+                                "openDocument(${escapeJavaScriptString(documentId)},${escapeJavaScriptString(code)});",
+                                null
+                            )
                             view?.post {
                                 view.requestLayout()
                                 view.invalidate()
@@ -280,13 +290,21 @@ fun escapeJavaScriptString(value: String): String {
 }
 
 class EditorBridge(
-    var onChange: (String) -> Unit,
+    var onChange: (documentId: String, code: String) -> Unit,
+    var onHistoryStateChange: (canUndo: Boolean, canRedo: Boolean) -> Unit = { _, _ -> },
     var onReady: () -> Unit = {}
 ) {
     @android.webkit.JavascriptInterface
-    fun onCodeChange(code: String) {
+    fun onCodeChange(documentId: String, code: String) {
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            onChange(code)
+            onChange(documentId, code)
+        }
+    }
+
+    @android.webkit.JavascriptInterface
+    fun onHistoryStateChange(canUndo: Boolean, canRedo: Boolean) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            onHistoryStateChange(canUndo, canRedo)
         }
     }
 

@@ -1006,14 +1006,14 @@ class TestEditorHandle:
         src = re.sub(r"^import .*\n", "", src, flags=re.M)
         i_scroll = src.find("horizontalScroll(")
         assert i_scroll > 0, "kereta tidak dapat digulir"
-        assert "tunnelKey" in src, "terowongan hilang"
-        # Terowongan wajib dirender SEBELUM Row yang menggulir, dan namanya
-        # tidak boleh muncul lagi setelah titik itu.
-        i_render = src.find("tunnelKey?.let")
+        assert "tunnelKeys" in src, "terowongan hilang"
+        # Semua tombol tetap dirender SEBELUM Row yang menggulir, dan daftar
+        # tunnel tidak boleh dipakai lagi setelah titik itu.
+        i_render = src.find("tunnelKeys.forEach")
         assert i_render > 0, "terowongan tidak pernah dirender"
         assert i_render < i_scroll, \
             "terowongan dirender setelah/di dalam area scroll"
-        assert "tunnelKey" not in src[i_scroll:], \
+        assert "tunnelKeys" not in src[i_scroll:], \
             "terowongan berada DI DALAM area scroll"
 
     def test_terpasang_di_terminal_dengan_ctrl_c_merah(self):
@@ -1021,26 +1021,25 @@ class TestEditorHandle:
         assert "EditorHandle(" in src, "EditorHandle belum dipakai di terminal"
         i = src.find("EditorHandle(")
         jendela = src[i:i + 900]
-        assert "tunnelKey" in jendela, "terminal tanpa terowongan ^C"
+        assert "tunnelKeys" in jendela, "terminal tanpa terowongan ^C"
         assert "^C" in jendela
         assert "danger = true" in jendela, "^C tidak ditandai bahaya (merah)"
 
-    def test_terpasang_di_editor_dengan_terowongan_referensi(self):
-        # SEJARAH DUA ERA — jangan hapus konteks ini:
-        # build #3: terowongan editor WAJIB kosong ("tak ada yang perlu
-        #   dihentikan" — slot itu semula khusus tombol stop terminal).
-        # v1.0.19 A5 (2026-08-18): terowongan diisi tombol "?" Reference
-        #   Card — pas semantik: referensi = jangkar yang tak ikut scroll
-        #   kereta simbol. Yang dijaga sekarang = terowongan HANYA boleh
-        #   berisi "?", bukan kembali jadi tombol stop/danger.
+    def test_terpasang_di_editor_dengan_undo_redo_referensi(self):
+        # Evolusi terowongan: awalnya kosong, lalu `?`, kini tiga kontrol tetap
+        # yang disetujui user: Undo, Redo, dan Reference. Hanya terminal ^C
+        # yang danger; kontrol editor tetap monokrom dan dapat disabled.
         src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
         assert "EditorHandle(" in src, "EditorHandle belum dipakai di editor"
         assert "QuickToolsBar" not in src, "bar lama masih tersisa (kode mati)"
         i = src.find("EditorHandle(")
-        jendela = src[i:i + 800]
-        assert "tunnelKey" in jendela and 'label = "?"' in jendela, (
-            "terowongan editor kini berisi tombol ? (A5 Reference Card)"
-        )
+        jendela = src[i:i + 1900]
+        assert "tunnelKeys = listOf(" in jendela
+        for label in ('label = "↶"', 'label = "↷"', 'label = "?"'):
+            assert label in jendela, f"kontrol terowongan hilang: {label}"
+        assert 'enabled = canUndo' in jendela and 'enabled = canRedo' in jendela
+        assert 'contentDescription = "Undo"' in jendela
+        assert 'contentDescription = "Redo"' in jendela
         assert "danger" not in jendela, (
             "terowongan editor tidak boleh berisi tombol danger/stop"
         )
@@ -3469,12 +3468,12 @@ class TestLintBundleV1019:
         assert "lintCompartment" in s and "whitespaceCompartment" in s, (
             "toggle lint/whitespace wajib via Compartment (live, tanpa reload)"
         )
-        assert "whitespaceCompartment.of([])" in s, (
-            "whitespace guard default OFF (keputusan user 2026-08-17)"
-        )
-        assert "lintCompartment.of(lintGutter())" in s, (
-            "lint gutter default ON"
-        )
+        assert "currentWhitespaceEnabled = false" in s and (
+            "currentWhitespaceEnabled ? highlightTrailingWhitespace() : []" in s
+        ), "whitespace guard default OFF (keputusan user 2026-08-17)"
+        assert "currentLintEnabled = true" in s and (
+            "currentLintEnabled ? lintGutter() : []" in s
+        ), "lint gutter default ON"
 
     def test_pin_eksak_lint(self):
         pkg = read(ROOT / "editor-src/package.json")
@@ -4205,3 +4204,104 @@ class TestCuratedSampleWaveV1019:
         }
         for package, sid in expected_links.items():
             assert catalog[package].get("sampleId") == sid
+
+
+class TestPerFileUndoRedoV1019:
+    """Undo/Redo mobile wajib per-file; switch tab bukan edit lintas dokumen."""
+
+    JS = ROOT / "editor-src/src/editor.js"
+    BUNDLE = ROOT / "app/src/main/assets/editor/codemirror.bundle.js"
+
+    def test_editor_state_dipisah_per_file(self):
+        src = read(self.JS)
+        for marker in (
+            "const documentStates = new Map()",
+            "let activeDocumentId = null",
+            "function openDocument(documentId, code)",
+            "documentStates.set(activeDocumentId, view.state)",
+            "let nextState = documentStates.get(id)",
+            "view.setState(nextState)",
+        ):
+            assert marker in src, f"kontrak per-file history hilang: {marker}"
+        assert "openDocument(${escapeJavaScriptString(id)}" in read(
+            UI / "workbench/WorkbenchScreen.kt"
+        )
+        kotlin = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
+        assert "openDocument(" in kotlin
+        assert "setCode(" not in kotlin, (
+            "initial/file switch kembali memakai replacement di satu undo stack"
+        )
+
+    def test_callback_membawa_document_id_anti_stale_tab(self):
+        js = read(self.JS)
+        assert "window.ZCODE.onCodeChange(" in js
+        assert 'activeDocumentId || ""' in js
+        screen = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
+        assert "fun onCodeChange(documentId: String, code: String)" in screen
+        workbench = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert "vm.updateCodeForFile(id, changedCode)" in workbench
+        vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
+        assert "fun updateCodeForFile(filename: String, newCode: String)" in vm
+        assert "if (filename !in openedFiles) return" in vm
+
+    def test_close_rename_delete_clear_mengelola_state(self):
+        js = read(self.JS)
+        for fn in ("dropDocument", "renameDocument", "clearDocumentStates"):
+            assert f"function {fn}(" in js and f"window.{fn} = {fn}" in js
+        wb = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert "dropDocumentState(filename)" in wb
+        assert "dropDocumentState(name)" in wb
+        assert "renameDocument(" in wb
+        assert 'evaluateJavascript("clearDocumentStates();"' in wb
+
+    def test_undo_redo_status_dan_tombol_terhubung(self):
+        js = read(self.JS)
+        assert "undoDepth(view.state) > 0" in js
+        assert "redoDepth(view.state) > 0" in js
+        assert "onHistoryStateChange(canUndo, canRedo)" in js
+        assert "const changed = cmUndo(view)" in js and "return changed" in js
+        assert "const changed = cmRedo(view)" in js
+        screen = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
+        assert "fun onHistoryStateChange(canUndo: Boolean, canRedo: Boolean)" in screen
+        handle = strip_kt_comments(read(UI / "common/EditorHandle.kt"))
+        assert ".clickable(enabled = key.enabled)" in handle
+        assert "contentDescription = key.contentDescription" in handle
+        wb = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        undo_at = wb.index('label = "↶"')
+        redo_at = wb.index('label = "↷"')
+        assert 'runHistoryAction("undo")' in wb[undo_at:undo_at + 350]
+        assert 'runHistoryAction("redo")' in wb[redo_at:redo_at + 350]
+
+    def test_transform_programatik_satu_undo_group(self):
+        js = read(self.JS)
+        block = js[js.index("function replaceCurrentDocument"):js.index("function openDocument")]
+        assert 'isolateHistory.of("full")' in block
+        wb = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        for action in ("sortLines", "changeCase", "trimNow"):
+            i = wb.index(f'evaluateJavascript("{action}')
+            assert "pushCode()" not in wb[i:i + 180], (
+                f"{action} sudah mengubah CM6; pushCode lama dapat mengembalikan kode stale"
+            )
+
+    def test_setting_editor_diterapkan_ke_semua_state(self):
+        js = read(self.JS)
+        assert "function reconfigureEveryDocument(" in js
+        assert "for (const [id, state] of documentStates)" in js
+        for setter, state_var in (
+            ("setCloseBrackets", "currentCloseBracketsEnabled"),
+            ("setHighlightSelectionMatches", "currentSelectionMatchesEnabled"),
+            ("setLintEnabled", "currentLintEnabled"),
+            ("setWhitespaceEnabled", "currentWhitespaceEnabled"),
+            ("setFontFamily", "currentFontFamily"),
+        ):
+            block = js[js.index(f"function {setter}"):]
+            block = block[:block.find("\n}") + 2]
+            assert state_var in block and "reconfigureEveryDocument(" in block
+
+    def test_bundle_memuat_kontrak_baru(self):
+        bundle = read(self.BUNDLE)
+        for marker in ("window.openDocument", "window.dropDocument",
+                       "window.renameDocument", "window.clearDocumentStates",
+                       "onHistoryStateChange"):
+            assert marker in bundle, f"bundle belum direbuild: {marker}"
+

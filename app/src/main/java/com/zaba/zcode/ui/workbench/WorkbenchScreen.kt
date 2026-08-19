@@ -144,6 +144,8 @@ fun WorkbenchScreen(
     var lastEggTap by remember { mutableStateOf(0L) }
     var showEgg by remember { mutableStateOf(false) }
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
+    var canUndo by remember { mutableStateOf(false) }
+    var canRedo by remember { mutableStateOf(false) }
     var showTerminalOverlay by rememberSaveable { mutableStateOf(false) }
 
     // state dialog
@@ -188,7 +190,28 @@ fun WorkbenchScreen(
     }
 
     fun pushCode() {
-        webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
+        val id = vm.activeFile ?: return
+        webViewRef.value?.evaluateJavascript(
+            "openDocument(${escapeJavaScriptString(id)},${escapeJavaScriptString(vm.activeCode)});",
+            null
+        )
+    }
+
+    fun dropDocumentState(filename: String) {
+        webViewRef.value?.evaluateJavascript(
+            "dropDocument(${escapeJavaScriptString(filename)});",
+            null
+        )
+    }
+
+    fun runHistoryAction(action: String) {
+        webViewRef.value?.evaluateJavascript("$action();") { changed ->
+            if (changed == "true") {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "EDITOR_${action.uppercase()}", vm.activeFile ?: "-"
+                )
+            }
+        }
     }
 
     // 📁 Ikon folder topbar → file manager HP (SAF), filter text/* (keputusan user).
@@ -280,13 +303,11 @@ fun WorkbenchScreen(
             // F1.9: Transform teks kecil (Kotlin/JS murni, tanpa pip)
             "sort_lines" -> {
                 webViewRef.value?.evaluateJavascript("sortLines();", null)
-                pushCode()
             }
             "change_case" -> {
                 // F1.9: Cycle upper → lower → title → upper…
                 val mode = changeCaseMode
                 webViewRef.value?.evaluateJavascript("changeCase('$mode');", null)
-                pushCode()
                 // Cycle ke mode berikutnya
                 changeCaseMode = when (mode) {
                     "upper" -> "lower"
@@ -297,7 +318,6 @@ fun WorkbenchScreen(
             }
             "trim_now" -> {
                 webViewRef.value?.evaluateJavascript("trimNow();", null)
-                pushCode()
             }
             "auto_trim_on_run" -> {
                 // BEHAVIOR: tidak ada eksekusi manual — jelaskan statusnya
@@ -645,6 +665,7 @@ fun WorkbenchScreen(
                                             pushCode()
                                         },
                                         onLongClick = {
+                                            dropDocumentState(filename)
                                             vm.closeFile(filename)
                                             pushCode()
                                         }
@@ -666,8 +687,15 @@ fun WorkbenchScreen(
                 // Editor (CodeMirror 6 WebView)
                 Box(modifier = Modifier.weight(1f)) {
                     EditorScreen(
+                        documentId = vm.activeFile ?: "main.py",
                         code = vm.activeCode,
-                        onCodeChange = { vm.updateCode(it) },
+                        onCodeChange = { id, changedCode ->
+                            vm.updateCodeForFile(id, changedCode)
+                        },
+                        onHistoryStateChange = { undo, redo ->
+                            canUndo = undo
+                            canRedo = redo
+                        },
                         webViewRef = webViewRef,
                         vm = vm // F1.7 & F1.8: apply editor settings ke CM6 bridge
                     )
@@ -675,15 +703,28 @@ fun WorkbenchScreen(
 
                 // QuickTools / symbol bar — bisa dimatikan user lewat drawer (EDITOR → Symbol bar)
                 if (vm.symbolBarEnabled) {
-                    // EDITOR HANDLE (build #3) — komponen yang sama dipakai di
-                    // terminal. A5 v1.0.19: terowongan (slot yang tak ikut
-                    // scroll) kini diisi tombol "?" → Reference Card. Pas
-                    // secara semantik: referensi = jangkar, bukan penumpang.
+                    // Terowongan editor selalu terlihat: pemulihan Undo/Redo +
+                    // jangkar Reference Card. Kereta simbol tetap scrollable.
                     com.zaba.zcode.ui.common.EditorHandle(
                         keys = com.zaba.zcode.ui.common.pythonEditorKeys(),
-                        tunnelKey = com.zaba.zcode.ui.common.HandleKey(
-                            label = "?",
-                            onClick = { showReferenceCard = true }
+                        tunnelKeys = listOf(
+                            com.zaba.zcode.ui.common.HandleKey(
+                                label = "↶",
+                                enabled = canUndo,
+                                contentDescription = "Undo",
+                                onClick = { runHistoryAction("undo") }
+                            ),
+                            com.zaba.zcode.ui.common.HandleKey(
+                                label = "↷",
+                                enabled = canRedo,
+                                contentDescription = "Redo",
+                                onClick = { runHistoryAction("redo") }
+                            ),
+                            com.zaba.zcode.ui.common.HandleKey(
+                                label = "?",
+                                contentDescription = "Referensi Python",
+                                onClick = { showReferenceCard = true }
+                            )
                         ),
                         onInsert = { text ->
                             webViewRef.value?.evaluateJavascript(
@@ -742,9 +783,17 @@ fun WorkbenchScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val ok = vm.renameFile(oldName, renameNewName)
+                    val newName = renameNewName
+                    val ok = vm.renameFile(oldName, newName)
                     fileToRename = null
-                    if (ok) pushCode()
+                    if (ok) {
+                        val actualNewName = vm.activeFile ?: newName
+                        webViewRef.value?.evaluateJavascript(
+                            "renameDocument(${escapeJavaScriptString(oldName)},${escapeJavaScriptString(actualNewName)});",
+                            null
+                        )
+                        pushCode()
+                    }
                 }) { Text("Rename") }
             },
             dismissButton = {
@@ -763,7 +812,10 @@ fun WorkbenchScreen(
                 TextButton(onClick = {
                     val ok = vm.deleteFile(name)
                     fileToDelete = null
-                    if (ok) pushCode()
+                    if (ok) {
+                        dropDocumentState(name)
+                        pushCode()
+                    }
                 }) { Text("Delete", color = Color(0xFFFFB4AB)) }
             },
             dismissButton = {
@@ -834,6 +886,7 @@ fun WorkbenchScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmClearAll = false
+                    webViewRef.value?.evaluateJavascript("clearDocumentStates();", null)
                     vm.clearAllDrafts()
                     pushCode()
                 }) { Text("Clear All", color = Color(0xFFFFB4AB)) }
@@ -1116,7 +1169,11 @@ private fun WorkbenchTopBar(
                     modifier = Modifier
                         .clickable {
                             vm.createNewFile()
-                            webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
+                            val id = vm.activeFile ?: return@clickable
+                            webViewRef.value?.evaluateJavascript(
+                                "openDocument(${escapeJavaScriptString(id)},${escapeJavaScriptString(vm.activeCode)});",
+                                null
+                            )
                         }
                         .padding(10.dp)
                         .size(20.dp)

@@ -26,8 +26,11 @@ import {
   history,
   historyKeymap,
   indentWithTab,
+  isolateHistory,
   undo as cmUndo,
   redo as cmRedo,
+  undoDepth,
+  redoDepth,
 } from "@codemirror/commands";
 import {
   indentUnit,
@@ -281,6 +284,25 @@ const tneHighlight = HighlightStyle.define([
 let view = null;
 let isSettingValue = false; // guard anti echo-loop (sama dengan versi Ace)
 
+// Satu EditorView, tetapi setiap file memiliki EditorState sendiri. State memuat
+// dokumen, selection, dan history CodeMirror; switch tab hanya menukar state,
+// bukan mengganti seluruh isi di satu undo stack.
+const documentStates = new Map();
+let activeDocumentId = null;
+let lastCanUndo = null;
+let lastCanRedo = null;
+
+function notifyHistoryState(force = false) {
+  const canUndo = !!view && undoDepth(view.state) > 0;
+  const canRedo = !!view && redoDepth(view.state) > 0;
+  if (!force && canUndo === lastCanUndo && canRedo === lastCanRedo) return;
+  lastCanUndo = canUndo;
+  lastCanRedo = canRedo;
+  if (window.ZCODE && typeof window.ZCODE.onHistoryStateChange === "function") {
+    window.ZCODE.onHistoryStateChange(canUndo, canRedo);
+  }
+}
+
 // Gerbong A v1.0.19: Compartment lint gutter & whitespace — toggle live via
 // bridge tanpa reload editor (kill-switch: OFF = perilaku lama persis).
 const lintCompartment = new Compartment();
@@ -293,6 +315,12 @@ const highlightSelectionMatchesCompartment = new Compartment();
 // Audit 2026-08: compartment fontFamily — jenis font dipilih user di Settings
 // (UI & editor; terminal tetap Monospace di sisi Compose). Default monospace.
 const fontFamilyCompartment = new Compartment();
+
+let currentLintEnabled = true;
+let currentWhitespaceEnabled = false;
+let currentCloseBracketsEnabled = true;
+let currentSelectionMatchesEnabled = true;
+let currentFontFamily = "monospace";
 
 function buildState(doc) {
   return EditorState.create({
@@ -329,21 +357,32 @@ function buildState(doc) {
       }),
       // Gerbong A: lint gutter default ON (ikon di gutter + underline merah;
       // tooltip muncul via tap di CM6 mobile). Data dari Kotlin Checker.
-      lintCompartment.of(lintGutter()),
-      // A2: whitespace guard default OFF (keputusan user 2026-08-17).
-      whitespaceCompartment.of([]),
-      // F1.7: Auto-close brackets (CM6) — default ON, toggle via bridge setCloseBrackets().
-      closeBracketsCompartment.of(closeBrackets()),
-      // F1.8: Selection match highlight (CM6) — default ON, toggle via bridge setHighlightSelectionMatches().
-      highlightSelectionMatchesCompartment.of(highlightSelectionMatches()),
-      // Audit 2026-08: fontFamily dinamis (default monospace) — toggle via bridge setFontFamily().
+      lintCompartment.of(currentLintEnabled ? lintGutter() : []),
+      whitespaceCompartment.of(
+        currentWhitespaceEnabled ? highlightTrailingWhitespace() : []
+      ),
+      closeBracketsCompartment.of(
+        currentCloseBracketsEnabled ? closeBrackets() : []
+      ),
+      highlightSelectionMatchesCompartment.of(
+        currentSelectionMatchesEnabled ? highlightSelectionMatches() : []
+      ),
       fontFamilyCompartment.of(
-        EditorView.theme({ ".cm-scroller": { fontFamily: "monospace" } }, { dark: true })
+        EditorView.theme(
+          { ".cm-scroller": { fontFamily: currentFontFamily } },
+          { dark: true }
+        )
       ),
       zcodeTheme,
       EditorView.updateListener.of((update) => {
-        if (update.docChanged && !isSettingValue && window.ZCODE) {
-          window.ZCODE.onCodeChange(update.state.doc.toString());
+        if (update.docChanged) {
+          if (!isSettingValue && window.ZCODE) {
+            window.ZCODE.onCodeChange(
+              activeDocumentId || "",
+              update.state.doc.toString()
+            );
+          }
+          notifyHistoryState();
         }
       }),
       // Catatan konfigurasi vs Ace lama:
@@ -366,13 +405,89 @@ function initEditor() {
 // Kontrak bridge — nama & semantik identik dengan versi Ace
 // ---------------------------------------------------------------------
 
-function setCode(code) {
-  if (!view) return;
+function replaceCurrentDocument(code) {
+  if (!view || view.state.doc.toString() === code) return false;
   isSettingValue = true;
-  view.dispatch({
-    changes: { from: 0, to: view.state.doc.length, insert: code },
-  });
-  isSettingValue = false;
+  try {
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: code },
+      // Transform programatik (beautify/rename symbol) = satu aksi Undo utuh.
+      annotations: isolateHistory.of("full"),
+    });
+  } finally {
+    isSettingValue = false;
+  }
+  notifyHistoryState(true);
+  return true;
+}
+
+function openDocument(documentId, code) {
+  if (!view) return false;
+  const id = String(documentId || "__untitled__");
+  const text = String(code ?? "");
+
+  if (activeDocumentId === id) {
+    return replaceCurrentDocument(text);
+  }
+
+  if (activeDocumentId !== null) {
+    documentStates.set(activeDocumentId, view.state);
+  }
+
+  let nextState = documentStates.get(id);
+  documentStates.delete(id); // state aktif hanya dimiliki EditorView
+  activeDocumentId = id;
+
+  if (!nextState) {
+    nextState = buildState(text);
+  } else if (nextState.doc.toString() !== text) {
+    // File pernah dibuka tetapi berubah lewat operasi eksternal. Pertahankan
+    // history file itu dan jadikan replacement satu event terisolasi.
+    nextState = nextState.update({
+      changes: { from: 0, to: nextState.doc.length, insert: text },
+      annotations: isolateHistory.of("full"),
+    }).state;
+  }
+
+  isSettingValue = true;
+  try {
+    view.setState(nextState);
+  } finally {
+    isSettingValue = false;
+  }
+  notifyHistoryState(true);
+  return true;
+}
+
+function dropDocument(documentId) {
+  const id = String(documentId || "");
+  documentStates.delete(id);
+  if (activeDocumentId === id) activeDocumentId = null;
+  notifyHistoryState(true);
+}
+
+function renameDocument(oldId, newId) {
+  const oldKey = String(oldId || "");
+  const newKey = String(newId || "");
+  if (!oldKey || !newKey || oldKey === newKey) return;
+  if (documentStates.has(oldKey)) {
+    documentStates.set(newKey, documentStates.get(oldKey));
+    documentStates.delete(oldKey);
+  }
+  if (activeDocumentId === oldKey) activeDocumentId = newKey;
+}
+
+function clearDocumentStates() {
+  documentStates.clear();
+  activeDocumentId = null;
+  if (view) view.setState(buildState(""));
+  notifyHistoryState(true);
+}
+
+// Compatibility untuk pemanggil lama: replacement pada file aktif adalah satu
+// aksi Undo. File switch WAJIB memakai openDocument(id, code).
+function setCode(code) {
+  return replaceCurrentDocument(String(code ?? ""));
 }
 
 function getCode() {
@@ -387,11 +502,17 @@ function insertText(text) {
 }
 
 function undo() {
-  if (view) cmUndo(view);
+  if (!view) return false;
+  const changed = cmUndo(view);
+  notifyHistoryState(true);
+  return changed;
 }
 
 function redo() {
-  if (view) cmRedo(view);
+  if (!view) return false;
+  const changed = cmRedo(view);
+  notifyHistoryState(true);
+  return changed;
 }
 
 // Plugin: Duplicate Active Line(s) — semantik Ace:
@@ -524,20 +645,34 @@ function trimNow() {
   });
 }
 
-// F1.7: Toggle auto-close brackets (CM6) — reconfigure via compartment (tanpa recreate editor).
+function reconfigureEveryDocument(compartment, extensionFactory) {
+  if (view) {
+    view.dispatch({ effects: compartment.reconfigure(extensionFactory()) });
+  }
+  for (const [id, state] of documentStates) {
+    documentStates.set(
+      id,
+      state.update({ effects: compartment.reconfigure(extensionFactory()) }).state
+    );
+  }
+}
+
+// F1.7: Toggle auto-close brackets di SEMUA state file, bukan hanya tab aktif.
 function setCloseBrackets(enabled) {
-  if (!view) return;
-  view.dispatch({
-    effects: closeBracketsCompartment.reconfigure(enabled ? closeBrackets() : []),
-  });
+  currentCloseBracketsEnabled = !!enabled;
+  reconfigureEveryDocument(
+    closeBracketsCompartment,
+    () => (enabled ? closeBrackets() : [])
+  );
 }
 
 // F1.8: Toggle selection match highlight (CM6) — reconfigure via compartment.
 function setHighlightSelectionMatches(enabled) {
-  if (!view) return;
-  view.dispatch({
-    effects: highlightSelectionMatchesCompartment.reconfigure(enabled ? highlightSelectionMatches() : []),
-  });
+  currentSelectionMatchesEnabled = !!enabled;
+  reconfigureEveryDocument(
+    highlightSelectionMatchesCompartment,
+    () => (enabled ? highlightSelectionMatches() : [])
+  );
 }
 
 // Gerbong A v1.0.19: terima diagnostik dari Checker Kotlin.
@@ -579,33 +714,35 @@ function setDiagnostics(json) {
 // Gerbong A: toggle lint gutter (kill-switch — OFF = tanpa gutter & tanpa
 // underline, diagnostik dikosongkan supaya tak ada sisa merah).
 function setLintEnabled(enabled) {
-  if (!view) return;
-  view.dispatch({
-    effects: lintCompartment.reconfigure(enabled ? lintGutter() : []),
-  });
-  if (!enabled) view.dispatch(cmSetDiagnostics(view.state, []));
+  currentLintEnabled = !!enabled;
+  reconfigureEveryDocument(
+    lintCompartment,
+    () => (enabled ? lintGutter() : [])
+  );
+  if (!enabled && view) view.dispatch(cmSetDiagnostics(view.state, []));
 }
 
 // A2: toggle whitespace guard (trailing whitespace highlight).
 function setWhitespaceEnabled(enabled) {
-  if (!view) return;
-  view.dispatch({
-    effects: whitespaceCompartment.reconfigure(
-      enabled ? highlightTrailingWhitespace() : []
-    ),
-  });
+  currentWhitespaceEnabled = !!enabled;
+  reconfigureEveryDocument(
+    whitespaceCompartment,
+    () => (enabled ? highlightTrailingWhitespace() : [])
+  );
 }
 
 // Audit 2026-08: jenis font (UI & editor) — Kotlin mengirim CSS font-family
 // (mis. "'ZCodeFiraCode', monospace"); @font-face di-inject Kotlin via <style>.
 // Gutter ikut karena berada di dalam .cm-scroller (inherit).
 function setFontFamily(cssFamily) {
-  if (!view) return;
-  view.dispatch({
-    effects: fontFamilyCompartment.reconfigure(
-      EditorView.theme({ ".cm-scroller": { fontFamily: cssFamily } }, { dark: true })
-    ),
-  });
+  currentFontFamily = String(cssFamily || "monospace");
+  reconfigureEveryDocument(
+    fontFamilyCompartment,
+    () => EditorView.theme(
+      { ".cm-scroller": { fontFamily: currentFontFamily } },
+      { dark: true }
+    )
+  );
 }
 
 // BARU (batch anti-sepi F2): lompat ke baris n (1-based, di-clamp).
@@ -645,6 +782,10 @@ try {
 
 // Expose ke window (Kotlin memanggil via evaluateJavascript)
 window.setCode = setCode;
+window.openDocument = openDocument;
+window.dropDocument = dropDocument;
+window.renameDocument = renameDocument;
+window.clearDocumentStates = clearDocumentStates;
 window.getCode = getCode;
 window.insertText = insertText;
 window.undo = undo;
@@ -663,8 +804,8 @@ window.setDiagnostics = setDiagnostics;
 window.setLintEnabled = setLintEnabled;
 window.setWhitespaceEnabled = setWhitespaceEnabled;
 
-// Handshake — dipanggil bahkan jika init gagal, agar Kotlin tidak hang
-// menunggu (setCode dkk. aman sebagai no-op).
+// Handshake — dipanggil bahkan jika init gagal, agar Kotlin tidak hang.
+notifyHistoryState(true);
 if (window.ZCODE && typeof window.ZCODE.onEditorReady === "function") {
   window.ZCODE.onEditorReady();
 }

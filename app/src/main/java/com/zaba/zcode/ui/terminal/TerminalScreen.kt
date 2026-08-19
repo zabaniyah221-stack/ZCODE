@@ -494,14 +494,17 @@ fun TerminalScreen(
                     // tinggi minimum bawaan komponen Material3.
                     EditorHandle(
                         keys = terminalKeys(),
-                        tunnelKey = HandleKey(
-                            label = "^C",
-                            danger = true,
-                            onClick = {
-                                TelemetryStore.increment("terminal_interrupts")
-                                session?.sendCtrlC()
-                                appendToTerminal("sys", "^C\nProcess Interrupted\n")
-                            }
+                        tunnelKeys = listOf(
+                            HandleKey(
+                                label = "^C",
+                                danger = true,
+                                contentDescription = "Hentikan proses",
+                                onClick = {
+                                    TelemetryStore.increment("terminal_interrupts")
+                                    session?.sendCtrlC()
+                                    appendToTerminal("sys", "^C\nProcess Interrupted\n")
+                                }
+                            )
                         ),
                         onInsert = { text ->
                             inputVal = TextFieldValue(
