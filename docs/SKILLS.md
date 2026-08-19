@@ -1,9 +1,11 @@
-# 🧠 SKILLS — panduan wajib untuk siapa pun yang mengerjakan ZCODE
+# 🧠 SKILLS — playbook engineering khusus ZCODE
 
-Ditulis untuk agent/kontributor berikutnya. Isinya bukan teori — semuanya
-pelajaran yang **dibayar dengan bug nyata** di proyek ini.
+Perilaku agent universal hidup di root `AGENTS.md`. Dokumen ini sengaja tetap
+khusus ZCODE: versi runtime, ARMv7/bionic, Chaquopy, Compose, emulator, jalur
+CI, dan pelajaran yang **dibayar dengan bug nyata** tidak boleh diencerkan
+menjadi nasihat generik.
 
-Baca ini sebelum menyentuh kode.
+Baca `AGENTS.md`, lalu dokumen ini sebelum menyentuh kode ZCODE.
 
 ---
 

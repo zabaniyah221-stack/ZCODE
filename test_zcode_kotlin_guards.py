@@ -4305,3 +4305,33 @@ class TestPerFileUndoRedoV1019:
                        "onHistoryStateChange"):
             assert marker in bundle, f"bundle belum direbuild: {marker}"
 
+
+class TestUniversalAgentsGuide:
+    """Root AGENTS.md = perilaku universal; SKILLS tetap playbook ZCODE."""
+
+    def test_agents_md_ada_dan_lengkap(self):
+        text = read(ROOT / "AGENTS.md")
+        assert text, "AGENTS.md universal hilang"
+        for principle in (
+            "Be honest about anything",
+            "Be meticulous in everything",
+            "Partnership with the user",
+            "Regression guards and mutation testing",
+            "Concurrency, lifecycle, and ownership",
+            "Security and secrets",
+            "Contracts and documentation are revisable",
+            "Handoff standard",
+        ):
+            assert principle in text, f"AGENTS.md kehilangan: {principle}"
+        for project_term in ("Chaquopy", "ZCODE", "Package Engine V2"):
+            assert project_term not in text, (
+                f"AGENTS.md harus universal, masih memuat detail proyek: {project_term}"
+            )
+
+    def test_skills_tetap_overlay_proyek(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "playbook engineering khusus ZCODE" in skills
+        assert "root `AGENTS.md`" in skills
+        assert "Chaquopy" in skills and "ARMv7" in skills, (
+            "fakta proyek tidak boleh hilang saat prinsip universal diekstrak"
+        )
