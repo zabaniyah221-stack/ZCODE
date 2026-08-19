@@ -5,24 +5,60 @@ Dokumen ini boleh diubah kapan saja: ada permintaan fitur baru, bug, error, atau
 temuan riset yang mematahkan asumsi di sini. Kalau kenyataan bertentangan dengan
 PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
 
-Versi saat ini: `1.0.18` (`gradle.properties` = sumber tunggal)
-Terakhir diperbarui: 2026-08-13
-Revisi: 2026-08-13 — §5 Bug L/M (timeout lifecycle + cancellation fallback),
-full Android ARMv7 API 24 emulator, dan verifikasi bionic311. (PRD = pegangan, bukan acuan terkunci.)
+Versi saat ini: `1.0.19` (`gradle.properties` = sumber tunggal)
+Terakhir diperbarui: 2026-08-19
+Revisi: 2026-08-19 — prinsip kemampuan tanpa paywall dan tanpa jalan buntu:
+keterbatasan wajib dijelaskan, diberi alternatif, dan menjadi kandidat riset
+berbasis bukti. (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
 ## 1. Apa itu ZCODE
 
-IDE Python untuk Android, setara Pydroid/Acode/VS Code mobile, dengan tiga
+IDE Python untuk Android, setara Pydroid/Acode/VS Code mobile, dengan empat
 komitmen yang tidak bisa ditawar:
 
 1. **100% gratis, tanpa premium lock.** Tidak ada fitur di balik bayaran.
 2. **Offline-first, bukan offline-only.** Jalan tanpa internet; script yang
    butuh jaringan tetap bisa jalan.
 3. **ARMv7 kelas satu.** HP murah bukan warga kelas dua.
+4. **Keterbatasan bukan jalan buntu.** Kemampuan yang belum didukung wajib
+   dijelaskan secara jujur, diberi alternatif yang dapat dipakai sekarang, dan
+   dinilai sebagai kandidat target pengembangan agar suatu hari ZCODE juga bisa.
 
-### Kenapa ketiganya penting
+### Prinsip kemampuan: gratis, jujur, dan terus mencari jalan
+
+> **Kalau sudah didukung → gratis untuk semua.**
+>
+> **Kalau belum didukung → jelaskan keterbatasannya secara jujur, catat bukti
+> teknisnya, tawarkan alternatif yang bisa dipakai sekarang, lalu jadikan
+> kandidat target pengembangan—tanpa menjanjikan dukungan sebelum jalur
+> teknisnya terbukti.**
+
+Prinsip ini bukan izin memasukkan semua nama paket populer ke roadmap aktif.
+Setiap kandidat tetap disaring berdasarkan kebutuhan nyata, kemungkinan jalur
+teknis, keamanan, ukuran, beban pemeliharaan, dukungan ABI/Python/Android,
+dampak pada ARMv7 dan perangkat low-end, serta manfaat dibanding alternatif
+yang sudah tersedia.
+
+Status kemampuan harus dibedakan dengan jujur:
+
+- **BELUM DIAUDIT** — belum ada bukti cukup.
+- **SEDANG DITELITI** — kebutuhan nyata ada; jalur teknis sedang dicari.
+- **TERKENDALA** — penyebab teknis diketahui, tetapi solusi belum terbukti.
+- **DIRENCANAKAN** — jalur, scope, risiko, dan acceptance criteria sudah jelas.
+- **EXPERIMENTAL** — bisa dicoba, belum stabil atau belum cukup bukti device.
+- **TESTED** — versi dan lingkungan uji tercatat serta bukti yang disyaratkan
+  telah lulus.
+- **TIDAK LAYAK SAAT INI** — biaya/risiko belum sebanding; boleh dibuka kembali
+  hanya jika ada premis atau bukti baru.
+
+`Samples` hanya menjanjikan contoh yang benar-benar dapat dijalankan di ZCODE
+setelah dependency yang disebutkan dipasang. Paket yang belum runnable tetap
+dijelaskan di `Library` beserta kendala, alternatif, dan status risetnya—bukan
+disamarkan sebagai fitur premium atau sample mati.
+
+### Kenapa keempatnya penting
 
 Pydroid menaruh PyTorch di balik paywall
 ([Grokipedia — Mobile Python](https://grokipedia.com/page/Mobile_Python)).
@@ -31,7 +67,9 @@ PocketCode membuang jaringan sepenuhnya
 VSCodroid hanya ARM64
 ([github.com/rmyndharis/VSCodroid](https://github.com/rmyndharis/VSCodroid)).
 
-Ketiga komitmen ZCODE adalah **ceruk yang secara harfiah kosong**.
+Keempat komitmen itu membentuk arah produk ZCODE: gratis, offline-first,
+ramah ARMv7, dan tidak menjadikan keterbatasan hari ini sebagai alasan untuk
+berhenti mencari jalan.
 
 ### Pengguna utama
 

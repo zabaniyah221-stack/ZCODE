@@ -52,6 +52,22 @@ Teliti tentang apa pun, sekecil apa pun, untuk meminimalkan edge case.
 - Jalankan datanya. Jangan bilang "seharusnya begini".
 - Baca kode di sekitar yang kamu ubah.
 
+## Prinsip produk yang wajib dijaga — KETERBATASAN BUKAN JALAN BUNTU
+
+Sumber kanonis: `docs/PRD_ZCODE.md` §1.
+
+- Kemampuan yang sudah didukung harus **gratis untuk semua**.
+- Kemampuan yang belum didukung harus dijelaskan dengan bukti teknis yang
+  jujur, disertai alternatif yang dapat dipakai sekarang.
+- Temuan `UNAVAILABLE`/`TERKENDALA` bukan akhir audit: nilai sebagai kandidat
+  riset agar ZCODE suatu hari juga bisa, tetapi **jangan menjanjikan** sebelum
+  jalur teknis, biaya, keamanan, ABI, dan acceptance criteria terbukti.
+- `Samples` hanya berisi contoh runnable; roadmap kemampuan yang belum runnable
+  hidup di Library/docs, bukan sebagai sample mati atau premium lock.
+- Teliti lebih penting daripada cepat, tetapi "sempurna" bukan alasan untuk
+  scope tanpa ujung. Definisi selesai harus dapat diamati, diuji, dan menyebut
+  sisa batasannya.
+
 ---
 
 # 🔧 SKILL 1 — Diagnosis tanpa bisa melihat
