@@ -380,3 +380,38 @@ redup dari artifact sebelumnya tertutup oleh callback gabungan
 Status jujur: Undo/Redo touch + history per-file **DEVICE VERIFIED** pada
 perangkat/artifact di atas; bukan klaim universal seluruh WebView/ROM Android.
 PR belum dibuka dan release belum dilakukan.
+
+
+### 2026-08-19 — Semantic package logs: IMPLEMENTED
+Commit `f95b838` memisahkan makna event dari teks/dekorasi. Producer package
+sekarang mengirim `SemanticLogKind`:
+
+```text
+STEP · INFO · WARN · WAIT · OK · FAIL · STOP · RAW
+```
+
+Renderer menambahkan label yang ikut tercopy:
+
+```text
+[>] [INFO] [WARN] [WAIT] [OK] [ERR] [STOP]
+```
+
+Warna berasal dari kind, bukan pencarian emoji dalam kalimat. `Step.Log` generik
+diganti `Step.Message(text, kind)`; hasil akhir memakai
+`FinishResult.OK/FAIL/STOP`. Cancel install/resolve tidak lagi disamakan dengan
+failure. Resolve bridge memetakan stage terstruktur ke severity. Legacy
+`ExecutionEngine.startPipStream` juga mengirim `SemanticLog`; output tool mentah
+memakai `RAW` tanpa label palsu.
+
+Reader backward-compatible masih memahami status lama `✅ ❌ ⚠️ ℹ️ ⏳ 🛑 ▶`
+dan label bracket, tetapi hanya bila token berada di prefix. Producer baru di
+PackageEngine/Execution/Pip dilarang menghasilkan emoji status. Dengan begitu
+teks user yang kebetulan mengandung simbol tidak mengubah warna/makna.
+
+Sembilan mutasi terbukti merah: WARN dihapus, WAIT menjadi INFO, STOP kehilangan
+warna, Cancel menjadi FAIL, Step.Message kehilangan kind, legacy WARN menjadi
+INFO, producer emoji kembali, jalur semantic menebak teks, dan resolve Cancel
+menjadi FAIL. Restore hijau.
+
+Validasi lokal: `tools/check.sh` **559 passed**, 58 Kotlin files, supply-chain
+guard dan diff-check hijau. Status: IMPLEMENTED lokal; belum CI/DEVICE VERIFIED.

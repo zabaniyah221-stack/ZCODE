@@ -35,6 +35,30 @@ Arah saat ini memiliki empat komitmen:
    dijelaskan secara jujur, diberi alternatif yang dapat dipakai sekarang, dan
    dinilai sebagai kandidat target pengembangan agar suatu hari ZCODE juga bisa.
 
+### North star
+
+> **Bukan tentang punya perangkat terbaik. Tentang tetap bisa berkarya dengan
+> perangkat yang kita punya.**
+
+Misi ZCODE adalah memperkecil jarak antara "aku punya ide" dan "aku berhasil
+membuat sesuatu dari ide itu" bagi pengguna Android terbatas tanpa PC. ZCODE
+harus membantu user membuat, menjalankan, memahami, memperbaiki, menyimpan, dan
+membagikan project Python—tanpa paywall dan tanpa berbohong tentang batasnya.
+
+Ukuran sukses utama bukan jumlah menu/plugin atau kemiripan dengan produk besar,
+melainkan:
+
+- karya nyata yang dapat dibuat user tanpa PC;
+- force-close dan kehilangan data mendekati nol;
+- error dapat dipahami dan disalin;
+- package bekerja sesuai klaim;
+- project dapat disimpan, dipulihkan, dan dibagikan;
+- ZCODE membuat user lebih sering berkarya daripada sebelum memilikinya.
+
+ZCODE tidak wajib menjadi editor semua bahasa, workstation desktop, atau clone
+penuh VS Code/Acode/Pydroid. Berhenti menambah fitur saat alatnya sudah cukup
+untuk berkarya adalah hasil yang sah, bukan kegagalan.
+
 ### Prinsip kemampuan: gratis, jujur, dan terus mencari jalan
 
 > **Kalau sudah didukung → gratis untuk semua.**
@@ -102,6 +126,7 @@ satu — gabungkan dalam satu build.
 | Editor CodeMirror 6, `file://` murni, offline | ✅ |
 | Multi-file, tab, autosave 600ms | ✅ |
 | Undo/Redo touch + history terpisah per file | ✅ DEVICE VERIFIED (Infinix ARMv7) |
+| Semantic package logs `[OK]/[WARN]/…` | IMPLEMENTED, menunggu CI/device |
 | Run Python (Chaquopy 3.11 in-process) | ✅ |
 | Terminal output + `input()` + Ctrl+C | ✅ |
 | Samples (pola 2 level) | ✅ |

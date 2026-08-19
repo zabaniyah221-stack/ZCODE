@@ -4461,3 +4461,8 @@ class TestSemanticPackageLogsV1019:
             assert forbidden not in block, (
                 f"appendMessage semantic masih menebak dari teks: {forbidden}"
             )
+
+    def test_pelajaran_semantic_log_masuk_playbook(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "SKILL 19 — Makna log harus bertipe" in skills
+        assert "STOP` berbeda dari `FAIL" in skills

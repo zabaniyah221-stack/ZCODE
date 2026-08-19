@@ -1341,3 +1341,25 @@ Undo dapat membawa isi file lama ke tab aktif.
 - https://codemirror.net/docs/ref/#commands.history
 - https://codemirror.net/docs/migration/
 - https://discuss.codemirror.net/t/cm6-multiple-docs-with-their-own-histories/3220
+
+
+---
+
+## SKILL 19 — Makna log harus bertipe, bukan ditebak dari teks (2026-08-19)
+
+**Trigger:** Install Modules memberi warna dengan mencari `✅/❌/>` di string.
+Warning/info/cancel tetap masuk LOG biasa, perubahan glyph memutus klasifikasi,
+dan teks user yang mengandung simbol dapat salah dianggap status.
+
+**Aturan:**
+
+1. Producer mengirim `SemanticLogKind`; renderer menentukan prefix/warna.
+2. `STOP` berbeda dari `FAIL`; pembatalan user bukan kerusakan engine.
+3. `RAW` untuk output tool yang tidak benar-benar dipahami ZCODE; jangan sok
+   mengklasifikasikan setiap baris pip.
+4. Label semantic harus ikut teks copy, tidak hanya warna.
+5. Parser emoji/status lama hanya reader kompatibilitas dan hanya memeriksa
+   prefix; producer baru dilarang memakai dekorasi status.
+6. Guard harus menguji setiap arah mapping dan membuktikannya lewat mutasi.
+7. Migrasi representasi log tidak boleh mengubah resolver, transaksi, download,
+   smoke test, atau keputusan compatibility.
