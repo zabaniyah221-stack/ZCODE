@@ -298,8 +298,16 @@ function notifyHistoryState(force = false) {
   if (!force && canUndo === lastCanUndo && canRedo === lastCanRedo) return;
   lastCanUndo = canUndo;
   lastCanRedo = canRedo;
-  if (window.ZCODE && typeof window.ZCODE.onHistoryStateChange === "function") {
-    window.ZCODE.onHistoryStateChange(canUndo, canRedo);
+  // Pakai SATU callback editor yang sudah lama DEVICE VERIFIED. Memisahkan
+  // status history ke method bridge baru terbukti tidak mengaktifkan tombol
+  // pada WebView device walau history CM6 berubah.
+  if (window.ZCODE && typeof window.ZCODE.onCodeChange === "function") {
+    window.ZCODE.onCodeChange(
+      activeDocumentId || "",
+      view ? view.state.doc.toString() : "",
+      canUndo,
+      canRedo
+    );
   }
 }
 
@@ -375,14 +383,9 @@ function buildState(doc) {
       ),
       zcodeTheme,
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
-          if (!isSettingValue && window.ZCODE) {
-            window.ZCODE.onCodeChange(
-              activeDocumentId || "",
-              update.state.doc.toString()
-            );
-          }
-          notifyHistoryState();
+        if (update.docChanged && !isSettingValue) {
+          // force=true: code harus tetap dikirim meski boolean history sama.
+          notifyHistoryState(true);
         }
       }),
       // Catatan konfigurasi vs Ace lama:

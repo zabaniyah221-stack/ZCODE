@@ -4237,7 +4237,11 @@ class TestPerFileUndoRedoV1019:
         assert "window.ZCODE.onCodeChange(" in js
         assert 'activeDocumentId || ""' in js
         screen = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
-        assert "fun onCodeChange(documentId: String, code: String)" in screen
+        bridge_block = screen[screen.index("fun onCodeChange("):]
+        bridge_block = bridge_block[:bridge_block.index("\n    }")]
+        for param in ("documentId: String", "code: String",
+                      "canUndo: Boolean", "canRedo: Boolean"):
+            assert param in bridge_block, f"callback editor kehilangan {param}"
         workbench = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
         assert "vm.updateCodeForFile(id, changedCode)" in workbench
         vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
@@ -4258,11 +4262,18 @@ class TestPerFileUndoRedoV1019:
         js = read(self.JS)
         assert "undoDepth(view.state) > 0" in js
         assert "redoDepth(view.state) > 0" in js
-        assert "onHistoryStateChange(canUndo, canRedo)" in js
+        # Device bug UAT: callback bridge history terpisah tidak mengaktifkan
+        # tombol. Status kini ikut callback onCodeChange yang sudah terbukti.
+        notify = js[js.index("function notifyHistoryState"):js.index("// Gerbong A", js.index("function notifyHistoryState"))]
+        assert "window.ZCODE.onCodeChange(" in notify
+        assert "canUndo," in notify and "canRedo" in notify
+        assert "window.ZCODE.onHistoryStateChange" not in notify
         assert "const changed = cmUndo(view)" in js and "return changed" in js
         assert "const changed = cmRedo(view)" in js
         screen = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
-        assert "fun onHistoryStateChange(canUndo: Boolean, canRedo: Boolean)" in screen
+        bridge = screen[screen.index("class EditorBridge("):]
+        assert "canUndo: Boolean" in bridge and "canRedo: Boolean" in bridge
+        assert "onChange(documentId, code, canUndo, canRedo)" in bridge
         handle = strip_kt_comments(read(UI / "common/EditorHandle.kt"))
         assert ".clickable(enabled = key.enabled)" in handle
         assert "contentDescription = key.contentDescription" in handle
@@ -4302,7 +4313,7 @@ class TestPerFileUndoRedoV1019:
         bundle = read(self.BUNDLE)
         for marker in ("window.openDocument", "window.dropDocument",
                        "window.renameDocument", "window.clearDocumentStates",
-                       "onHistoryStateChange"):
+                       "onCodeChange"):
             assert marker in bundle, f"bundle belum direbuild: {marker}"
 
     def test_pelajaran_per_file_masuk_playbook(self):

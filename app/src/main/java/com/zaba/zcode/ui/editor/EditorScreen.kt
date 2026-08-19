@@ -45,15 +45,19 @@ fun EditorScreen(
     // Menghindari stale state capture pada factory blok AndroidView
     val bridge = androidx.compose.runtime.remember {
         EditorBridge(
-            onChange = { id, changedCode -> onCodeChange(id, changedCode) },
-            onHistoryStateChange = { undo, redo -> onHistoryStateChange(undo, redo) },
+            onChange = { id, changedCode, undo, redo ->
+                onCodeChange(id, changedCode)
+                onHistoryStateChange(undo, redo)
+            },
             onReady = {}
         )
     }
 
     // Perbarui callback dan nilai code pada bridge setiap kali recomposition terjadi
-    bridge.onChange = onCodeChange
-    bridge.onHistoryStateChange = onHistoryStateChange
+    bridge.onChange = { id, changedCode, undo, redo ->
+        onCodeChange(id, changedCode)
+        onHistoryStateChange(undo, redo)
+    }
     bridge.onReady = {
         webViewRef.value?.post {
             webViewRef.value?.evaluateJavascript(
@@ -290,21 +294,23 @@ fun escapeJavaScriptString(value: String): String {
 }
 
 class EditorBridge(
-    var onChange: (documentId: String, code: String) -> Unit,
-    var onHistoryStateChange: (canUndo: Boolean, canRedo: Boolean) -> Unit = { _, _ -> },
+    var onChange: (
+        documentId: String,
+        code: String,
+        canUndo: Boolean,
+        canRedo: Boolean
+    ) -> Unit,
     var onReady: () -> Unit = {}
 ) {
     @android.webkit.JavascriptInterface
-    fun onCodeChange(documentId: String, code: String) {
+    fun onCodeChange(
+        documentId: String,
+        code: String,
+        canUndo: Boolean,
+        canRedo: Boolean
+    ) {
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            onChange(documentId, code)
-        }
-    }
-
-    @android.webkit.JavascriptInterface
-    fun onHistoryStateChange(canUndo: Boolean, canRedo: Boolean) {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
-            onHistoryStateChange(canUndo, canRedo)
+            onChange(documentId, code, canUndo, canRedo)
         }
     }
 
