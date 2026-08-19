@@ -337,5 +337,34 @@ Sumber konvensi: https://agents.md/ dan
 https://developers.openai.com/codex/guides/agents-md
 
 Validasi gabungan: `tools/check.sh` **550 passed**, 57 Kotlin files,
-supply-chain guard dan diff-check hijau. Status Undo/Redo dan AGENTS: IMPLEMENTED
-lokal; belum CI VERIFIED dan Undo/Redo belum DEVICE VERIFIED.
+supply-chain guard dan diff-check hijau. CI run `32218316691` sukses untuk
+commit `ea9205d`; fondasi per-file history berstatus CI VERIFIED.
+
+### 2026-08-19 — UAT Undo/Redo: REGRESSION FOUND, status bridge diperbaiki
+UAT Infinix SMART 9 HD pada artifact run `32218316691`: per-file editor dan
+fitur lain berfungsi, tetapi `↶/↷` selalu redup/nonaktif setelah user mengetik
+dan menghapus teks. Screenshot 12:44 membuktikan `?` aktif sementara kedua
+tombol history memakai disabled alpha.
+
+Diagnosis kelas jalur: CodeMirror menghitung `undoDepth/redoDepth`, tetapi
+status dikirim melalui method JavascriptInterface baru
+`onHistoryStateChange`. Jalur baru ini tidak mengubah state Compose pada WebView
+device. Fix commit `a5cbd8d` menghapus jalur status terpisah dan menggabungkan
+satu event atomik pada callback `onCodeChange` yang sudah DEVICE VERIFIED:
+
+```text
+documentId + code + canUndo + canRedo
+```
+
+Dengan begitu code dan kemampuan Undo/Redo tidak dapat berbeda snapshot atau
+melewati dua bridge path. Runtime jsdom atas bundle shipped membuktikan: typing
+mengaktifkan Undo, Undo mengaktifkan Redo, Redo mengaktifkan Undo, dan history
+main/helper tetap terpisah (`CM6_COMBINED_BRIDGE_OK`). Dua mutasi tambahan
+terbukti merah: status dikembalikan ke callback terpisah dan native callback
+kehilangan `canRedo`.
+
+Bundle: 472.559 byte; SHA-256
+`4169f7a706257985b384d11ea4ece1d765be83049dbe8ab2134ceb751bb7fb8d`.
+Validasi lokal: `tools/check.sh` **551 passed**, 57 Kotlin files, supply-chain
+guard dan diff-check hijau. Status fix: IMPLEMENTED + LOCAL/BUNDLE RUNTIME
+VERIFIED; belum CI/DEVICE VERIFIED.
