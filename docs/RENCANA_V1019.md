@@ -366,5 +366,17 @@ kehilangan `canRedo`.
 Bundle: 472.559 byte; SHA-256
 `4169f7a706257985b384d11ea4ece1d765be83049dbe8ab2134ceb751bb7fb8d`.
 Validasi lokal: `tools/check.sh` **551 passed**, 57 Kotlin files, supply-chain
-guard dan diff-check hijau. Status fix: IMPLEMENTED + LOCAL/BUNDLE RUNTIME
-VERIFIED; belum CI/DEVICE VERIFIED.
+guard dan diff-check hijau.
+
+### 2026-08-19 — Undo/Redo callback fix: DEVICE VERIFIED
+GitHub Actions run `32222196121` sukses (`check` + `build`) pada commit
+`b0eb67e`; artifact `ZCODE-Fase12-APK` ID `9354329546`, SHA-256
+`1c3b5beb6940b107853ccd3bed3e5212acac59053ec8da489aca8df34ece7c86`.
+UAT Infinix SMART 9 HD, ARMv7, Android 12: user mengonfirmasi Undo/Redo kini
+aktif dan berfungsi seperti kontrak yang disepakati. Regresi tombol selalu
+redup dari artifact sebelumnya tertutup oleh callback gabungan
+`documentId + code + canUndo + canRedo`.
+
+Status jujur: Undo/Redo touch + history per-file **DEVICE VERIFIED** pada
+perangkat/artifact di atas; bukan klaim universal seluruh WebView/ROM Android.
+PR belum dibuka dan release belum dilakukan.
