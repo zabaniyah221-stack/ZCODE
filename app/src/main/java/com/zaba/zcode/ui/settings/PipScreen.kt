@@ -16,12 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -36,7 +33,6 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import android.widget.Toast
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -88,7 +84,6 @@ private enum class PipTab { LIBRARY, MANUAL }
  *              Confirm kalau risky → Install via PackageEngineV2.
  * Semua tombol install terhubung ke PackageEngineV2 (Rule 7 — satu backend).
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PipScreen(
     context: android.content.Context,
@@ -99,25 +94,22 @@ fun PipScreen(
     val repository = remember { PackageRepository(context) }
     val engine = remember { PackageEngineV2(context) }
     val compat = remember { CompatibilityEngine(context) }
-    val focusManager = LocalFocusManager.current
 
-    // Satu sumber kebenaran untuk tap DAN swipe. PagerState punya Saver,
-    // sehingga page aktif bertahan rotate; string activeTab lama dihapus agar
-    // tidak ada dua state yang dapat berbeda.
-    val pagerState = rememberPagerState(pageCount = { PipTab.values().size })
+    // v1.0.19 final: tab tap-only adalah topology stabil yang sudah melewati
+    // UAT sebelum Pager diperkenalkan. State screen tetap di owner agar
+    // Library/Manual tidak kehilangan input atau posisi scroll saat berganti.
+    var activeTab by remember { mutableStateOf(PipTab.LIBRARY) }
     val libraryListState = rememberLazyListState()
     val manualPageScroll = rememberScrollState()
 
     fun selectPipTab(tab: PipTab) {
-        focusManager.clearFocus(force = true)
-        scope.launch { pagerState.animateScrollToPage(tab.ordinal) }
+        if (activeTab == tab) return
+        activeTab = tab
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PIP_TAB", tab.name)
     }
 
-    LaunchedEffect(pagerState.currentPage) {
-        focusManager.clearFocus(force = true)
-        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
-            "PIP_TAB", PipTab.values()[pagerState.currentPage].name
-        )
+    LaunchedEffect(Unit) {
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PIP_TAB", activeTab.name)
     }
 
     var searchQuery by remember { mutableStateOf("") }
@@ -608,10 +600,10 @@ fun PipScreen(
                         )
                     }
                     Row(modifier = Modifier.fillMaxWidth().height(40.dp)) {
-                        TabBox("LIBRARY", pagerState.currentPage == PipTab.LIBRARY.ordinal) {
+                        TabBox("LIBRARY", activeTab == PipTab.LIBRARY) {
                             selectPipTab(PipTab.LIBRARY)
                         }
-                        TabBox("MANUAL INSTALL", pagerState.currentPage == PipTab.MANUAL.ordinal) {
+                        TabBox("MANUAL INSTALL", activeTab == PipTab.MANUAL) {
                             selectPipTab(PipTab.MANUAL)
                         }
                     }
@@ -619,14 +611,13 @@ fun PipScreen(
             }
         }
     ) { padding ->
-        HorizontalPager(
-            state = pagerState,
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
-        ) { page ->
-            when (PipTab.values()[page]) {
+        ) {
+            when (activeTab) {
                 PipTab.LIBRARY -> LibraryTab(
                     repository = repository,
                     searchQuery = searchQuery,

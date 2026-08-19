@@ -464,5 +464,23 @@ dipisahkan menjadi pembuka v1.0.20, bukan dimasukkan ke kandidat release.
 Roadmap, gate, mutation proof, UAT, rollback, dan jalur riset lengkap:
 `ROADMAP_FINAL_V1019_FOCUS_STABILITY.md`.
 
-Status: roadmap **DESIGNED dan disetujui**; fix **belum IMPLEMENTED**; PR,
-merge, dan release belum dilakukan.
+Status awal: roadmap **DESIGNED dan disetujui**; fix saat itu **belum
+IMPLEMENTED**; PR, merge, dan release belum dilakukan.
+
+### 2026-08-19 — Tap-only focus fix: IMPLEMENTED + LOCALLY VERIFIED
+`PipScreen` kembali memakai satu enum state tap-only. `HorizontalPager`,
+`rememberPagerState`, opt-in Pager, `LocalFocusManager`, dan kedua
+`clearFocus(force = true)` dihapus. Seluruh state Library/Manual yang penting
+(input, scroll Library, scroll halaman Manual, dan scroll console) tetap
+di-hoist; breadcrumb tab dipertahankan tanpa side effect focus. Package Engine,
+resolver, runtime, dan versi dependency tidak diubah.
+
+Tujuh guard menjaga topology final. Enam mutasi dibuktikan merah: Pager,
+PagerState, dan clearFocus dikembalikan; mapping tab ditukar; state scroll
+diturunkan dari owner; serta jalur Library → Manual diputus. Setelah restore,
+focused guard hijau. Validasi lokal: `tools/check.sh` **572 passed**, 58 Kotlin
+files lexical sanity, npm/editor supply-chain guard dan `git diff --check`
+hijau.
+
+Status: **IMPLEMENTED + LOCALLY VERIFIED**. Belum CI VERIFIED, belum DEVICE
+VERIFIED, dan belum PR/merge/release.

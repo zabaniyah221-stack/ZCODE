@@ -3904,44 +3904,74 @@ class TestTracebackChipBabak2:
         )
 
 
-class TestPipSwipeTabsV1019:
-    """Swipe hanya untuk dua sibling page INSTALL MODULES; tap tetap hidup."""
+class TestPipTapTabsV1019:
+    """Final release: tab tap-only, tanpa Pager atau manipulasi focus paksa."""
 
     def _src(self) -> str:
         return strip_kt_comments(read(UI / "settings/PipScreen.kt"))
 
-    def test_pager_satu_sumber_state_dan_dua_page(self):
+    def test_pager_dan_forced_focus_clear_dilarang(self):
         src = self._src()
-        assert "rememberPagerState" in src and "HorizontalPager" in src
-        assert "pageCount = { PipTab.values().size }" in src
+        for token in (
+            "HorizontalPager", "rememberPagerState", "LocalFocusManager",
+            "clearFocus(", "animateScrollToPage",
+        ):
+            assert token not in src, f"PipScreen final tap-only memuat kembali {token}"
+
+    def test_enum_adalah_satu_sumber_state(self):
+        src = self._src()
+        assert "private enum class PipTab { LIBRARY, MANUAL }" in src
+        assert "var activeTab by remember { mutableStateOf(PipTab.LIBRARY) }" in src
         assert 'mutableStateOf("LIBRARY")' not in src, (
-            "activeTab string lama membuat sumber state kedua"
+            "string activeTab membuat mapping tab rapuh"
         )
-        assert "pagerState.currentPage" in src
+        assert "when (activeTab)" in src
 
-    def test_tap_tab_tetap_menggerakkan_pager(self):
+    def test_tap_mapping_dan_breadcrumb_tidak_tertukar(self):
         src = self._src()
-        assert 'TabBox("LIBRARY"' in src and "selectPipTab(PipTab.LIBRARY)" in src
-        assert 'TabBox("MANUAL INSTALL"' in src and "selectPipTab(PipTab.MANUAL)" in src
-        assert "animateScrollToPage(tab.ordinal)" in src
+        library = src.index('TabBox("LIBRARY", activeTab == PipTab.LIBRARY)')
+        manual = src.index('TabBox("MANUAL INSTALL", activeTab == PipTab.MANUAL)')
+        assert "selectPipTab(PipTab.LIBRARY)" in src[library:manual]
+        assert "selectPipTab(PipTab.MANUAL)" in src[manual:manual + 250]
 
-    def test_mapping_page_tidak_tertukar(self):
-        src = self._src()
-        pager = src[src.find("HorizontalPager"):]
-        assert "PipTab.values()[page]" in pager
-        assert "PipTab.LIBRARY -> LibraryTab(" in pager
-        assert "PipTab.MANUAL -> ManualTab(" in pager
+        selector = src[src.index("fun selectPipTab"):src.index("var searchQuery")]
+        assert "activeTab = tab" in selector
+        assert 'Breadcrumb.log("PIP_TAB", tab.name)' in selector
+        assert "focus" not in selector.lower()
 
-    def test_state_scroll_dipertahankan_di_parent(self):
+    def test_mapping_content_tidak_tertukar(self):
         src = self._src()
-        assert "val libraryListState = rememberLazyListState()" in src
-        assert "val manualPageScroll = rememberScrollState()" in src
+        content = src[src.index("when (activeTab)"):]
+        library = content.index("PipTab.LIBRARY -> LibraryTab(")
+        manual = content.index("PipTab.MANUAL -> ManualTab(")
+        assert library < manual
+        assert "repository = repository" in content[library:manual]
+        assert "packageName = packageName" in content[manual:manual + 1000]
+
+    def test_state_input_dan_scroll_dipertahankan_di_parent(self):
+        src = self._src()
+        owner = src[:src.index("Scaffold(")]
+        for declaration in (
+            "val libraryListState = rememberLazyListState()",
+            "val manualPageScroll = rememberScrollState()",
+            'var packageName by remember { mutableStateOf("") }',
+            "val consoleScroll = rememberScrollState()",
+        ):
+            assert declaration in owner, f"state owner hilang: {declaration}"
         assert "listState = libraryListState" in src
         assert "state = listState" in src
         assert "pageScroll = manualPageScroll" in src
         assert "verticalScroll(pageScroll)" in src
+        assert "consoleScroll = consoleScroll" in src
 
-    def test_pager_tidak_bocor_ke_editor_atau_diagnostics(self):
+    def test_semua_jalur_library_ke_install_memilih_manual(self):
+        src = self._src()
+        install = src[src.index("fun installFromLibrary"):src.index("fun doUninstall")]
+        assert "selectPipTab(PipTab.MANUAL)" in install
+        sample = src[src.index('"LIBRARY_SAMPLE_TO_INSTALL"'):src.index("onOpenAnyway")]
+        assert "selectPipTab(PipTab.MANUAL)" in sample
+
+    def test_pager_tidak_bocor_ke_layar_lain(self):
         assert "HorizontalPager" not in read(UI / "workbench/WorkbenchScreen.kt")
         assert "HorizontalPager" not in read(UI / "settings/DiagnosticsScreen.kt")
 

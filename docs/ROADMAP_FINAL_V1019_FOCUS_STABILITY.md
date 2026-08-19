@@ -2,7 +2,7 @@
 
 Tanggal keputusan: **2026-08-19**
 
-Status: **DESIGNED — disetujui untuk perencanaan, belum IMPLEMENTED**
+Status: **IMPLEMENTED + LOCALLY VERIFIED — menunggu CI dan UAT perangkat**
 
 Branch: `arena/v1019-fondasi`
 
@@ -328,15 +328,40 @@ memilih UX yang stabil.
 - Pager/TextField issue di ekosistem Compose:
   https://github.com/JetBrains/compose-multiplatform/issues/4681
 
-## 8. Status ringkas
+## 8. Catatan implementasi 2026-08-19
+
+Fix tap-only telah diterapkan pada `PipScreen`: Pager, PagerState, opt-in Pager,
+`LocalFocusManager`, dan dua forced focus clear dihapus. Satu enum `activeTab`
+menjadi owner tab; input, Library scroll, Manual page scroll, dan console scroll
+tetap di-hoist. Breadcrumb awal dan perubahan tab dipertahankan tanpa side
+effect focus. Dependency Foundation tetap dipakai luas oleh UI lain sehingga
+tidak dihapus pada fix ini.
+
+Guard final bertambah dari kontrak swipe menjadi tujuh kontrak tap-only. Enam
+arah mutasi dibuktikan merah secara terpisah: Pager kembali, PagerState kembali,
+clearFocus kembali, mapping tab tertukar, state scroll tidak di-hoist, dan jalur
+Library tidak menuju Manual. Source dipulihkan dan focused guard kembali hijau.
+
+Verifikasi lokal:
+
+```text
+tools/check.sh                     : 572 passed
+Kotlin lexical sanity             : 58 files passed
+npm/editor supply-chain guard     : passed
+git diff --check                  : passed
+```
+
+Belum ada kompilasi CI atau verifikasi perangkat untuk fix ini.
+
+## 9. Status ringkas
 
 ```text
 Crash                           : REGRESSION FOUND
 Package Engine sebagai akar     : RULED OUT (confidence 99,5%)
 Kelas masalah focus tree        : IDENTIFIED (confidence 99%)
-Tap-only release fix            : DESIGNED
-Implementasi fix                : BELUM IMPLEMENTED
-Local/CI/device verification    : BELUM untuk fix ini
+Tap-only release fix            : IMPLEMENTED + LOCALLY VERIFIED
+Mutation proof                  : 6 arah RED → restore GREEN
+CI/device verification          : BELUM untuk fix ini
 PR / merge / release            : BELUM
 v1.0.20 Focus Reliability Lab   : DESIGNED, bukan scope v1.0.19
 ```
