@@ -1106,6 +1106,25 @@ Setiap tambahan harus memuat: trigger, aturan, contoh ZCODE, dan bila eksternal
 mencantumkan sumber. Bila bukti baru membantahnya, edit/hapus—SKILLS bukan kitab
 suci.
 
+### 14.1.1 Kontrak berlaku sekarang, bukan selamanya
+
+`PRD`, `SKILLS`, ADR, schema, API, dan kontrak UX adalah pegangan versi yang
+sedang berlaku. Semuanya boleh di-upgrade, disederhanakan, di-downgrade, bahkan
+diganti jika masalah atau kemampuan ZCODE berubah.
+
+Namun selama belum direvisi secara eksplisit, kontrak lama tetap harus dipatuhi
+agar perilaku tidak berubah diam-diam. Mengganti "senjata" wajib mencatat:
+
+- musuh/masalah nyata dan bukti bahwa senjata lama tidak cukup;
+- kemampuan tim/runtime/device menggunakan solusi baru;
+- waktu belajar atau eksperimen yang dibutuhkan;
+- dampak kompatibilitas dan migrasi data/perilaku;
+- acceptance criteria, guard mutasi, dan rollback;
+- hal yang sengaja dikorbankan, bukan hanya manfaat baru.
+
+Upgrade bukan tujuan itu sendiri. Downgrade atau solusi lebih sederhana sah
+bila bukti menunjukkan hasilnya lebih aman, ringan, dan mudah dipelihara.
+
 ## 14.2 Traceability ringan
 
 Untuk perubahan berisiko, jaga rantai:

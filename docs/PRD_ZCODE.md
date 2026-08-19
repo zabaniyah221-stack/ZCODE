@@ -1,9 +1,16 @@
 # 📘 PRD — ZCODE
 
-**Status: BLUEPRINT — bukan kontrak.**
-Dokumen ini boleh diubah kapan saja: ada permintaan fitur baru, bug, error, atau
-temuan riset yang mematahkan asumsi di sini. Kalau kenyataan bertentangan dengan
-PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
+**Status: BLUEPRINT — bukan hukum permanen.**
+Dokumen ini boleh di-upgrade, disederhanakan, di-downgrade, atau diganti ketika
+kebutuhan user, ancaman, kemampuan tim, atau bukti teknis berubah. Kalau
+kenyataan bertentangan dengan PRD, **kenyataan yang menang** dan PRD diperbarui
+— bukan sebaliknya.
+
+Komitmen dan kontrak di dokumen ini mengikat **arah/versi yang sedang berlaku**,
+bukan masa depan selamanya. Perubahannya harus eksplisit: jelaskan masalah yang
+dihadapi, bukti, kemampuan mengoperasikan solusi, biaya belajar/migrasi, risiko,
+acceptance criteria, dan jalan mundur. Tidak boleh berubah diam-diam hanya
+karena teknologi baru terlihat lebih menarik.
 
 Versi saat ini: `1.0.19` (`gradle.properties` = sumber tunggal)
 Terakhir diperbarui: 2026-08-19
