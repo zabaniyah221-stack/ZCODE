@@ -183,3 +183,28 @@ lengkap belum memiliki schema. Enam selisih manifest sudah diklasifikasi bukan
 bug: manifest adalah peta versi resolver dengan kontrak sengaja satu arah,
 bukan daftar status UI. Status: audit COMPLETED, prioritas DESIGNED, konten
 lanjutan belum IMPLEMENTED.
+
+### 2026-08-19 — Jembatan Detail Library → Samples: IMPLEMENTED
+Commit `7def2cf` menambahkan relasi opsional `PackageDetails.sampleId`, tombol
+`Coba contoh lengkap →`, dan satu `SampleRequirementDialog` yang dipakai oleh
+SamplesScreen maupun Detail Library. Sebelas kartu TESTED ditautkan ke sample
+lama yang sudah runnable; `cryptography` sengaja tidak ditautkan karena bukti
+saat ini baru COMPATIBLE/ARMV7-IMPORT-VERIFIED, bukan DEVICE VERIFIED spesifik.
+
+Alur Detail Library:
+- paket aktif → sample dibuat dan kembali ke editor;
+- paket belum aktif → pilihan `Install dulu` / `Buka kode` / `Batal`;
+- `Install dulu` membuka tab Manual dengan requirement pertama terisi;
+- `sampleId` yatim memiliki fallback toast + breadcrumb, tetapi guard seharusnya
+  mencegah data tersebut masuk build.
+
+Guard memeriksa round-trip JSON, sample ID unik/ada, kecocokan
+`requiresPackage`, larangan link UNAVAILABLE/INCOMPATIBLE, pemakaian dependency
+gate bersama, generator, dan navigasi kembali ke editor. Uji mutasi terbukti
+merah untuk tujuh arah: ID yatim, requiresPackage hilang, status mustahil,
+toJson membuang field, dialog terduplikasi, generator salah mapping, dan
+navigasi editor hilang; restore hijau.
+
+Validasi lokal: `tools/check.sh` **531 passed**, 57 Kotlin files lexical sanity,
+npm/editor supply-chain guard hijau, `git diff --check` hijau. Status jujur:
+IMPLEMENTED lokal; belum CI VERIFIED dan belum DEVICE VERIFIED.

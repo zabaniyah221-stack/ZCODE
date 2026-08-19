@@ -265,9 +265,11 @@ sinkronisasi dua arah sebelum dikerjakan.
 
 ## 8. Status jujur
 
-- Audit data: **COMPLETED** untuk snapshot commit sebelum implementasi konten.
-- Rancangan prioritas: **DESIGNED**, belum IMPLEMENTED.
-- Sample/kartu baru: **NOT IMPLEMENTED**.
-- Relasi `Coba contoh lengkap`: **DESIGNED**, belum disepakati schema final.
+- Audit data: **COMPLETED** untuk snapshot commit sebelum pengayaan lanjutan.
+- Rancangan prioritas konten: **DESIGNED**, belum IMPLEMENTED.
+- Sample/kartu baru setelah audit: **NOT IMPLEMENTED**.
+- Relasi `Coba contoh lengkap`: **IMPLEMENTED lokal** pada commit `7def2cf`
+  dengan schema nullable `PackageDetails.sampleId`, 11 link TESTED, dan satu
+  dependency gate bersama; belum CI/DEVICE VERIFIED.
 - Paket GUI/ML besar: tetap **TERKENDALA/UNAVAILABLE** sesuai bukti saat ini,
   tetapi menjadi kandidat riset berdasarkan prinsip produk baru.
