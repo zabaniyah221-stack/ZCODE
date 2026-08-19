@@ -174,9 +174,12 @@ didukung dijelaskan jujur di Library dan tetap dinilai sebagai kandidat riset,
 bukan dikubur atau dijadikan premium lock. Prinsip kanonis dicatat di
 `PRD_ZCODE.md` §1 dan aturan kontributor di `SKILLS.md`.
 
-Audit snapshot dicatat di `AUDIT_LIBRARY_SAMPLES_V1019.md`. Temuan utama:
-231 paket TESTED tetapi baru 19 kartu TESTED berkedalaman kurasi tangan; 29
-sample runnable dengan 12 requirement package unik; kategori yatim dan enam
-selisih manifest perlu diklasifikasi; relasi Detail Library → sample lengkap
-belum memiliki schema. Status: audit COMPLETED, prioritas DESIGNED, konten baru
-belum IMPLEMENTED.
+Audit snapshot dicatat di `AUDIT_LIBRARY_SAMPLES_V1019.md`. Koreksi sejarah:
+Gerbong D gelombang awal sudah IMPLEMENTED pada commit `7111d42`; pekerjaan
+berikut adalah pengayaan lanjutan, bukan memulai dari nol. Temuan utama: 231
+paket TESTED tetapi baru 19 kartu TESTED berkedalaman kurasi tangan; 29 sample
+runnable dengan 12 requirement package unik; relasi Detail Library → sample
+lengkap belum memiliki schema. Enam selisih manifest sudah diklasifikasi bukan
+bug: manifest adalah peta versi resolver dengan kontrak sengaja satu arah,
+bukan daftar status UI. Status: audit COMPLETED, prioritas DESIGNED, konten
+lanjutan belum IMPLEMENTED.

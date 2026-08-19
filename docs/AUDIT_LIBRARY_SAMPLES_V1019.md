@@ -6,7 +6,12 @@ Basis: data produk lokal, bukan tebakan atau target jumlah.
 
 ## 1. Tujuan dan batas audit
 
-Audit ini menjawab tiga pertanyaan sebelum konten baru ditulis:
+Koreksi sejarah: gelombang awal Gerbong D sudah IMPLEMENTED pada commit
+`7111d42` (30 snippet katalog, deskripsi 11 kategori, dan 6 sample baru).
+Audit ini menilai **gap setelah gelombang awal tersebut**, bukan menyatakan
+Gerbong D belum pernah dimulai.
+
+Audit ini menjawab tiga pertanyaan sebelum konten lanjutan ditulis:
 
 1. Bagian mana dari Detail Library yang benar-benar kosong/generik?
 2. Paket TESTED mana yang belum punya sample berguna?
@@ -97,10 +102,17 @@ berstatus TESTED.
   `mypy`, `paramiko`.
 - Tidak ada TESTED katalog yang hilang dari manifest.
 
-Perbedaan ini **belum otomatis bug** karena manifest dapat berisi dependency
-atau bukti versi yang tidak dimaksudkan sebagai kartu mandiri. Namun enam nama
-tersebut harus diklasifikasi eksplisit agar dua sumber status tidak tampak
-bertentangan.
+Hasil klasifikasi setelah membaca kontrak resolver dan guard: ini **bukan enam
+bug status**. `tested-manifest.json` berfungsi sebagai peta versi prioritas
+resolver, bukan daftar kartu yang seluruhnya berstatus TESTED. Kontraknya
+sengaja satu arah: setiap kartu TESTED wajib punya versi di manifest, tetapi
+setiap nama di manifest tidak wajib menjadi kartu TESTED. Empat nama tanpa
+kartu dapat dipakai sebagai dependency/pin resolver; `mypy` dan `paramiko`
+tetap EXPERIMENTAL walau resolver memiliki versi prioritas.
+
+Utang yang tersisa adalah penamaan `tested-manifest` yang mudah disalahartikan.
+Jangan rename file/schema pada batch konten karena dipakai Kotlin, Python, dan
+guard; cukup dokumentasikan semantik asimetrisnya sampai ada migrasi tersendiri.
 
 ## 3. Snapshot Samples
 
@@ -240,13 +252,16 @@ sinkronisasi dua arah sebelum dikerjakan.
 
 ## 7. Urutan kerja yang disarankan
 
-1. Normalisasi satu kategori yatim dan klasifikasi enam selisih manifest.
-2. Lengkapi P0: kartu paket yang sample-nya sudah ada.
-3. Putuskan schema relasi `PackageDetails ↔ SampleEntry` sebelum menyalin kode.
-4. Buat gelombang sample kecil namun lintas-kegunaan dari P1.
-5. Tambah kartu detail bersamaan dengan sample sebagai satu sumber kebenaran.
-6. Jalankan guard + mutation test, CI, lalu satu UAT device terkurasi.
-7. Baru lanjut gelombang berikutnya berdasarkan hasil UAT, bukan mengejar angka.
+1. Putuskan normalisasi kategori yatim `virtualenv`; jangan ubah data dulu
+   karena guard lama secara eksplisit memperlakukannya sebagai pengecualian.
+2. Pertahankan kontrak asimetris manifest; dokumentasikan bahwa ini peta versi
+   resolver, bukan daftar status UI.
+3. Lengkapi P0: kartu paket yang sample-nya sudah ada.
+4. Putuskan schema relasi `PackageDetails ↔ SampleEntry` sebelum menyalin kode.
+5. Buat gelombang sample kecil namun lintas-kegunaan dari P1.
+6. Tambah kartu detail bersamaan dengan sample sebagai satu sumber kebenaran.
+7. Jalankan guard + mutation test, CI, lalu satu UAT device terkurasi.
+8. Baru lanjut gelombang berikutnya berdasarkan hasil UAT, bukan mengejar angka.
 
 ## 8. Status jujur
 
