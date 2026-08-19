@@ -171,13 +171,14 @@ TESTED yang sudah ada—bukan alfabet atau popularitas semata.
 
 ### P0 — paket yang sample-nya sudah tampil
 
-Lengkapi lebih dulu kartu auto-fill berikut agar Samples dan Library tidak
-berbeda kualitas:
+Status 2026-08-19:
 
-- `python-docx`
-- `qrcode`
-- `sympy`
-- `cryptography` — setelah status/bukti diselesaikan
+- `python-docx` — IMPLEMENTED kurasi tangan (`7e73ed5`).
+- `qrcode` — IMPLEMENTED kurasi tangan; bug optional Pillow diperbaiki dengan
+  fallback SVG (`7e73ed5`).
+- `sympy` — IMPLEMENTED kurasi tangan (`7e73ed5`).
+- `cryptography` — tetap COMPATIBLE; audit tidak menemukan bukti DEVICE TESTED
+  spesifik, sehingga kartu belum diberi `sampleId`.
 
 Kartu kurasi tangan yang sudah ada tetap diaudit sinkronisasi snippet terhadap
 sample: `numpy`, `requests`, `rich`, `tqdm`, `openpyxl`, `pillow`, `pandas`,
@@ -266,9 +267,10 @@ sinkronisasi dua arah sebelum dikerjakan.
 ## 8. Status jujur
 
 - Audit data: **COMPLETED** untuk snapshot commit sebelum pengayaan lanjutan.
-- Rancangan prioritas konten: **DESIGNED**, belum IMPLEMENTED.
-- Sample/kartu baru setelah audit: **NOT IMPLEMENTED**.
-- Relasi `Coba contoh lengkap`: **IMPLEMENTED lokal** pada commit `7def2cf`
+- Rancangan prioritas konten lanjutan: **DESIGNED**.
+- Tiga kartu P0: **IMPLEMENTED lokal** pada commit `7e73ed5`; belum CI/DEVICE
+  VERIFIED. Sample QR yang ada ikut diperbaiki, tetapi belum ada item sample baru.
+- Relasi `Coba contoh lengkap`: **CI VERIFIED** pada commit `7def2cf`
   dengan schema nullable `PackageDetails.sampleId`, 11 link TESTED, dan satu
   dependency gate bersama; belum CI/DEVICE VERIFIED.
 - Paket GUI/ML besar: tetap **TERKENDALA/UNAVAILABLE** sesuai bukti saat ini,

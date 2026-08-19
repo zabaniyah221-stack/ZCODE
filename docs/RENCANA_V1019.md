@@ -206,5 +206,38 @@ toJson membuang field, dialog terduplikasi, generator salah mapping, dan
 navigasi editor hilang; restore hijau.
 
 Validasi lokal: `tools/check.sh` **531 passed**, 57 Kotlin files lexical sanity,
-npm/editor supply-chain guard hijau, `git diff --check` hijau. Status jujur:
-IMPLEMENTED lokal; belum CI VERIFIED dan belum DEVICE VERIFIED.
+npm/editor supply-chain guard hijau, `git diff --check` hijau. CI run
+`32203918119` kemudian sukses untuk commit `7d578b0`; jembatan berstatus
+CI VERIFIED, belum DEVICE VERIFIED.
+
+### 2026-08-19 — Kurasi P0 + QR optional-dependency bug: IMPLEMENTED
+Commit `7e73ed5` memperkaya kartu `python-docx`, `qrcode`, dan `sympy` dengan
+WHAT/WHY/HOW/WHERE/WHO, use case, dependency, risiko, lisensi/publisher,
+sumber resmi, dan tanggal/bukti device. Detail Library kini benar-benar
+merender field dependency yang sebelumnya terisi tetapi tidak pernah terlihat.
+
+Audit eksekusi menemukan bug nyata di sample QR: komentar lama mengklaim
+`qrcode` otomatis menarik Pillow, tetapi metadata qrcode 8.2 menempatkan Pillow
+di extra `pil`, dan eksperimen clean venv `qrcode==8.2 --no-deps` membuat
+`qrcode.make()` gagal `ModuleNotFoundError: PIL`. Sample diperbaiki: bila Pillow
+aktif hasil PNG; bila tidak, factory pure SVG memberi `qr.svg`. Kedua jalur
+dijalankan nyata: fallback SVG 6.539 byte, jalur Pillow PNG 447 byte.
+
+Sumber resmi kurasi:
+- python-docx: https://pypi.org/project/python-docx/1.2.0/ dan
+  https://python-docx.readthedocs.io/en/latest/
+- qrcode: https://pypi.org/project/qrcode/8.2/ dan
+  https://github.com/lincolnloop/python-qrcode#usage
+- SymPy: https://docs.sympy.org/latest/index.html dan
+  https://docs.sympy.org/latest/explanation/best-practices.html
+
+`cryptography` diaudit ulang melalui docs dan riwayat Git: ada wheel Chaquopy,
+ARMV7-IMPORT-VERIFIED bionic311, dan sample, tetapi tidak ditemukan breadcrumb
+atau laporan DEVICE TESTED spesifik. Status tetap COMPATIBLE; tidak ada
+`sampleId` dari kartu.
+
+Guard P0 terbukti merah lewat empat mutasi: whyUse hilang, dependency tak
+dirender, import fallback SVG hilang, dan klaim palsu Pillow otomatis kembali.
+Restore hijau. Validasi lokal: `tools/check.sh` **535 passed**, 57 Kotlin files,
+supply-chain guard dan diff-check hijau. Status: IMPLEMENTED lokal; belum CI
+VERIFIED untuk commit P0 dan belum DEVICE VERIFIED.
