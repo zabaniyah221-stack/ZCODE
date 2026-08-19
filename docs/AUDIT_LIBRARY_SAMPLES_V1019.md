@@ -153,7 +153,23 @@ layak mendapat sample sendiri. Seleksi harus berdasarkan kegunaan user.
    `example` saat ini adalah snippet terpisah, sehingga berisiko membusuk dan
    belum bisa menjadi tombol `Coba contoh lengkap`.
 
-### 3.3 Ketidakkonsistenan cryptography
+### 3.3 Perubahan setelah snapshot audit
+
+Commit `791dc9e` mengimplementasikan gelombang lanjutan:
+
+| Metrik | Sebelum | Setelah |
+|---|---:|---:|
+| Item Samples | 29 | 37 |
+| Kategori tujuan | 4 | 11 |
+| Requirement package unik | 12 | 18 |
+| Kartu dengan `sampleId` | 11 | 17 |
+
+Delapan tambahan: NumPy slicing, Matplotlib subplots, HTTPX, Beautiful Soup,
+python-pptx, TinyDB, PyOTP, dan PyYAML. Empat kartu auto-fill dinaikkan menjadi
+kurasi tangan. Ini IMPLEMENTED lokal dan host-runtime-verified sesuai rincian
+di `RENCANA_V1019.md`; belum CI/DEVICE VERIFIED.
+
+### 3.4 Ketidakkonsistenan cryptography
 
 Sample `crypto_pesan.py` memakai `requiresPackage = ["cryptography"]`, tetapi
 katalog menandai `cryptography` sebagai COMPATIBLE, bukan TESTED. Komentar
@@ -269,7 +285,9 @@ sinkronisasi dua arah sebelum dikerjakan.
 - Audit data: **COMPLETED** untuk snapshot commit sebelum pengayaan lanjutan.
 - Rancangan prioritas konten lanjutan: **DESIGNED**.
 - Tiga kartu P0: **IMPLEMENTED lokal** pada commit `7e73ed5`; belum CI/DEVICE
-  VERIFIED. Sample QR yang ada ikut diperbaiki, tetapi belum ada item sample baru.
+  VERIFIED. Sample QR yang ada ikut diperbaiki.
+- Gelombang 8 sample + 4 kartu kurasi: **IMPLEMENTED lokal** pada commit
+  `791dc9e`; host-runtime-verified secara bertingkat, belum CI/DEVICE VERIFIED.
 - Relasi `Coba contoh lengkap`: **CI VERIFIED** pada commit `7def2cf`
   dengan schema nullable `PackageDetails.sampleId`, 11 link TESTED, dan satu
   dependency gate bersama; belum CI/DEVICE VERIFIED.

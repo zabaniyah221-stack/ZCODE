@@ -241,3 +241,53 @@ dirender, import fallback SVG hilang, dan klaim palsu Pillow otomatis kembali.
 Restore hijau. Validasi lokal: `tools/check.sh` **535 passed**, 57 Kotlin files,
 supply-chain guard dan diff-check hijau. Status: IMPLEMENTED lokal; belum CI
 VERIFIED untuk commit P0 dan belum DEVICE VERIFIED.
+
+### 2026-08-19 — Gelombang 8 sample lintas-kegunaan: IMPLEMENTED
+Commit `791dc9e` menambah delapan sample berdasarkan lubang audit, bukan target
+jumlah:
+
+- NumPy: indexing/slicing;
+- Matplotlib: subplots PNG dengan backend Agg;
+- HTTPX: API + timeout + HTTPError;
+- Beautiful Soup: parsing HTML deterministik/offline;
+- python-pptx: presentasi dua slide;
+- TinyDB: catatan JSON persisten dengan upsert/query;
+- PyOTP: secret/kode TOTP demo + peringatan produksi;
+- PyYAML: `safe_load`/`safe_dump`, bukan `yaml.load` berbahaya.
+
+Samples berubah dari 29 item/4 kategori menjadi 37 item/11 kategori tujuan.
+Keranjang `Paket Populer` dihapus; NumPy dan Matplotlib punya jalur sendiri,
+sisanya dikelompokkan sebagai Web & API, Office, Database, Data & Matematika,
+Gambar & QR, Security, Utilities, dan Project Mini. Tidak ada sample GUI/paket
+UNAVAILABLE yang ditambahkan. Sample cryptography lama tetap tampil tetapi kini
+eksplisit bertuliskan belum DEVICE VERIFIED dan kartu tetap tanpa `sampleId`.
+
+Empat kartu auto-fill (`python-pptx`, `tinydb`, `pyotp`, `pyyaml`) dinaikkan ke
+kurasi tangan; HTTPX dan Beautiful Soup mendapat dependency/sumber HOW serta
+link sample. Enam kartu baru terhubung ke sample lengkap.
+
+Verifikasi runtime host:
+- exact-version clean venv: HTTPX 0.27.2, BeautifulSoup 4.12.3,
+  python-pptx 1.0.2, TinyDB 4.9.0, PyOTP 2.10.0, PyYAML 6.0.3 — semua jalan;
+- HTTPX mendapat HTTP 200;
+- output: PPTX 29.174 byte, TinyDB JSON 131 byte, YAML 85 byte;
+- NumPy/Matplotlib sample jalan pada host NumPy 2.3.5/Matplotlib 3.10.9;
+  versi Android exact 1.26.2/3.6.0 sudah DEVICE TESTED untuk paket lama,
+  tetapi **sample baru** belum DEVICE VERIFIED pada versi exact tersebut;
+- subplot PNG berhasil 28.744 byte.
+
+Sumber resmi:
+- https://numpy.org/doc/1.26/user/basics.indexing.html
+- https://matplotlib.org/3.6.3/gallery/subplots_axes_and_figures/subplots_demo.html
+- https://www.python-httpx.org/advanced/timeouts/
+- https://www.crummy.com/software/BeautifulSoup/bs4/doc/#quick-start
+- https://python-pptx.readthedocs.io/en/latest/user/quickstart.html
+- https://tinydb.readthedocs.io/en/latest/intro.html
+- https://pyauth.github.io/pyotp/
+- https://pyyaml.org/wiki/PyYAMLDocumentation
+
+Enam mutasi terbukti merah: timeout HTTPX dimatikan, PyYAML kembali ke unsafe
+load, paket sample diturunkan dari TESTED, kategori tujuan dikembalikan menjadi
+keranjang, backend Agg dihapus, dan link PyOTP diputus. Restore hijau. Validasi
+lokal `tools/check.sh`: **541 passed**, 57 Kotlin files, supply-chain guard dan
+diff-check hijau. Status: IMPLEMENTED lokal; belum CI/DEVICE VERIFIED.
