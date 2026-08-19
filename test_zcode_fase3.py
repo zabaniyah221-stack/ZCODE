@@ -214,3 +214,35 @@ class TestDokumentasi:
     def test_readme_nunjuk_ke_dok(self):
         assert "RENCANA_UPDATE_2026_08" in read(ROOT / "README.md"), \
             "README harus menunjuk ke dok rencana update"
+
+    def test_readme_gallery_memakai_bukti_device(self):
+        txt = read(ROOT / "README.md")
+        gallery = ROOT / "docs/screenshots/v1019"
+        wajib = ["splash.png", "drawer.png", "settings.png", "samples.png",
+                 "library.png", "manual-install.png", "editor.png",
+                 "palette.png", "terminal.png"]
+        for name in wajib:
+            assert (gallery / name).exists(), f"bukti screenshot hilang: {name}"
+            assert f"docs/screenshots/v1019/{name}" in txt, (
+                f"README tidak menampilkan screenshot {name}"
+            )
+
+    def test_readme_angka_katalog_dan_sample_sinkron(self):
+        import json as _json
+        txt = read(ROOT / "README.md")
+        catalog = _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        total = len(catalog)
+        tested = sum(p.get("status") == "TESTED" for p in catalog)
+        lib = read(CORE / "samples/SampleLibrary.kt")
+        samples = len(re.findall(r'\bSampleEntry\(\s*\n\s*"', lib))
+        categories = len(re.findall(r'\bSampleCategory\(\s*\n\s*"', lib))
+        assert f"**{total} kartu package**" in txt
+        assert f"**{tested} package berstatus TESTED**" in txt
+        assert f"**{samples} sample runnable dalam {categories} kategori**" in txt
+
+    def test_readme_menyebut_batas_utama(self):
+        txt = read(ROOT / "README.md")
+        for limit in ("Python tetap 3.11", "in-process", "reverse-dependency",
+                      "belum memiliki Linux shell", "klaim universal"):
+            assert limit in txt, f"README menyembunyikan batas: {limit}"
