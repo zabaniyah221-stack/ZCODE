@@ -145,3 +145,25 @@ UAT Infinix SMART 9 HD, ARMv7, APK v1.0.19 commit `6fa90f5`:
 - Dua pintu dipertahankan dengan fungsi berbeda: chip = sumber error workspace
   terdalam (jalur utama ramah jempol), inline = navigator frame traceback
   multi-file. Label chip akan dipoles bersama batch glyph, bukan build tunggal.
+
+### 2026-08-19 — UAT Build 1 hardening + swipe + glyph: DEVICE VERIFIED
+UAT user pada Infinix SMART 9 HD, ARMv7, Android 12, APK v1.0.19 commit
+`bf5e7ef` (CI run `32196030398`, conclusion `success`): user mengonfirmasi
+seluruh checklist berfungsi lancar sesuai harapan.
+
+Cakupan yang naik status dari CI VERIFIED menjadi DEVICE VERIFIED:
+- Editor WebView tetap memuat CodeMirror setelah CSP dan native network block;
+  edit, lint, Find, goto-line, traceback jump, dan font bundled tidak regresi.
+- Pembatasan network hanya berlaku pada Editor WebView; internet Python tetap
+  berfungsi dan alur Install Modules tidak regresi.
+- Tab `LIBRARY` ↔ `MANUAL INSTALL` berfungsi lewat tap maupun swipe; state,
+  seleksi/copy console, proses aktif, keyboard, scroll/input, dan rotasi tidak
+  menunjukkan regresi pada checklist UAT.
+- Migrasi decorative emoji ke glyph/text stabil tampil benar; label Back,
+  startup Python, dan traceback root-source tetap berfungsi, sementara emoji
+  dalam Samples tetap dipertahankan sesuai kebijakan.
+
+Status jujur: ini DEVICE VERIFIED untuk perangkat UAT di atas, bukan klaim
+universal untuk seluruh perangkat/ROM Android. PR belum dibuka dan release
+belum dilakukan. Langkah berikutnya adalah audit gap nyata Library dan Samples
+sebelum memperkaya detail paket atau menambah sample terkurasi.
