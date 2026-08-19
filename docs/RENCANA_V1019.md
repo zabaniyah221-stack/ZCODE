@@ -167,3 +167,16 @@ Status jujur: ini DEVICE VERIFIED untuk perangkat UAT di atas, bukan klaim
 universal untuk seluruh perangkat/ROM Android. PR belum dibuka dan release
 belum dilakukan. Langkah berikutnya adalah audit gap nyata Library dan Samples
 sebelum memperkaya detail paket atau menambah sample terkurasi.
+
+### 2026-08-19 — Roadmap konten disetujui; audit gap Library/Samples selesai
+User menyetujui arah: Samples hanya berisi contoh runnable, paket yang belum
+didukung dijelaskan jujur di Library dan tetap dinilai sebagai kandidat riset,
+bukan dikubur atau dijadikan premium lock. Prinsip kanonis dicatat di
+`PRD_ZCODE.md` §1 dan aturan kontributor di `SKILLS.md`.
+
+Audit snapshot dicatat di `AUDIT_LIBRARY_SAMPLES_V1019.md`. Temuan utama:
+231 paket TESTED tetapi baru 19 kartu TESTED berkedalaman kurasi tangan; 29
+sample runnable dengan 12 requirement package unik; kategori yatim dan enam
+selisih manifest perlu diklasifikasi; relasi Detail Library → sample lengkap
+belum memiliki schema. Status: audit COMPLETED, prioritas DESIGNED, konten baru
+belum IMPLEMENTED.
