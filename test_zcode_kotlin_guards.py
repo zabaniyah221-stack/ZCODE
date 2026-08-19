@@ -4526,3 +4526,8 @@ class TestUninstallHardeningV1019:
             assert dangerous not in block, (
                 "v1.0.19 belum punya ownership graph; jangan auto-clean dependency"
             )
+
+    def test_pelajaran_uninstall_masuk_playbook(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "SKILL 20 — Uninstall tanpa reverse graph" in skills
+        assert "Satu operasi sukses memiliki satu owner telemetry" in skills

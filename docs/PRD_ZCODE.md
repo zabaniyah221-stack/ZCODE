@@ -131,8 +131,9 @@ satu — gabungkan dalam satu build.
 | Terminal output + `input()` + Ctrl+C | ✅ |
 | Samples (pola 2 level) | ✅ |
 | Tema, font, true-black `#050806` | ✅ |
-| Breadcrumb + Crash Reporter | ✅ (cakupan masih sempit) |
-| **Install Modules** | ❌ **rusak — 4 bug** |
+| Breadcrumb + Crash Reporter | ✅ (cakupan masih berkembang) |
+| **Install Modules** transactional core | ✅ DEVICE VERIFIED (Infinix ARMv7) |
+| Uninstall confirmation/ownership hardening | IMPLEMENTED, menunggu CI/device |
 
 ---
 

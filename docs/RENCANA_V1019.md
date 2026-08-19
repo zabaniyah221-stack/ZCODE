@@ -415,3 +415,29 @@ menjadi FAIL. Restore hijau.
 
 Validasi lokal: `tools/check.sh` **559 passed**, 58 Kotlin files, supply-chain
 guard dan diff-check hijau. Status: IMPLEMENTED lokal; belum CI/DEVICE VERIFIED.
+
+
+### 2026-08-19 — Uninstall hardening sebelum final UAT: IMPLEMENTED
+Keputusan: hardening kecil dikerjakan sebelum UAT semantic logs agar satu APK
+menguji kandidat v1.0.19 yang utuh. Core resolver/download/smoke/activate tidak
+dirombak.
+
+Commit `19ef2a3`:
+
+- menghapus telemetry `uninstall_count` ganda; PackageEngine menjadi satu owner;
+- log uninstall berubah dari callback String ke `SemanticLog`;
+- tombol Detail tidak lagi langsung menghapus package;
+- dialog menjelaskan ZCODE belum memiliki reverse-dependency graph dan package
+  lain mungkin berhenti bekerja;
+- `Batal` tetap tersedia dan uninstall harus dikonfirmasi eksplisit;
+- uninstall ditolak saat analyze/install/engine lain masih berjalan;
+- breadcrumb `PKG_UNINSTALL_REQUEST/OK/FAIL` ditambahkan;
+- tidak ada auto-clean dependency/orphan sebelum ownership graph tersedia.
+
+Enam mutasi terbukti merah: telemetry ganda kembali, callback kembali String,
+warning dependency disembunyikan, tombol menghapus tanpa konfirmasi, uninstall
+dibiarkan balapan, dan breadcrumb request dihapus. Restore hijau.
+
+Validasi gabungan semantic logs + uninstall: `tools/check.sh` **566 passed**,
+58 Kotlin files, supply-chain guard dan diff-check hijau. Status: IMPLEMENTED
+lokal; belum CI/DEVICE VERIFIED.

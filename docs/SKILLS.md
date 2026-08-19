@@ -1363,3 +1363,21 @@ dan teks user yang mengandung simbol dapat salah dianggap status.
 6. Guard harus menguji setiap arah mapping dan membuktikannya lewat mutasi.
 7. Migrasi representasi log tidak boleh mengubah resolver, transaksi, download,
    smoke test, atau keputusan compatibility.
+
+
+---
+
+## SKILL 20 — Uninstall tanpa reverse graph wajib konservatif (2026-08-19)
+
+**Trigger:** uninstall langsung menghapus directory package tanpa konfirmasi atau
+reverse-dependency check; telemetry juga dicatat oleh dua layer.
+
+**Aturan:**
+
+1. Satu operasi sukses memiliki satu owner telemetry.
+2. Jangan auto-delete dependency/orphan sebelum ownership graph tersedia.
+3. Jelaskan risiko reverse dependency sebelum uninstall dan sediakan Batal.
+4. Uninstall tidak boleh balapan dengan install/analyze/activate.
+5. Log dan breadcrumb request/OK/fail wajib terpisah.
+6. Lower transaction layer mengubah state; outer engine memiliki policy,
+   telemetry, dan verdict user-facing.
