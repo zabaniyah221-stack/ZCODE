@@ -22,8 +22,10 @@ berbasis bukti. (PRD = pegangan, bukan acuan terkunci.)
 
 ## 1. Apa itu ZCODE
 
-IDE Python untuk Android, setara Pydroid/Acode/VS Code mobile, dengan empat
-komitmen yang tidak bisa ditawar:
+IDE Python untuk Android. Pembanding produk langsungnya adalah Pydroid;
+VS Code dan Acode menjadi sumber pola workbench/editor/plugin, bukan kategori
+pesaing yang sama. Audit: `docs/RISET_VSCODE_ACODE_PYDROID_2026_08_19.md`.
+Arah saat ini memiliki empat komitmen:
 
 1. **100% gratis, tanpa premium lock.** Tidak ada fitur di balik bayaran.
 2. **Offline-first, bukan offline-only.** Jalan tanpa internet; script yang
