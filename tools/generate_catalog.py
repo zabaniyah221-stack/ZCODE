@@ -947,6 +947,12 @@ SAMPLE_LINKS = {
     "pandas": "pandas_nilai",
     "sympy": "sympy_aljabar",
     "matplotlib": "matplotlib_chart",
+    "httpx": "httpx_api",
+    "beautifulsoup4": "beautifulsoup_links",
+    "python-pptx": "pptx_presentasi",
+    "tinydb": "tinydb_catatan",
+    "pyotp": "pyotp_2fa",
+    "pyyaml": "pyyaml_config",
 }
 
 

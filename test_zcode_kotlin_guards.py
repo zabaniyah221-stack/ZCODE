@@ -4002,6 +4002,11 @@ class TestLibrarySampleBridgeV1019:
         assert not by_name["cryptography"].get("sampleId"), (
             "bukti device cryptography belum ditemukan — jangan klaim dari kartu"
         )
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        start = lib.index('"crypto_pesan"')
+        assert "belum device-verified" in lib[start:start + 300], (
+            "sample lama cryptography wajib menyebut batas bukti secara jujur"
+        )
 
     def test_dependency_gate_dipakai_dua_pintu(self):
         dialog = read(UI / "samples/SampleRequirementDialog.kt")
@@ -4037,7 +4042,10 @@ class TestLibrarySampleBridgeV1019:
             "openpyxl": "openpyxl_excel", "pillow": "pillow_image",
             "python-docx": "docx_laporan", "qrcode": "qr_generator",
             "pandas": "pandas_nilai", "sympy": "sympy_aljabar",
-            "matplotlib": "matplotlib_chart",
+            "matplotlib": "matplotlib_chart", "httpx": "httpx_api",
+            "beautifulsoup4": "beautifulsoup_links",
+            "python-pptx": "pptx_presentasi", "tinydb": "tinydb_catatan",
+            "pyotp": "pyotp_2fa", "pyyaml": "pyyaml_config",
         }
         for name, sid in expected.items():
             assert f'"{name}": "{sid}"' in block, (
@@ -4109,3 +4117,91 @@ class TestLibraryP0CurationV1019:
         pkg = self._by_name()["qrcode"]
         assert "SvgPathImage" in pkg["example"]
         assert 'image_factory=SvgPathImage' in pkg["example"]
+
+
+class TestCuratedSampleWaveV1019:
+    """Gelombang 8 sample: berguna lintas kategori, runnable, dan aman-default."""
+
+    NEW = {
+        "numpy_slicing": "numpy",
+        "matplotlib_subplots": "matplotlib",
+        "httpx_api": "httpx",
+        "beautifulsoup_links": "beautifulsoup4",
+        "pptx_presentasi": "python-pptx",
+        "tinydb_catatan": "tinydb",
+        "pyotp_2fa": "pyotp",
+        "pyyaml_config": "pyyaml",
+    }
+
+    def _catalog(self):
+        import json as _json
+        return {p["name"]: p for p in _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))}
+
+    def test_delapan_sample_terdaftar_dan_tested(self):
+        lib = strip_kt_comments(read(APP / "core/samples/SampleLibrary.kt"))
+        catalog = self._catalog()
+        for sid, package in self.NEW.items():
+            assert f'"{sid}"' in lib, f"sample {sid} belum terdaftar"
+            assert (ROOT / f"app/src/main/assets/samples/{sid}.py").exists()
+            assert catalog[package]["status"] == "TESTED", (
+                f"{sid} memakai {package} yang belum TESTED"
+            )
+            start = lib.index(f'"{sid}"')
+            assert f'requiresPackage = listOf("{package}")' in lib[start:start + 500], (
+                f"{sid} kehilangan requiresPackage {package}"
+            )
+
+    def test_kategori_berdasarkan_tujuan_bukan_keranjang(self):
+        lib = strip_kt_comments(read(APP / "core/samples/SampleLibrary.kt"))
+        categories = re.findall(r'\bSampleCategory\(\s*"([^"]+)"', lib)
+        expected = {"basics", "numpy", "matplotlib", "web_api", "office",
+                    "database", "data_math", "image_qr", "security",
+                    "utilities", "projects"}
+        assert set(categories) == expected, f"kategori melenceng: {categories}"
+        assert len(categories) == len(set(categories)), "ID kategori duplikat"
+        assert '"paket", "Paket Populer"' not in lib
+
+    def test_network_timeout_dan_parser_offline(self):
+        httpx = read(ROOT / "app/src/main/assets/samples/httpx_api.py")
+        assert "timeout=10.0" in httpx and "raise_for_status()" in httpx
+        assert "except httpx.HTTPError" in httpx
+        soup = read(ROOT / "app/src/main/assets/samples/beautifulsoup_links.py")
+        assert 'BeautifulSoup(html, "html.parser")' in soup
+        for network in ("requests", "httpx", "urllib"):
+            assert f"import {network}" not in soup, (
+                "sample Beautiful Soup harus deterministik/offline; HTTP dipelajari terpisah"
+            )
+
+    def test_matplotlib_headless_dan_output_ditutup(self):
+        src = read(ROOT / "app/src/main/assets/samples/matplotlib_subplots.py")
+        assert 'matplotlib.use("Agg")' in src
+        assert src.index('matplotlib.use("Agg")') < src.index("import matplotlib.pyplot")
+        assert 'fig.savefig("subplots.png"' in src and "plt.close(fig)" in src
+
+    def test_security_defaults(self):
+        yaml = read(ROOT / "app/src/main/assets/samples/pyyaml_config.py")
+        assert "yaml.safe_load(" in yaml and "yaml.safe_dump(" in yaml
+        assert "yaml.load(" not in yaml, "data luar tidak boleh masuk yaml.load yang unsafe"
+        otp = read(ROOT / "app/src/main/assets/samples/pyotp_2fa.py")
+        assert "pyotp.random_base32()" in otp and ".verify(kode)" in otp
+        assert "Jangan cetak atau simpan secret asli" in otp
+
+    def test_empat_kartu_baru_lengkap_dan_enam_link(self):
+        catalog = self._catalog()
+        for name in ("python-pptx", "tinydb", "pyotp", "pyyaml"):
+            pkg = catalog[name]
+            for field in ("useCases", "doesNotWork", "risks", "license",
+                          "publisher", "longDescription", "whyUse", "example",
+                          "whoMadeIt", "sources", "curatedAt", "sampleId"):
+                assert pkg.get(field), f"{name}: {field} kosong"
+            assert "auto:" not in pkg["curatedAt"]
+            kinds = {s.get("untuk") for s in pkg["sources"]}
+            assert {"what", "why", "how", "who"} <= kinds
+        expected_links = {
+            "httpx": "httpx_api", "beautifulsoup4": "beautifulsoup_links",
+            "python-pptx": "pptx_presentasi", "tinydb": "tinydb_catatan",
+            "pyotp": "pyotp_2fa", "pyyaml": "pyyaml_config",
+        }
+        for package, sid in expected_links.items():
+            assert catalog[package].get("sampleId") == sid

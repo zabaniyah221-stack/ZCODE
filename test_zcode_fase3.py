@@ -145,9 +145,13 @@ class TestSamples:
                   "matplotlib_chart",
                   # A7 v1.0.19: sample multi-file pertama (entri katalog).
                   "project_mini",
-                  # Gerbong D v1.0.19: 6 sample baru (5 paket TESTED + 1 stdlib)
+                  # Gerbong D v1.0.19: gelombang awal
                   "docx_laporan", "qr_generator", "crypto_pesan",
-                  "sqlite_catatan", "pandas_nilai", "sympy_aljabar"]
+                  "sqlite_catatan", "pandas_nilai", "sympy_aljabar",
+                  # Gelombang lanjutan: jalur belajar + lintas kegunaan
+                  "numpy_slicing", "matplotlib_subplots", "httpx_api",
+                  "beautifulsoup_links", "pptx_presentasi", "tinydb_catatan",
+                  "pyotp_2fa", "pyyaml_config"]
 
     # A7: file .py di assets yang BUKAN entri katalog — companion yang
     # ditulis ke workspace dgn nama tetap saat sample induknya dibuka.
@@ -162,8 +166,14 @@ class TestSamples:
         txt = read(CORE / "samples/SampleLibrary.kt")
         for sid in self.SAMPLE_IDS:
             assert f'"{sid}"' in txt, f"sample {sid} hilang dari katalog"
-        for cat in ['"basics"', '"numpy"', '"web"']:
-            assert cat in txt, f"kategori {cat} hilang"
+        categories = ["basics", "numpy", "matplotlib", "web_api", "office",
+                      "database", "data_math", "image_qr", "security",
+                      "utilities", "projects"]
+        for cat in categories:
+            assert f'"{cat}"' in txt, f"kategori {cat} hilang"
+        assert '"paket", "Paket Populer"' not in txt, (
+            "kategori keranjang Paket Populer kembali — sample harus mudah dicari berdasarkan tujuan"
+        )
 
     def test_asset_sama_dengan_katalog(self):
         ids_assets = sorted(p.stem for p in (ASSETS / "samples").glob("*.py"))
