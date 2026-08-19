@@ -2907,7 +2907,8 @@ class TestResolveLifecycleV1015:
         assert "onCancel" in ui and "Batalkan" in ui
         assert "cancelCurrentOperation" in ui
         assert "PKG_RESOLVE_PROGRESS" in engine
-        assert "Step.Log" in engine and "ResolveOperationBridge" in engine
+        assert "Step.Message" in engine and "ResolveOperationBridge" in engine
+        assert "SemanticLogKind" in engine, "progress resolver kehilangan severity semantic"
 
     def test_resolver_progress_terikat_context_bukan_global_bridge(self):
         src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
@@ -4351,3 +4352,112 @@ class TestUniversalAgentsGuide:
         assert "Chaquopy" in skills and "ARMv7" in skills, (
             "fakta proyek tidak boleh hilang saat prinsip universal diekstrak"
         )
+
+
+class TestSemanticPackageLogsV1019:
+    """Package log meaning comes from types, never decorative status text."""
+
+    MODEL = APP / "core/logging/SemanticLog.kt"
+    PIP = UI / "settings/PipScreen.kt"
+    ENGINE = APP / "core/packageengine/PackageEngineV2.kt"
+    RESOLVE = APP / "core/packageengine/ResolveOperationBridge.kt"
+    EXECUTION = APP / "core/execution/ExecutionEngine.kt"
+
+    def test_model_memuat_semua_makna(self):
+        src = strip_kt_comments(read(self.MODEL))
+        for kind in ("STEP", "INFO", "WARN", "WAIT", "OK", "FAIL", "STOP", "RAW"):
+            assert re.search(rf"\b{kind}\b", src), f"SemanticLogKind.{kind} hilang"
+        assert "data class SemanticLog" in src
+
+    def test_renderer_prefix_dan_warna_lengkap(self):
+        src = strip_kt_comments(read(self.PIP))
+        expected_prefix = {
+            "STEP": "[>] ", "INFO": "[INFO] ", "WARN": "[WARN] ",
+            "WAIT": "[WAIT] ", "OK": "[OK] ", "FAIL": "[ERR] ",
+            "STOP": "[STOP] ", "RAW": "",
+        }
+        for kind, prefix in expected_prefix.items():
+            assert f'SemanticLogKind.{kind} -> "{prefix}"' in src, (
+                f"prefix {kind} salah/hilang"
+            )
+            assert f"SemanticLogKind.{kind} -> Color(" in src, (
+                f"warna {kind} salah/hilang"
+            )
+        assert "line.displayText" in src, "label semantic tidak ikut hasil copy"
+
+    def test_engine_event_bertipe_dan_cancel_bukan_fail(self):
+        src = strip_kt_comments(read(self.ENGINE))
+        assert "data class Message(" in src and "val kind: SemanticLogKind" in src
+        assert "enum class FinishResult { OK, FAIL, STOP }" in src
+        assert "data class Log(" not in src, "Step.Log generik kembali"
+        assert 'if (code == "CANCELLED") FinishResult.STOP' in src
+        pip = strip_kt_comments(read(self.PIP))
+        assert "FinishResult.STOP -> SemanticLogKind.STOP" in pip
+        assert 'result.code == "CANCELLED"' in pip
+        assert '"PKG_INSTALL_CANCELLED"' in pip
+
+    def test_resolve_progress_memiliki_kind(self):
+        src = strip_kt_comments(read(self.RESOLVE))
+        expected = (
+            '"package_begin", "http_begin" -> SemanticLogKind.WAIT',
+            '"http_retry", "http_fail", "package_unavailable" -> SemanticLogKind.WARN',
+            '"cancelled" -> SemanticLogKind.STOP',
+            '"package_chosen", "target_not_found" -> SemanticLogKind.INFO',
+        )
+        for mapping in expected:
+            assert mapping in src, f"resolve semantic mapping salah: {mapping}"
+        engine = strip_kt_comments(read(self.ENGINE))
+        assert "display, raw, keepDiagnostic, kind" in engine
+        assert "Step.Message(display, kind)" in engine
+
+    def test_legacy_reader_lengkap_dan_hanya_prefix(self):
+        src = strip_kt_comments(read(self.PIP))
+        start = src.index("fun parseLegacyConsoleLine")
+        block = src[start:src.index("@Composable", start)]
+        expected_lines = (
+            'listOf("✅", "[OK]") to SemanticLogKind.OK',
+            'listOf("❌", "[ERR]") to SemanticLogKind.FAIL',
+            'listOf("⚠️", "⚠", "[WARN]") to SemanticLogKind.WARN',
+            'listOf("ℹ️", "ℹ", "[INFO]") to SemanticLogKind.INFO',
+            'listOf("⏳", "[WAIT]") to SemanticLogKind.WAIT',
+            'listOf("🛑", "[STOP]") to SemanticLogKind.STOP',
+            'listOf("▶️", "▶", ">", "[>]") to SemanticLogKind.STEP',
+        )
+        for mapping in expected_lines:
+            assert mapping in block, f"legacy mapping salah/hilang: {mapping}"
+        assert "line.startsWith(it)" in block, (
+            "legacy reader tidak boleh menebak status dari emoji di tengah teks user"
+        )
+        assert "line.contains" not in block
+        assert "SemanticLogKind.RAW" in block
+
+    def test_producer_baru_bebas_emoji_status(self):
+        tokens = ("✅", "❌", "⚠️", "ℹ️", "⏳", "🛑")
+        for path in (self.ENGINE, self.EXECUTION,
+                     APP / "core/packageengine/WheelSelector.kt"):
+            src = strip_kt_comments(read(path))
+            for token in tokens:
+                assert token not in src, f"producer {path.name} masih emit {token}"
+        pip = strip_kt_comments(read(self.PIP))
+        # Emoji hanya boleh hidup dalam reader backward-compatibility.
+        start = pip.index("fun parseLegacyConsoleLine")
+        end = pip.index("@Composable", start)
+        active = pip[:start] + pip[end:]
+        for token in tokens:
+            assert token not in active, f"PipScreen producer masih emit {token}"
+
+    def test_execution_legacy_mengirim_semantic_log(self):
+        src = strip_kt_comments(read(self.EXECUTION))
+        assert "onLog: (SemanticLog) -> Unit" in src
+        assert "SemanticLogKind.FAIL" in src
+        assert "SemanticLogKind.RAW" in src
+
+    def test_text_tidak_menentukan_kind_jalur_baru(self):
+        pip = strip_kt_comments(read(self.PIP))
+        assert "fun appendMessage(text: String, kind: SemanticLogKind)" in pip
+        block = pip[pip.index("fun appendMessage"):pip.index("fun appendLegacyLog")]
+        assert "ConsoleLine(line.trim(), kind)" in block
+        for forbidden in ("contains", "startsWith", "✅", "❌"):
+            assert forbidden not in block, (
+                f"appendMessage semantic masih menebak dari teks: {forbidden}"
+            )

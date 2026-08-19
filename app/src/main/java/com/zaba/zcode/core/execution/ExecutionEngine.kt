@@ -4,6 +4,8 @@ import android.content.Context
 import android.os.StatFs
 import com.chaquo.python.PyException
 import com.chaquo.python.Python
+import com.zaba.zcode.core.logging.SemanticLog
+import com.zaba.zcode.core.logging.SemanticLogKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -401,7 +403,7 @@ object ExecutionEngine {
     fun startPipStream(
         context: Context?,
         packageName: String,
-        onLog: (String) -> Unit,
+        onLog: (SemanticLog) -> Unit,
         onDone: (success: Boolean, exitCode: Int) -> Unit
     ): Boolean {
         if (!isSafePackageName(packageName)) return false
@@ -410,22 +412,27 @@ object ExecutionEngine {
             Thread {
                 try {
                     if (!PythonRuntime.ensureStarted(appContext)) {
-                        onLog("\n❌ Python runtime tidak tersedia.\n")
+                        onLog(SemanticLog(
+                            "Python runtime tidak tersedia.",
+                            SemanticLogKind.FAIL
+                        ))
                         onDone(false, -1)
                         return@Thread
                     }
                     val bridge = TerminalBridge(
-                        onOutput = { _, text -> onLog(text) },
+                        onOutput = { _, text ->
+                            onLog(SemanticLog(text, SemanticLogKind.RAW))
+                        },
                         onExit = { code -> onDone(code == 0, code) }
                     )
                     Python.getInstance()
                         .getModule("zcode_pip")
                         .callAttr("install_package", bridge, packageName)
                 } catch (e: PyException) {
-                    onLog("\n❌ Error: ${e.message}\n")
+                    onLog(SemanticLog("Error: ${e.message}", SemanticLogKind.FAIL))
                     onDone(false, -1)
                 } catch (e: Exception) {
-                    onLog("\n❌ Error: ${e.message}\n")
+                    onLog(SemanticLog("Error: ${e.message}", SemanticLogKind.FAIL))
                     onDone(false, -1)
                 }
             }.start()
@@ -437,12 +444,12 @@ object ExecutionEngine {
                     val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
                     var line: String?
                     while (reader.readLine().also { line = it } != null) {
-                        onLog(line + "\n")
+                        onLog(SemanticLog(line ?: "", SemanticLogKind.RAW))
                     }
                     val exitCode = process.waitFor()
                     onDone(exitCode == 0, exitCode)
                 } catch (e: Exception) {
-                    onLog("\n❌ Error: ${e.message}\n")
+                    onLog(SemanticLog("Error: ${e.message}", SemanticLogKind.FAIL))
                     onDone(false, -1)
                 }
             }.start()
