@@ -1,5 +1,5 @@
 # sympy — matematika simbolik: PR aljabar dikerjain HP (TESTED di ZCODE)
-# Butuh: install sympy (pure Python, ringan)
+# Butuh: install sympy (pure Python; ekspresi besar dapat berat)
 
 from sympy import symbols, solve, expand, factor, diff
 

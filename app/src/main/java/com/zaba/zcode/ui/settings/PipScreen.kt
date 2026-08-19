@@ -1016,6 +1016,9 @@ private fun PackageDetailScreen(
                 WhereLine("∆", analysis.reasons.joinToString(" "))
             }
             pkg.works.forEach { WhereLine("✓", it) }
+            if (pkg.dependencies.isNotEmpty()) {
+                WhereLine("·", "Dependensi: ${pkg.dependencies.joinToString(", ")}")
+            }
             pkg.risks.forEach { WhereLine("∆", it) }
             pkg.doesNotWork.forEach { WhereLine("✗", it) }
             if (pkg.works.isEmpty() && pkg.risks.isEmpty() && pkg.doesNotWork.isEmpty()

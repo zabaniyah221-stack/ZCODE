@@ -199,7 +199,7 @@ object SampleLibrary {
                 ),
                 SampleEntry(
                     "qr_generator", "qrcode — QR Generator",
-                    "QR code offline dari teks/link apa pun — butuh: install qrcode",
+                    "QR offline: PNG bila Pillow aktif, fallback SVG — butuh qrcode",
                     "samples/qr_generator.py",
                     requiresPackage = listOf("qrcode")
                 ),

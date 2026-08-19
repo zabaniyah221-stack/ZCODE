@@ -3829,36 +3829,57 @@
    "3.11"
   ],
   "abis": [],
-  "description": "Matematika simbolik murni-Python.",
-  "useCases": [],
+  "description": "Matematika simbolik: aljabar, kalkulus, persamaan, dan matriks.",
+  "useCases": [
+   "menyelesaikan persamaan",
+   "turunan dan integral simbolik",
+   "faktorisasi, ekspansi, serta matriks"
+  ],
   "works": [
    "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.14.0 instal+smoke OK"
   ],
-  "doesNotWork": [],
-  "dependencies": [],
-  "risks": [],
+  "doesNotWork": [
+   "Bukan pengganti komputasi numerik array besar; untuk itu gunakan NumPy."
+  ],
+  "dependencies": [
+   "mpmath>=1.1.0,<1.4"
+  ],
+  "risks": [
+   "Ekspresi simbolik besar dapat tumbuh mahal; mulai dari bentuk sederhana dan gunakan asumsi simbol saat diketahui."
+  ],
   "smokeTest": null,
-  "license": "",
-  "publisher": "",
+  "license": "BSD",
+  "publisher": "SymPy development team",
   "source": "https://pypi.org/project/sympy/",
   "sha256": null,
-  "longDescription": "Computer algebra system (CAS) in Python",
-  "whoMadeIt": "SymPy development team · BSD",
+  "longDescription": "Computer algebra system pure-Python untuk bekerja dengan simbol dan rumus secara eksak: menyederhanakan ekspresi, menyelesaikan persamaan, melakukan kalkulus, aljabar linear, dan matematika diskret.",
+  "whoMadeIt": "Dikembangkan secara terbuka oleh SymPy development team dan komunitas kontributor. Lisensi BSD.",
   "sources": [
    {
     "untuk": "what",
-    "label": "pypi.org/project/sympy",
-    "url": "https://pypi.org/project/sympy/"
+    "label": "Dokumentasi SymPy 1.14",
+    "url": "https://docs.sympy.org/latest/index.html"
    },
    {
     "untuk": "why",
-    "label": "sympy.org",
-    "url": "https://sympy.org"
+    "label": "Tutorial pengantar SymPy",
+    "url": "https://docs.sympy.org/latest/tutorials/intro-tutorial/index.html"
+   },
+   {
+    "untuk": "how",
+    "label": "Best practices SymPy",
+    "url": "https://docs.sympy.org/latest/explanation/best-practices.html"
+   },
+   {
+    "untuk": "who",
+    "label": "GitHub · sympy/sympy",
+    "url": "https://github.com/sympy/sympy"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "example": "from sympy import symbols, solve, expand\nx = symbols(\"x\")\nprint(\"ekspansi:\", expand((x + 2) ** 3))\nprint(\"akar    :\", solve(x**2 - 5*x + 6, x))",
-  "sampleId": "sympy_aljabar"
+  "curatedAt": "2026-08-19 (kurasi tangan; device evidence 2026-08-16)",
+  "example": "from sympy import expand, solve, symbols\n\nx = symbols(\"x\")\nprint(\"ekspansi:\", expand((x + 2) ** 3))\nprint(\"akar:\", solve(x**2 - 5*x + 6, x))",
+  "sampleId": "sympy_aljabar",
+  "whyUse": "Gunakan ketika hasil yang dibutuhkan berupa rumus atau nilai eksak, bukan hanya angka pendekatan—misalnya akar persamaan, turunan, integral, faktor, dan ekspansi."
  },
  {
   "name": "tabulate",
@@ -5831,37 +5852,59 @@
    "3.11"
   ],
   "abis": [],
-  "description": "Baca/tulis Word .docx.",
-  "useCases": [],
+  "description": "Buat, baca, dan perbarui dokumen Microsoft Word .docx.",
+  "useCases": [
+   "laporan Word otomatis",
+   "surat dan sertifikat",
+   "tabel serta dokumen berformat"
+  ],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
    "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v1.2.0 instal+smoke OK"
   ],
-  "doesNotWork": [],
-  "dependencies": [],
-  "risks": [],
+  "doesNotWork": [
+   "Format Word lama .doc tidak didukung; gunakan .docx."
+  ],
+  "dependencies": [
+   "lxml>=3.1.0",
+   "typing-extensions>=4.9.0"
+  ],
+  "risks": [
+   "lxml adalah dependency native; gunakan versi TESTED melalui Install Modules ZCODE."
+  ],
   "smokeTest": null,
-  "license": "",
-  "publisher": "",
+  "license": "MIT",
+  "publisher": "Steve Canny / python-openxml",
   "source": "https://pypi.org/project/python-docx/",
   "sha256": null,
-  "longDescription": "Create, read, and update Microsoft Word .docx files.",
-  "whoMadeIt": "MIT",
+  "longDescription": "Library Python untuk membaca, membuat, dan memperbarui file Microsoft Word 2007+ (.docx), termasuk paragraf, heading, tabel, gambar, section, header, dan footer.",
+  "whoMadeIt": "Dibuat dan dipelihara oleh Steve Canny bersama proyek python-openxml. Lisensi MIT.",
   "sources": [
    {
     "untuk": "what",
-    "label": "pypi.org/project/python-docx",
-    "url": "https://pypi.org/project/python-docx/"
+    "label": "PyPI · python-docx 1.2.0",
+    "url": "https://pypi.org/project/python-docx/1.2.0/"
    },
    {
     "untuk": "why",
-    "label": "python-docx.readthedocs.org/en/latest",
-    "url": "https://python-docx.readthedocs.org/en/latest/"
+    "label": "Dokumentasi python-docx",
+    "url": "https://python-docx.readthedocs.io/en/latest/"
+   },
+   {
+    "untuk": "how",
+    "label": "Quickstart python-docx",
+    "url": "https://python-docx.readthedocs.io/en/latest/user/quickstart.html"
+   },
+   {
+    "untuk": "who",
+    "label": "GitHub · python-openxml/python-docx",
+    "url": "https://github.com/python-openxml/python-docx"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "example": "from docx import Document\ndoc = Document()\ndoc.add_heading(\"Laporan ZCODE\", 0)\ndoc.add_paragraph(\"Dokumen Word dibuat dari HP.\")\ndoc.save(\"laporan.docx\")\nprint(\"tersimpan: laporan.docx\")",
-  "sampleId": "docx_laporan"
+  "curatedAt": "2026-08-19 (kurasi tangan; device evidence 2026-08-16)",
+  "example": "from docx import Document\n\ndoc = Document()\ndoc.add_heading(\"Laporan ZCODE\", 0)\ndoc.add_paragraph(\"Dokumen Word dibuat dari HP.\")\ndoc.save(\"laporan.docx\")\nprint(\"tersimpan: laporan.docx\")",
+  "sampleId": "docx_laporan",
+  "whyUse": "Cocok untuk membuat laporan, surat, sertifikat, dan dokumen Word berulang langsung dari data Python tanpa menyusun semuanya secara manual."
  },
  {
   "name": "python-magic",
@@ -7768,37 +7811,58 @@
    "3.11"
   ],
   "abis": [],
-  "description": "Generate QR code (pakai Pillow).",
-  "useCases": [],
+  "description": "Buat QR code offline sebagai PNG atau SVG.",
+  "useCases": [
+   "QR untuk tautan atau teks",
+   "label dan tiket sederhana",
+   "output SVG tanpa dependency gambar tambahan"
+  ],
   "works": [
    "ARMv7-import-verified 2026-08-16 (bionic311)",
    "DEVICE TESTED 2026-08-16 (Infinix SMART 9 HD, ARMv7, UAT maraton) — v8.2 instal+smoke OK"
   ],
-  "doesNotWork": [],
-  "dependencies": [],
-  "risks": [],
+  "doesNotWork": [
+   "Output PNG default membutuhkan Pillow; tanpa Pillow gunakan factory SVG."
+  ],
+  "dependencies": [
+   "Pillow>=9.1.0 (opsional untuk output PNG)"
+  ],
+  "risks": [
+   "QR bergaya atau berlogo tidak dijamin terbaca semua scanner; uji hasilnya sebelum dipakai."
+  ],
   "smokeTest": null,
-  "license": "",
-  "publisher": "",
+  "license": "BSD",
+  "publisher": "Lincoln Loop",
   "source": "https://pypi.org/project/qrcode/",
   "sha256": null,
-  "longDescription": "QR Code image generator",
-  "whoMadeIt": "Lincoln Loop · BSD",
+  "longDescription": "Generator QR code pure-Python yang dapat membuat QR dari teks atau data, merender ke terminal, serta menyimpan output SVG. Output PNG tersedia ketika Pillow dipasang.",
+  "whoMadeIt": "Dikembangkan oleh Lincoln Loop dan para kontributor python-qrcode. Lisensi BSD.",
   "sources": [
    {
     "untuk": "what",
-    "label": "pypi.org/project/qrcode",
-    "url": "https://pypi.org/project/qrcode/"
+    "label": "PyPI · qrcode 8.2",
+    "url": "https://pypi.org/project/qrcode/8.2/"
    },
    {
     "untuk": "why",
-    "label": "github.com/lincolnloop/python-qrcode",
+    "label": "python-qrcode · What is a QR Code?",
+    "url": "https://github.com/lincolnloop/python-qrcode#what-is-a-qr-code"
+   },
+   {
+    "untuk": "how",
+    "label": "python-qrcode · Usage",
+    "url": "https://github.com/lincolnloop/python-qrcode#usage"
+   },
+   {
+    "untuk": "who",
+    "label": "GitHub · lincolnloop/python-qrcode",
     "url": "https://github.com/lincolnloop/python-qrcode"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)",
-  "example": "import qrcode\nimg = qrcode.make(\"https://github.com/muzape28-blip/ZCODE\")\nimg.save(\"qr.png\")\nprint(\"tersimpan: qr.png\")",
-  "sampleId": "qr_generator"
+  "curatedAt": "2026-08-19 (kurasi tangan; device evidence 2026-08-16)",
+  "example": "import qrcode\nfrom qrcode.image.svg import SvgPathImage\n\nimg = qrcode.make(\"https://github.com/muzape28-blip/ZCODE\", image_factory=SvgPathImage)\nimg.save(\"qr.svg\")\nprint(\"tersimpan: qr.svg\")",
+  "sampleId": "qr_generator",
+  "whyUse": "Berguna untuk membuat QR offline dari link, teks, identitas, atau kode tiket langsung di HP tanpa mengirim datanya ke layanan web."
  },
  {
   "name": "soundfile",

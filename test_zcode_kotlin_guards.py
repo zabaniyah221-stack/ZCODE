@@ -4043,3 +4043,69 @@ class TestLibrarySampleBridgeV1019:
             assert f'"{name}": "{sid}"' in block, (
                 f"generator kehilangan link {name} → {sid}"
             )
+
+
+class TestLibraryP0CurationV1019:
+    """Tiga kartu yang sample-nya sudah ada wajib kurasi tangan dan jujur.
+
+    Menjaga kelas regresi: auto-fill kembali menyamar sebagai kurasi, dependency
+    tidak tampil, atau sample QR kembali menganggap Pillow dependency otomatis.
+    """
+
+    NAMES = ("python-docx", "qrcode", "sympy")
+
+    def _by_name(self):
+        import json as _json
+        data = _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        return {p["name"]: p for p in data}
+
+    def test_tiga_kartu_lengkap_dan_bersumber(self):
+        by = self._by_name()
+        for name in self.NAMES:
+            pkg = by[name]
+            for field in ("description", "useCases", "works", "dependencies",
+                          "risks", "license", "publisher", "longDescription",
+                          "whyUse", "example", "whoMadeIt", "sources",
+                          "curatedAt", "sampleId"):
+                assert pkg.get(field), f"{name}: field {field} kosong"
+            assert "auto:" not in pkg["curatedAt"], (
+                f"{name}: metadata auto-fill menyaru sebagai kurasi tangan"
+            )
+            kinds = {source.get("untuk") for source in pkg["sources"]}
+            assert {"what", "why", "how", "who"} <= kinds, (
+                f"{name}: sumber 5W1H belum lengkap: {sorted(kinds)}"
+            )
+            assert all(source.get("url", "").startswith("https://")
+                       for source in pkg["sources"]), f"{name}: URL sumber tidak aman"
+
+    def test_dependency_spesifik_dan_dirender(self):
+        by = self._by_name()
+        assert "lxml>=3.1.0" in by["python-docx"]["dependencies"]
+        assert "typing-extensions>=4.9.0" in by["python-docx"]["dependencies"]
+        assert any("Pillow>=9.1.0" in x for x in by["qrcode"]["dependencies"])
+        assert "mpmath>=1.1.0,<1.4" in by["sympy"]["dependencies"]
+        ui = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert '"Dependensi: ${pkg.dependencies.joinToString(", ")}"' in ui, (
+            "field dependencies terisi tetapi tidak pernah tampil di Detail Library"
+        )
+
+    def test_qrcode_tanpa_pillow_tetap_punya_output(self):
+        sample = read(ROOT / "app/src/main/assets/samples/qr_generator.py")
+        assert "otomatis menarik pillow" not in sample.lower(), (
+            "qrcode tidak menarik Pillow pada install standar — komentar lama bohong"
+        )
+        assert "except ModuleNotFoundError" in sample
+        assert "from qrcode.image.svg import SvgPathImage" in sample
+        assert 'image_factory=SvgPathImage' in sample and 'nama_file = "qr.svg"' in sample
+        assert 'nama_file = "qr.png"' in sample, (
+            "Pillow yang sudah aktif tetap boleh menghasilkan PNG ramah galeri"
+        )
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        i = lib.find('"qr_generator"')
+        assert "fallback SVG" in lib[i:i + 300]
+
+    def test_qrcode_snippet_memakai_jalur_tanpa_dependency_opsional(self):
+        pkg = self._by_name()["qrcode"]
+        assert "SvgPathImage" in pkg["example"]
+        assert 'image_factory=SvgPathImage' in pkg["example"]
