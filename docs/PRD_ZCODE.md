@@ -260,9 +260,12 @@ A–J + ralat `tested-manifest.json` (`numpy 1.26.4`→`1.26.2`,
 - **DIAGNOSTICS** layar penuh di sidebar, tab Semua/Run/Install/File/Crash
 - Export Log pindah ke Diagnostics + daftar run lama + rotasi 50 file
 
-### Build #4 — Alpine
-Terminal shell di sidebar · script bisa dihentikan · `apk add py3-scipy` ·
-tombol ZMUX yang butuh PTY baru diaktifkan di sini
+### Target pasca-v1.0.19 — terminal & interpreter pribadi
+Jangan langsung membundel Alpine. Tangga riset: ZCODE Command Console → spike
+Chaquopy pada private process `:python` untuk hard-stop/crash isolation → audit
+standalone CPython bionic → Alpine/PRoot opt-in hanya bila kebutuhan sudah
+mencakup shell Linux, `apk`, compiler, atau SciPy. Rancangan dan batas:
+`docs/TARGET_TERMINAL_ZCODE.md`.
 
 ### Build #5 — Library "perpustakaan mini"
 50 entri bertahap, pola SAMPLES 2 level, prosa ditulis tangan.
