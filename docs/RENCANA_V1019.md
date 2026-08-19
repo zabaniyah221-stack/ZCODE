@@ -290,4 +290,52 @@ Enam mutasi terbukti merah: timeout HTTPX dimatikan, PyYAML kembali ke unsafe
 load, paket sample diturunkan dari TESTED, kategori tujuan dikembalikan menjadi
 keranjang, backend Agg dihapus, dan link PyOTP diputus. Restore hijau. Validasi
 lokal `tools/check.sh`: **541 passed**, 57 Kotlin files, supply-chain guard dan
-diff-check hijau. Status: IMPLEMENTED lokal; belum CI/DEVICE VERIFIED.
+diff-check hijau. CI run `32207368332` kemudian sukses untuk commit `c047adf`.
+Status gelombang sample: CI VERIFIED, belum DEVICE VERIFIED.
+
+### 2026-08-19 — Undo/Redo touch + history per-file: IMPLEMENTED
+Audit menemukan `history()`/`undo()`/`redo()` sudah ada di CodeMirror tetapi
+belum punya UI touch. Lebih penting: semua tab sebelumnya memakai satu
+EditorState dan `setCode` replacement, sehingga history berisiko menyeberang
+file. Commit `aac56cb` memperbaiki kelas masalah sebelum membuka tombol:
+
+- satu EditorView, satu EditorState tersimpan per file;
+- switch tab memakai `openDocument(id, code)`, bukan replacement pada stack yang
+  sama;
+- close/delete membuang state, rename memindahkan key, Clear All membersihkan
+  semua state;
+- callback WebView membawa document ID supaya event terlambat tidak menimpa tab
+  baru;
+- transform programatik menjadi satu undo group terisolasi;
+- setting lint/whitespace/bracket/font diterapkan ke semua state;
+- `↶`, `↷`, `?` menjadi tiga tombol terowongan editor yang selalu terlihat;
+- tombol Undo/Redo redup dan nonaktif bila stack kosong; shortcut CM6 tetap ada;
+- isi/secret tidak dicatat; breadcrumb hanya action + nama file.
+
+Bundle CM6 dibangun ulang secara supply-chain-safe menjadi 472.611 byte, SHA-256
+`3359bd9af25e8e7f08099ebd968018a47b4ee0ecb847ab4f86bd2832cf0bbc5a`.
+Runtime test jsdom menjalankan bundle shipped dan membuktikan history main/helper
+terpisah, rename mempertahankan ID, close/clear membuang history. Delapan mutasi
+terbukti merah: state lama tak disimpan, callback kehilangan ID, close tidak
+membersihkan state, Undo diarahkan ke Redo, transform tidak terisolasi, setting
+hanya mengenai tab aktif, sort mengembalikan kode stale, dan callback file
+tertutup tetap menulis.
+
+Sumber keputusan:
+- https://codemirror.net/docs/ref/#commands.history
+- https://codemirror.net/docs/migration/
+- https://code.visualstudio.com/api/references/vscode-api
+
+### 2026-08-19 — AGENTS.md universal + SKILLS overlay proyek
+Permintaan user untuk membuat panduan agent universal diimplementasikan dengan
+nama standar root `AGENTS.md`, bukan `agent.md`. `docs/SKILLS.md` sengaja tidak
+dihapus/diubah menjadi generik karena berisi fakta ZCODE yang tidak universal
+(Chaquopy, ARMv7, bionic, Compose, CI/emulator). Ia kini menjadi overlay playbook
+khusus proyek setelah agent membaca kontrak universal. Commit: `119a7c9`.
+
+Sumber konvensi: https://agents.md/ dan
+https://developers.openai.com/codex/guides/agents-md
+
+Validasi gabungan: `tools/check.sh` **550 passed**, 57 Kotlin files,
+supply-chain guard dan diff-check hijau. Status Undo/Redo dan AGENTS: IMPLEMENTED
+lokal; belum CI VERIFIED dan Undo/Redo belum DEVICE VERIFIED.

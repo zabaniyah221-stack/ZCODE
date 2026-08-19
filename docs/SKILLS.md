@@ -1309,3 +1309,35 @@ portrait.
 5. Guard per titik + audit layar lain saat satu titik ketahuan (kelas,
    bukan kejadian): korban 2026-08-18 = 3 titik; Settings/Diagnostics/
    Samples/Terminal diaudit aman.
+
+
+---
+
+## SKILL 18 — Editor multi-file wajib punya identity + history per-file (2026-08-19)
+
+**Trigger:** CodeMirror sudah mengaktifkan `history()` dan hardware shortcut,
+tetapi ZCODE mengganti isi semua tab melalui `setCode` pada satu EditorState.
+Tombol Undo touch belum ada, sehingga bahaya ini lama tersembunyi. Pergantian
+file adalah transaction perubahan dokumen biasa dan berpotensi masuk stack;
+Undo dapat membawa isi file lama ke tab aktif.
+
+**Aturan:**
+
+1. Satu file = satu identity dan satu EditorState/history.
+2. Switch file menukar state; jangan `setCode` seluruh file pada stack bersama.
+3. Callback async WebView wajib membawa document ID; active context dapat berubah
+   sebelum callback main-thread diproses.
+4. Close/delete membuang state; rename memindahkan identity; clear-all membuang
+   semua state.
+5. Transform programatik (beautify/rename/format) = satu undo group terisolasi.
+6. Perubahan setting editor harus diterapkan pada state tab yang sedang tidak
+   aktif juga.
+7. Initial load/switch bukan edit user dan tidak boleh dapat di-Undo menjadi
+   dokumen kosong/file lain.
+8. History tidak dipersist lintas process restart sampai ada kebutuhan dan schema
+   yang terbukti.
+
+**Sumber:**
+- https://codemirror.net/docs/ref/#commands.history
+- https://codemirror.net/docs/migration/
+- https://discuss.codemirror.net/t/cm6-multiple-docs-with-their-own-histories/3220

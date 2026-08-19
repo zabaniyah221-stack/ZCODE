@@ -4305,6 +4305,11 @@ class TestPerFileUndoRedoV1019:
                        "onHistoryStateChange"):
             assert marker in bundle, f"bundle belum direbuild: {marker}"
 
+    def test_pelajaran_per_file_masuk_playbook(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "SKILL 18 — Editor multi-file" in skills
+        assert "Satu file = satu identity dan satu EditorState/history" in skills
+
 
 class TestUniversalAgentsGuide:
     """Root AGENTS.md = perilaku universal; SKILLS tetap playbook ZCODE."""

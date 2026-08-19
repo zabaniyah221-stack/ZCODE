@@ -101,6 +101,7 @@ satu — gabungkan dalam satu build.
 |---|---|
 | Editor CodeMirror 6, `file://` murni, offline | ✅ |
 | Multi-file, tab, autosave 600ms | ✅ |
+| Undo/Redo touch + history terpisah per file | IMPLEMENTED, menunggu CI/device |
 | Run Python (Chaquopy 3.11 in-process) | ✅ |
 | Terminal output + `input()` + Ctrl+C | ✅ |
 | Samples (pola 2 level) | ✅ |
