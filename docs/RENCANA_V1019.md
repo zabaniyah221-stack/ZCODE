@@ -441,3 +441,28 @@ dibiarkan balapan, dan breadcrumb request dihapus. Restore hijau.
 Validasi gabungan semantic logs + uninstall: `tools/check.sh` **566 passed**,
 58 Kotlin files, supply-chain guard dan diff-check hijau. Status: IMPLEMENTED
 lokal; belum CI/DEVICE VERIFIED.
+
+### 2026-08-19 — Swipe INSTALL MODULES: REGRESSION FOUND; roadmap final disetujui
+Final UAT artifact commit `25a6a9e` membuktikan install `hashid`, install
+`hashids==1.3.1`, dan uninstall `hashids` berhasil, tetapi perpindahan ke tab
+Manual berulang kali diikuti force close sebelum operasi package dimulai.
+Crash report runtime-proven berasal dari INFINIX X6532C, Android 14/API 34,
+ABI `armeabi-v7a, armeabi`; klaim Android 12 pada catatan UAT lama harus dibaca
+sebagai riwayat yang kini dikoreksi oleh bukti runtime lebih kuat.
+
+Exception tepat berada di Compose 1.6.1
+`FocusOwnerImpl.dispatchKeyEvent`: key event diterima ketika tidak ada active
+focus target. Perbandingan pre/post commit `2c51250` mempersempit regresi ke
+kelas topology `HorizontalPager` + lifecycle page + dua
+`clearFocus(force = true)`, bukan Package Engine. Klaim swipe DEVICE VERIFIED
+di atas resmi berubah menjadi **REGRESSION FOUND**.
+
+Keputusan release v1.0.19: kembali ke tab tap-only, hapus Pager dan kedua forced
+focus clear, pertahankan seluruh state input/scroll yang telah di-hoist, tanpa
+upgrade Compose. Diagnostics fokus dan matriks eksperimen Pager/TextField/IME
+dipisahkan menjadi pembuka v1.0.20, bukan dimasukkan ke kandidat release.
+Roadmap, gate, mutation proof, UAT, rollback, dan jalur riset lengkap:
+`ROADMAP_FINAL_V1019_FOCUS_STABILITY.md`.
+
+Status: roadmap **DESIGNED dan disetujui**; fix **belum IMPLEMENTED**; PR,
+merge, dan release belum dilakukan.
