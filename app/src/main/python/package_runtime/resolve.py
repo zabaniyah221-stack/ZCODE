@@ -34,7 +34,7 @@ from packaging.version import InvalidVersion, Version
 
 from .probe import CHAQUOPY_INDEX_URL, PYPI_JSON_URL, USER_AGENT
 from .requirement import RequirementError, parse_requirement
-from .wheelinfo import best_wheel, parse_wheel, wheel_compatible
+from .wheelinfo import WheelInfoError, best_wheel, parse_wheel, wheel_compatible
 
 _NETWORK_TIMEOUT_S = 20
 # v1.0.15 memakai 3 × 20 detik per URL sementara PyCall memotong SELURUH
@@ -622,6 +622,60 @@ def _marker_ok(req: Requirement, requested_extras: set[str], marker_env: dict) -
     return False
 
 
+def _candidate_version(candidate: dict) -> str | None:
+    """Versi wheel dari kandidat semua source; None untuk filename rusak."""
+    try:
+        return parse_wheel(candidate.get("filename", ""))["version"]
+    except (WheelInfoError, KeyError, TypeError):
+        return None
+
+
+def _filter_candidates_by_specifier(
+    candidates: list[dict], specifier: str
+) -> list[dict]:
+    """Terapkan satu kontrak versi ke local, PyPI, dan Chaquopy.
+
+    Sebelum v1.0.19 hanya `_pypi_candidates` yang memfilter specifier. Wheel
+    local/Chaquopy langsung masuk ranking, sehingga tested priority dapat
+    memilih contourpy 1.0.5 untuk dependency `contourpy>=1.2` milik Bokeh
+    3.9.2. Import dasar lolos, tetapi environment secara matematis salah.
+    """
+    if not specifier:
+        return list(candidates)
+    return [
+        candidate for candidate in candidates
+        if (version := _candidate_version(candidate)) is not None
+        and _contains(specifier, version)
+    ]
+
+
+def _runtime_compatible_candidates(candidates: list[dict], supported_tags) -> list[dict]:
+    """Kandidat yang tag Python/API/ABI-nya cocok dengan runtime target."""
+    compatible = []
+    for candidate in candidates:
+        try:
+            if wheel_compatible(
+                candidate.get("filename", ""), supported_tags=supported_tags
+            ):
+                compatible.append(candidate)
+        except WheelInfoError:
+            continue
+    return compatible
+
+
+def _compatible_available_versions(candidates: list[dict], supported_tags) -> list[str]:
+    """Versi unik yang benar-benar cocok runtime, untuk verdict user-facing."""
+    versions = {
+        version
+        for candidate in _runtime_compatible_candidates(candidates, supported_tags)
+        if (version := _candidate_version(candidate)) is not None
+    }
+    try:
+        return [str(v) for v in sorted((Version(v) for v in versions), reverse=True)]
+    except InvalidVersion:
+        return sorted(versions, reverse=True)
+
+
 def _local_wheel_candidates(wheels_dir: str, name: str) -> list[dict]:
     """Sumber 1: cache wheel lokal (offline reuse)."""
     import os
@@ -870,7 +924,9 @@ def _resolve_unlocked(
         pypi = []
         try:
             data = fetch_pypi_metadata(cname)
-            pypi = _pypi_candidates(data, {"specifier": specifier})
+            # Constraint difilter SATU KALI setelah semua source digabung.
+            # Requires-Python tetap difilter di helper ini.
+            pypi = _pypi_candidates(data, {"specifier": ""})
         except ResolveError as e:
             _propagate_cancel(e)
             if e.code != "SOURCE_NOT_FOUND":
@@ -883,12 +939,39 @@ def _resolve_unlocked(
             _propagate_cancel(e)
             source_errors.append(e)
         all_cands = local + pypi + chaq
-        # Jangan memvonis PACKAGE_NOT_AVAILABLE ketika kandidat kosong karena
-        # repository gagal dibaca. Local/remote candidate yang nyata tetap
-        # boleh menang walau sumber lain sedang putus.
-        if not all_cands and source_errors:
+        runtime_cands = _runtime_compatible_candidates(all_cands, supported_tags)
+        valid_cands = _filter_candidates_by_specifier(runtime_cands, specifier)
+        if valid_cands:
+            # Ranking hanya melihat wheel yang lolos ABI DAN constraint.
+            # Source lain boleh gagal selama kandidat valid nyata sudah ada.
+            return valid_cands
+
+        # Tanpa kandidat valid, source yang gagal membuat verdict versi tidak
+        # pasti: versi yang memenuhi bisa berada di repository yang tak terbaca.
+        if source_errors:
             raise source_errors[-1]
-        return all_cands
+
+        compatible_versions = _compatible_available_versions(
+            all_cands, supported_tags
+        )
+        if specifier and compatible_versions:
+            available = ", ".join(compatible_versions[:8])
+            raise ResolveError(
+                "DEPENDENCY_VERSION_UNAVAILABLE", "resolve",
+                "%s membutuhkan versi %s, tetapi versi yang tersedia untuk "
+                "runtime ZCODE ini: %s." % (cname, specifier, available),
+                "package=%s required=%s available=%s" % (
+                    cname, specifier, ",".join(compatible_versions)
+                ),
+            )
+
+        # Ada wheel, tetapi tidak satu pun cocok tag Python/API/ABI: biarkan
+        # `_choose` mempertahankan verdict COMPATIBILITY beserta ABI target.
+        if all_cands and not runtime_cands:
+            return all_cands
+
+        # Tidak ada kandidat wheel sama sekali: queue menghasilkan unavailable.
+        return valid_cands
 
     def _choose(cands: list[dict], cname: str) -> dict:
         tested = (tested_versions or {}).get(cname)

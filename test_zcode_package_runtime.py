@@ -294,13 +294,15 @@ class TestResolve:
         assert np_pkg["filename"].endswith("android_21_arm64_v8a.whl")
 
     def test_no_compatible_wheel_never_sdist(self, mock_net):
-        # requests 1.0.0 hanya punya sdist; constraint harus memilih 2.32.3,
-        # dan kalau cuma ada sdist → unavailable, BUKAN install palsu.
-        plan = resolve_mod.resolve(
-            "requests==1.0.0",
-            supported_tags=[Tag("py3", "none", "any")],
-        )
-        assert not plan["packages"]  # sdist tidak pernah dipilih → tidak ada package
+        # requests 1.0.0 hanya punya sdist; resolver wheel-only wajib menolak
+        # exact pin dan menjelaskan versi wheel runtime yang benar-benar ada.
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod.resolve(
+                "requests==1.0.0",
+                supported_tags=[Tag("py3", "none", "any")],
+            )
+        assert exc.value.code == "DEPENDENCY_VERSION_UNAVAILABLE"
+        assert "==1.0.0" in exc.value.human and "2.32.3" in exc.value.human
 
     def test_conflict_detected(self, mock_net):
         # A butuh charset==3.3.2, root minta charset==2.0.0 → konflik
@@ -373,6 +375,117 @@ class TestResolve:
         r = Requirement(te)
         # di Python 3.11 marker false → tidak perlu diinstall
         assert r.marker.evaluate(env) is False
+
+class TestCrossSourceSpecifierV1019:
+    """Constraint versi wajib berlaku sama untuk PyPI, Chaquopy, dan cache."""
+
+    @staticmethod
+    def _candidate(version, source):
+        return {
+            "filename": f"contourpy-{version}-py3-none-any.whl",
+            "url": f"{source}://contourpy-{version}.whl",
+            "source": source,
+        }
+
+    def test_filter_semua_source_dan_exact_pin(self):
+        candidates = [
+            self._candidate("1.0.5", "local"),
+            self._candidate("1.1.0", "chaquopy"),
+            self._candidate("1.2.1", "pypi"),
+        ]
+        valid = resolve_mod._filter_candidates_by_specifier(candidates, ">=1.2")
+        assert [c["source"] for c in valid] == ["pypi"]
+        exact = resolve_mod._filter_candidates_by_specifier(candidates, "==1.0.5")
+        assert [c["source"] for c in exact] == ["local"]
+
+    def test_tested_priority_tidak_boleh_mengalahkan_constraint(self):
+        candidates = [
+            self._candidate("1.0.5", "chaquopy"),
+            self._candidate("1.2.1", "pypi"),
+        ]
+        valid = resolve_mod._filter_candidates_by_specifier(candidates, ">=1.2")
+        best = whl_mod.best_wheel(
+            valid,
+            tested_versions=["1.0.5"],
+            supported_tags=[Tag("py3", "none", "any")],
+        )
+        assert best["filename"].startswith("contourpy-1.2.1")
+
+    @staticmethod
+    def _parent_metadata(specifier):
+        return {
+            "info": {
+                "name": "parent",
+                "version": "1.0.0",
+                "requires_dist": [f"contourpy{specifier}"],
+            },
+            "releases": {
+                "1.0.0": [{
+                    "filename": "parent-1.0.0-py3-none-any.whl",
+                    "packagetype": "bdist_wheel",
+                    "url": "https://files.pythonhosted.org/parent.whl",
+                    "digests": {"sha256": "11" * 32},
+                    "size": 100,
+                    "yanked": False,
+                }],
+            },
+        }
+
+    def _wire_bokeh_like_sources(self, monkeypatch, child_spec, pypi_child_error=False):
+        parent = self._parent_metadata(child_spec)
+
+        def metadata(name):
+            if name == "parent":
+                return parent
+            if pypi_child_error:
+                raise resolve_mod.ResolveError(
+                    "NETWORK", "metadata", "PyPI belum terbaca", "uji"
+                )
+            return {
+                "info": {"name": "contourpy", "version": "1.0.5", "requires_dist": []},
+                "releases": {},
+            }
+
+        def chaquopy(name):
+            if name != "contourpy":
+                return []
+            return [self._candidate("1.0.5", "chaquopy")]
+
+        monkeypatch.setattr(resolve_mod, "fetch_pypi_metadata", metadata)
+        monkeypatch.setattr(resolve_mod, "fetch_chaquopy_wheels", chaquopy)
+
+    def test_bokeh_39_like_dependency_ditolak_dengan_versi_tersedia(self, monkeypatch):
+        self._wire_bokeh_like_sources(monkeypatch, ">=1.2")
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._resolve_unlocked(
+                "parent==1.0.0",
+                supported_tags=[Tag("py3", "none", "any")],
+                tested_versions={"contourpy": ["1.0.5"]},
+            )
+        assert exc.value.code == "DEPENDENCY_VERSION_UNAVAILABLE"
+        assert ">=1.2" in exc.value.human and "1.0.5" in exc.value.human
+
+    def test_bokeh_33_like_dependency_menerima_contourpy_105(self, monkeypatch):
+        self._wire_bokeh_like_sources(monkeypatch, ">=1")
+        plan = resolve_mod._resolve_unlocked(
+            "parent==1.0.0",
+            supported_tags=[Tag("py3", "none", "any")],
+            tested_versions={"contourpy": ["1.0.5"]},
+        )
+        versions = {p["name"]: p["version"] for p in plan["packages"]}
+        assert versions["contourpy"] == "1.0.5"
+
+    def test_source_gagal_menang_atas_vonis_versi(self, monkeypatch):
+        self._wire_bokeh_like_sources(
+            monkeypatch, ">=1.2", pypi_child_error=True
+        )
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._resolve_unlocked(
+                "parent==1.0.0",
+                supported_tags=[Tag("py3", "none", "any")],
+            )
+        assert exc.value.code == "NETWORK"
+
 
 # =====================================================================
 # Resolver reliability — timeout/retry/progress/cancellation (v1.0.15 regression)
