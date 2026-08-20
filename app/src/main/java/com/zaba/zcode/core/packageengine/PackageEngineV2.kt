@@ -6,6 +6,7 @@ import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.core.logging.SemanticLog
 import com.zaba.zcode.core.logging.SemanticLogKind
+import com.zaba.zcode.core.runtime.NativeRuntimeState
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -52,7 +53,8 @@ class PackageEngineV2(private val context: Context) {
         val humanMessage: String?,
         val technicalMessage: String?,
         val rollbackPerformed: Boolean,
-        val installed: List<String>
+        val installed: List<String>,
+        val restartRequired: Boolean = false
     )
 
     private val resolver = DependencyResolver(context)
@@ -189,6 +191,7 @@ class PackageEngineV2(private val context: Context) {
         var tx: TransactionManager.Transaction? = null
         var rollbackPerformed = false
         var pkgName = requirementText.trim()
+        val nativeTouched = linkedSetOf<String>()
 
         fun fail(
             code: String,
@@ -538,6 +541,17 @@ class PackageEngineV2(private val context: Context) {
                 val manifestTests = repository.loadSmokeTests()[p.canonicalName]
                 val tests = buildSmokeTests(p.canonicalName, importName, details?.type, manifestTests)
                 val outcome = smokeRunner.run(importName, staging, tests, allStagingDirs)
+                // Detection is generic and evidence-based: if smoke saw a .so,
+                // its loader/C++ registry may now survive sys.modules cleanup.
+                // Persist stale state even when smoke later fails and rolls back.
+                if (outcome.nativeLibs.isNotEmpty()) {
+                    nativeTouched.add(p.canonicalName)
+                    NativeRuntimeState.markRequired(
+                        context,
+                        nativeTouched,
+                        if (outcome.ok) "native-smoke-ok" else "native-smoke-fail"
+                    )
+                }
                 if (!outcome.ok) {
                     TelemetryStore.increment("smoke_test_failure")
                     if (outcome.nativeLibs.isNotEmpty()) TelemetryStore.increment("native_load_failure")
@@ -573,6 +587,15 @@ class PackageEngineV2(private val context: Context) {
             }
             onStep(Step.Finish("Smoke Test", FinishResult.OK))
 
+            // Record native artifacts while staging still exists: activate may
+            // atomically move these directories out of staging.
+            planPackages.forEach { p ->
+                val dir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
+                if (dir.walkTopDown().any { it.isFile && it.name.contains(".so") }) {
+                    nativeTouched.add(p.canonicalName)
+                }
+            }
+
             // 8. Activate (atomic-ish + rollback)
             onStep(Step.Begin("Activate"))
             val (actOk, actMsg) = txManager.activate(tx, planPackages) { m -> onStep(Step.Message(m)) }
@@ -582,6 +605,12 @@ class PackageEngineV2(private val context: Context) {
             }
             onStep(Step.Finish("Activate", FinishResult.OK))
 
+            // A native environment change also needs a fresh process even when
+            // a support wheel had no importable Python module of its own.
+            if (nativeTouched.isNotEmpty()) {
+                NativeRuntimeState.markRequired(context, nativeTouched, "native-environment-changed")
+            }
+
             // 9. Sync SQLite + telemetri sukses
             for (p in planPackages) {
                 db.upsertInstalled(p.canonicalName, p.version, "site-packages/${p.canonicalName}/${p.version}", p.source, p.sha256)
@@ -589,7 +618,10 @@ class PackageEngineV2(private val context: Context) {
             TelemetryStore.increment("install_success")
             TelemetryStore.increment("packages_installed", planPackages.size.toLong())
             val installed = planPackages.map { it.canonicalName }
-            return InstallResult(true, null, null, null, null, false, installed)
+            return InstallResult(
+                true, null, null, null, null, false, installed,
+                restartRequired = nativeTouched.isNotEmpty()
+            )
 
         } catch (e: Exception) {
             return fail("RUNTIME", "engine", "Kegagalan internal engine: ${e.message}", e.toString())
@@ -804,11 +836,19 @@ class PackageEngineV2(private val context: Context) {
         canonicalName: String,
         onLog: (SemanticLog) -> Unit
     ): Pair<Boolean, String> {
+        val canonical = canonicalName.lowercase().replace("_", "-")
+        val installed = repository.installedSnapshot()[canonical]
+        val installedDir = installed?.path?.let { File(Paths.pythonEnvDir(context), it) }
+        val hadNative = installedDir?.takeIf { it.isDirectory }
+            ?.walkTopDown()?.any { it.isFile && it.name.contains(".so") } == true
         val tx = TransactionManager(context)
-        val result = tx.uninstall(canonicalName, onLog)
+        val result = tx.uninstall(canonical, onLog)
         if (result.first) {
-            db.deleteInstalled(canonicalName)
+            db.deleteInstalled(canonical)
             TelemetryStore.increment("uninstall_count")
+            if (hadNative) {
+                NativeRuntimeState.markRequired(context, listOf(canonical), "native-uninstall")
+            }
         }
         return result
     }

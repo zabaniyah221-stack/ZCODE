@@ -86,6 +86,7 @@ import com.zaba.zcode.core.plugins.PluginRegistry
 import com.zaba.zcode.core.plugins.SnippetLibrary
 import com.zaba.zcode.core.plugins.TodoExtractor
 import com.zaba.zcode.core.plugins.TodoItem
+import com.zaba.zcode.core.runtime.NativeRuntimeState
 import com.zaba.zcode.ui.components.ZIcons
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
@@ -592,6 +593,11 @@ fun WorkbenchScreen(
                 )
                 FloatingActionButton(
                     onClick = {
+                        if (NativeRuntimeState.isRequired(context)) {
+                            com.zaba.zcode.core.diagnostics.Breadcrumb.log("RUN_BLOCKED_RUNTIME_STALE")
+                            toast("Python perlu dimulai ulang sebelum program dijalankan.")
+                            return@FloatingActionButton
+                        }
                         // Breadcrumb: titik paling awal jalur Run. Kalau file jejak
                         // berhenti tepat setelah baris ini, berarti crash terjadi
                         // sebelum layar terminal sempat dikomposisi (diagnostik 2026-08-12).

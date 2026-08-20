@@ -1,6 +1,10 @@
 package com.zaba.zcode
 
+import android.app.ActivityManager
 import android.app.Application
+import android.content.Context
+import android.os.Build
+import android.os.Process
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.diagnostics.CrashReporter
 import com.zaba.zcode.core.packageengine.TelemetryStore
@@ -9,8 +13,24 @@ import dagger.hilt.android.HiltAndroidApp
 @HiltAndroidApp
 class ZcodeApp : Application() {
 
+    private fun currentProcessName(): String {
+        if (Build.VERSION.SDK_INT >= 28) return Application.getProcessName()
+        val pid = Process.myPid()
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        val listed = manager?.runningAppProcesses
+            ?.firstOrNull { it.pid == pid }
+            ?.processName
+        return listed ?: runCatching {
+            java.io.File("/proc/self/cmdline").readText().trimEnd('\u0000')
+        }.getOrDefault("")
+    }
+
     override fun onCreate() {
         super.onCreate()
+        // Helper relaunch hidup di process terpisah dan WAJIB tetap kecil: jangan
+        // pasang crash reporter/telemetri, jangan prewarm atau menyentuh Chaquopy.
+        if (currentProcessName().endsWith(":rebirth")) return
+
         // Diagnostik WAJIB paling awal: user tidak punya PC/logcat, jadi satu-satunya
         // bukti saat force close adalah apa yang sempat tertulis ke disk.
         Breadcrumb.init(this)

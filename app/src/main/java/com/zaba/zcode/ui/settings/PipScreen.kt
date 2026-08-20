@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -66,6 +67,7 @@ import com.zaba.zcode.core.packageengine.RuntimeProbe
 import com.zaba.zcode.core.packageengine.SourceRef
 import com.zaba.zcode.core.packageengine.TelemetryStore
 import com.zaba.zcode.core.logging.SemanticLogKind
+import com.zaba.zcode.core.runtime.NativeRuntimeState
 import com.zaba.zcode.core.samples.SampleEntry
 import com.zaba.zcode.core.samples.SampleLibrary
 import com.zaba.zcode.ui.samples.SampleRequirementDialog
@@ -89,11 +91,15 @@ fun PipScreen(
     context: android.content.Context,
     onBack: () -> Unit,
     onOpenSample: (SampleEntry) -> Unit = {},
+    onRestartRuntime: () -> Boolean = { false },
 ) {
     val scope = rememberCoroutineScope()
     val repository = remember { PackageRepository(context) }
     val engine = remember { PackageEngineV2(context) }
     val compat = remember { CompatibilityEngine(context) }
+    var runtimeStale by remember { mutableStateOf(NativeRuntimeState.isRequired(context)) }
+    var showRestartDialog by remember { mutableStateOf(false) }
+    var showRestartFailure by remember { mutableStateOf(false) }
 
     // v1.0.19 final: tab tap-only adalah topology stabil yang sudah melewati
     // UAT sebelum Pager diperkenalkan. State screen tetap di owner agar
@@ -199,6 +205,11 @@ fun PipScreen(
 
     fun startInstall(req: String, plan: DependencyResolver.ResolvePlan? = null) {
         if (isInstalling) return
+        if (runtimeStale || NativeRuntimeState.isRequired(context)) {
+            runtimeStale = true
+            appendMessage("Python perlu dimulai ulang sebelum package diubah lagi.", SemanticLogKind.WARN)
+            return
+        }
         val trimmed = req.trim()
         if (trimmed.isBlank()) {
             activeRequirement = null
@@ -234,6 +245,11 @@ fun PipScreen(
                 isInstalling = false
                 isCancelling = false // v1.0.18: install cancellable — reset state tombol
                 activeRequirement = null
+                val becameStale = result.restartRequired || NativeRuntimeState.isRequired(context)
+                if (becameStale) {
+                    runtimeStale = true
+                    showRestartDialog = true
+                }
                 if (result.ok) {
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
@@ -298,6 +314,11 @@ fun PipScreen(
 
     fun analyzeThenInstall(req: String) {
         if (isInstalling) return
+        if (runtimeStale || NativeRuntimeState.isRequired(context)) {
+            runtimeStale = true
+            appendMessage("Python perlu dimulai ulang sebelum package diubah lagi.", SemanticLogKind.WARN)
+            return
+        }
         val trimmed = req.trim()
         if (trimmed.isBlank()) {
             appendMessage("Requirement kosong.", SemanticLogKind.WARN)
@@ -430,6 +451,11 @@ fun PipScreen(
     }
 
     fun doUninstall(canonical: String) {
+        if (runtimeStale || NativeRuntimeState.isRequired(context)) {
+            runtimeStale = true
+            appendMessage("Python perlu dimulai ulang sebelum package diubah lagi.", SemanticLogKind.WARN)
+            return
+        }
         if (isInstalling || isAnalyzing || PackageEngineV2.isBusy()) {
             appendMessage(
                 "Tunggu operasi package yang sedang berjalan sebelum uninstall.",
@@ -456,6 +482,10 @@ fun PipScreen(
                     if (ok) "Uninstall $canonical berhasil." else msg,
                     if (ok) SemanticLogKind.OK else SemanticLogKind.FAIL
                 )
+                if (NativeRuntimeState.isRequired(context)) {
+                    runtimeStale = true
+                    showRestartDialog = true
+                }
                 refreshInstalled()
             }
         }
@@ -623,6 +653,25 @@ fun PipScreen(
                             selectPipTab(PipTab.MANUAL)
                         }
                     }
+                    if (runtimeStale) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF5A4300))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Python perlu dimulai ulang.",
+                                color = Color(0xFFFFD166),
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { showRestartDialog = true }) {
+                                Text("Mulai ulang", color = Color(0xFFFFD166))
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -682,6 +731,49 @@ fun PipScreen(
                 )
             }
         }
+    }
+
+    if (showRestartFailure) {
+        AlertDialog(
+            onDismissRequest = { showRestartFailure = false },
+            title = { Text("Belum dapat dimulai ulang", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "File aktif atau workspace gagal disimpan. ZCODE tidak menutup process agar kode tidak hilang."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestartFailure = false
+                    showRestartDialog = true
+                }) { Text("Coba simpan lagi") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestartFailure = false }) { Text("Kembali") }
+            }
+        )
+    }
+
+    if (showRestartDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestartDialog = false },
+            title = { Text("Mulai ulang ZCODE?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Package native telah memuat atau mengubah state Python. " +
+                        "File dan tab akan disimpan, lalu ZCODE terbuka kembali secara otomatis."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestartDialog = false
+                    if (!onRestartRuntime()) showRestartFailure = true
+                }) { Text("Simpan & mulai ulang") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestartDialog = false }) { Text("Nanti") }
+            }
+        )
     }
 
     // ---- Risky confirmation dialog (Manual Install) ----

@@ -444,18 +444,50 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         persistWorkspaceState()
     }
 
-    fun flushSaveSync() {
-        val current = activeFile ?: return
-        val codeToSave = activeCode
-        if (pendingSave) {
-            saveJob?.cancel()
-            try {
-                FileManager.saveFile(filesDir, current, codeToSave)
-            } catch (e: Exception) {
-                // ignore
+    /**
+     * Flush used by ordinary lifecycle callbacks and by process rebirth.
+     * Unlike the old Unit API, success means both current source and workspace
+     * topology are durably committed. A failed save must never be followed by
+     * killing the process.
+     */
+    fun flushSaveSync(verifyAllDrafts: Boolean = false): Boolean {
+        saveJob?.cancel()
+        val current = activeFile
+        val draftsToSave = linkedMapOf<String, String>()
+        if (verifyAllDrafts) {
+            fileDrafts.forEach { (name, code) ->
+                if (name in openedFiles) draftsToSave[name] = code
             }
+            if (current != null) draftsToSave[current] = activeCode
+        } else if (current != null && pendingSave) {
+            draftsToSave[current] = activeCode
+        }
+        for ((name, code) in draftsToSave) {
+            val result = FileManager.saveFile(filesDir, name, code)
+            if (result.isFailure) {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "WORKSPACE_FLUSH_FAIL",
+                    "$name: ${result.exceptionOrNull()?.message ?: "save gagal"}"
+                )
+                return false
+            }
+        }
+        if (draftsToSave.isNotEmpty()) {
             pendingSave = false
         }
+        val json = try {
+            JSONObject().apply {
+                put("opened", JSONArray(openedFiles))
+                put("active", activeFile ?: "")
+            }.toString()
+        } catch (e: Exception) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", e.message ?: "state gagal")
+            return false
+        }
+        val committed = prefs.edit().putString("workspace", json).commit()
+        if (committed) com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_OK", activeFile ?: "-")
+        else com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", "commit workspace gagal")
+        return committed
     }
 
     fun updateCode(newCode: String) {
