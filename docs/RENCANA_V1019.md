@@ -550,3 +550,29 @@ Status jujur:
 - semantic label/warna/copy visual dan dialog uninstall `Batal` belum dibuktikan
   oleh log sesi ini;
 - PR, merge, dan release belum dilakukan.
+
+### 2026-08-20 — Cross-source specifier + Bokeh evidence correction: IMPLEMENTED lokal
+Final focus UAT membuka bug resolver terpisah: metadata Bokeh 3.9.2 mencatat
+`contourpy>=1.2`, tetapi plan memilih wheel Chaquopy 1.0.5. Penyebabnya bukan
+Bokeh khusus: PyPI difilter specifier, sedangkan local cache dan Chaquopy masuk
+ranking tanpa filter; tested priority dapat mengalahkan constraint.
+
+Resolver kini menggabungkan semua source, memfilter tag runtime dan specifier
+PEP 440, lalu baru melakukan ranking. Bila wheel runtime-compatible ada tetapi
+versinya tidak memenuhi, verdict baru `DEPENDENCY_VERSION_UNAVAILABLE`
+menyebut requirement dan versi tersedia. NETWORK tetap menang bila source yang
+mungkin memuat versi valid gagal dibaca; mismatch ABI tetap COMPATIBILITY.
+
+Reproduksi metadata nyata ARMv7/API34:
+- `bokeh==3.9.2` → ditolak: contourpy butuh `>=1.2`, tersedia `1.0.5`;
+- `bokeh==3.3.4` → plan dependency-correct 20 paket, termasuk contourpy 1.0.5,
+  numpy 1.26.2, pandas 2.1.3, Pillow 11.0.0, PyYAML 6.0.3, dan Tornado 6.5.2.
+
+Katalog Bokeh diturunkan dari TESTED menjadi COMPATIBLE; klaim 3.9.2 dibatalkan
+dan Bokeh dihapus dari tested-manifest. Versi 3.3.4 hanya kandidat sampai exact
+device UAT basic HTML + contour + restart lulus. Total katalog kini 230 TESTED,
+9 COMPATIBLE, 16 EXPERIMENTAL, 77 UNAVAILABLE, 10 INCOMPATIBLE (342 total).
+
+Guard: lima test resolver lintas-source dan dua guard data/generator. Enam
+mutasi resolver serta tiga mutasi katalog/generator terbukti merah lalu restore
+hijau. Status: **IMPLEMENTED lokal**, full gate/CI/device UAT kandidat belum.

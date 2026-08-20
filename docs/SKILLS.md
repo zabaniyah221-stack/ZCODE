@@ -1417,3 +1417,30 @@ memasang `rich` dengan sukses—bukti dua arah bahwa verdict pertama palsu.
 6. Cancel tetap control-flow tertinggi dan tidak boleh ditelan fallback.
 7. Mutation proof wajib mencakup: IncompleteRead tak diretry, 404 menjadi
    NETWORK, dan dua transport error ditelan menjadi unavailable.
+
+
+---
+
+## SKILL 22 — Specifier berlaku setelah semua source, sebelum ranking (2026-08-20)
+
+**Trigger:** Bokeh 3.9.2 menyatakan `contourpy>=1.2`, tetapi resolver memilih
+ContourPy 1.0.5 dari Chaquopy karena hanya kandidat PyPI yang difilter
+specifier. Tested priority kemudian memenangkan versi lama; install dan import
+dasar lolos walau environment melanggar metadata.
+
+**Aturan:**
+
+1. Kumpulkan kandidat local, PyPI, dan Chaquopy; filter tag runtime dan PEP 440
+   specifier pada **semuanya**; baru jalankan ranking/tested priority.
+2. `testedVersion` tidak pernah boleh mengalahkan constraint dependency.
+3. Ada wheel runtime-compatible tetapi semua versinya melanggar constraint →
+   `DEPENDENCY_VERSION_UNAVAILABLE`, sertakan requirement dan versi tersedia.
+4. Bila satu source gagal dibaca dan belum ada kandidat valid, propagasikan
+   `NETWORK`; jangan menyimpulkan version unavailable dari data parsial.
+5. Ada wheel tetapi semua tag Python/API/ABI tidak cocok → pertahankan verdict
+   `COMPATIBILITY`, bukan version mismatch.
+6. Basic import bukan bukti dependency-correct atau full-feature support.
+7. Status katalog harus diturunkan ketika evidence lama dibatalkan; kandidat
+   versi baru belum boleh masuk tested-manifest sebelum exact device UAT.
+8. Mutation proof wajib menghapus filter tiap source, membiarkan tested priority
+   menang, menelan network, dan menghilangkan available-version detail.

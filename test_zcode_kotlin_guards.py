@@ -24,6 +24,7 @@ Riwayat error yang di-guard:
 
 Run: pytest test_zcode_kotlin_guards.py -v
 """
+import json
 import re
 from pathlib import Path
 
@@ -4108,6 +4109,40 @@ class TestLibrarySampleBridgeV1019:
             assert f'"{name}": "{sid}"' in block, (
                 f"generator kehilangan link {name} → {sid}"
             )
+
+
+class TestBokehArmv7CandidateV1019:
+    """Bokeh terbaru tidak boleh mengalahkan constraint ContourPy ARMv7."""
+
+    def test_bokeh_39_diturunkan_dan_33_belum_diklaim_tested(self):
+        catalog = json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        manifest = json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
+        bokeh = next(p for p in catalog if p["name"] == "bokeh")
+        assert bokeh["status"] == "COMPATIBLE"
+        assert bokeh.get("testedVersion") is None
+        assert "bokeh" not in manifest, (
+            "3.3.4 belum exact DEVICE VERIFIED; jangan masukkan tested-manifest"
+        )
+        joined = " ".join(
+            bokeh.get("works", []) + bokeh.get("doesNotWork", []) +
+            bokeh.get("risks", []) + bokeh.get("dependencies", [])
+        )
+        for fact in ("3.3.4", "3.9.2", "contourpy>=1", "contourpy>=1.2", "1.0.5"):
+            assert fact in joined, f"batas Bokeh ARMv7 hilang: {fact}"
+
+    def test_generator_tidak_menghidupkan_klaim_lama(self):
+        generator = read(ROOT / "tools/generate_catalog.py")
+        assert '("bokeh", "bokeh", "Data / Math / Science", "pure", "COMPATIBLE"' in generator
+        rich_start = generator.index('"bokeh": {')
+        rich_end = generator.index('\n    },', rich_start)
+        rich = generator[rich_start:rich_end]
+        assert '"testedVersion": None' in rich
+        assert "3.3.4" in rich and "contourpy>=1.2" in rich
+        manifest_start = generator.index("TESTED_MANIFEST = {")
+        manifest_end = generator.index("\n}", manifest_start)
+        assert '"bokeh"' not in generator[manifest_start:manifest_end]
 
 
 class TestLibraryP0CurationV1019:

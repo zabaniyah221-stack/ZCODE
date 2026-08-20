@@ -65,8 +65,8 @@ CATALOG = [
      "Visualisasi statistik di atas matplotlib."),
     ("plotly", "plotly", "Data / Math / Science", "pure", "EXPERIMENTAL",
      "Plot interaktif (output HTML/JSON)."),
-    ("bokeh", "bokeh", "Data / Math / Science", "pure", "EXPERIMENTAL",
-     "Visualisasi interaktif berbasis browser."),
+    ("bokeh", "bokeh", "Data / Math / Science", "pure", "COMPATIBLE",
+     "Visualisasi interaktif berbasis browser; kandidat ARMv7 saat ini 3.3.4."),
     ("xarray", "xarray", "Data / Math / Science", "pure", "COMPATIBLE",
      "Array berlabel untuk data multidimensi."),
     ("numba", "numba", "Data / Math / Science", "native", "EXPERIMENTAL",
@@ -731,6 +731,24 @@ RICH = {
         "smokeTest": "rich_render",
         "license": "MIT", "publisher": "Will McGugan",
         "source": "https://pypi.org/project/rich/",
+    },
+    "bokeh": {
+        "testedVersion": None, "python": ["3.11"], "abis": ["armeabi-v7a"],
+        "useCases": ["plot interaktif", "standalone HTML", "contour plot"],
+        "works": [
+            "Kandidat ARMv7 bokeh==3.3.4: contourpy>=1 dipenuhi wheel 1.0.5.",
+            "Bokeh 3.9.2 basic smoke pernah lolos, tetapi dependency contract tidak.",
+        ],
+        "doesNotWork": [
+            "Bokeh 3.4+ butuh contourpy>=1.2; CPython 3.11 ARMv7 hanya punya 1.0.5."
+        ],
+        "risks": [
+            "3.3.4 belum exact DEVICE VERIFIED.",
+            "Pandas/NumPy membuat instalasi besar pada perangkat rendah RAM.",
+        ],
+        "smokeTest": None,
+        "license": "BSD-3-Clause", "publisher": "Bokeh Team / NumFOCUS",
+        "source": "https://pypi.org/project/bokeh/3.3.4/",
     },
     "openpyxl": {
         "testedVersion": "3.1.5", "python": ["3.11"], "abis": [],

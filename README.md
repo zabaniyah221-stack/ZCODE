@@ -128,7 +128,7 @@ Parse → Resolve → Storage Guard → Download → Verify → Extract
 ### Library dan Samples
 
 - **342 kartu package** pada snapshot v1.0.19.
-- **231 package berstatus TESTED** pada perangkat/lingkungan yang tercatat.
+- **230 package berstatus TESTED** pada perangkat/lingkungan yang tercatat.
 - Status dibedakan: TESTED, COMPATIBLE, EXPERIMENTAL, INCOMPATIBLE, UNAVAILABLE.
 - Detail package menjelaskan What/Why/How/Where/Who, versi, dependency, risiko,
   sumber, dan batas perangkat.

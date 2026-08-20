@@ -2116,8 +2116,8 @@
   "importName": "bokeh",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "TESTED",
-  "testedVersion": "3.9.2",
+  "status": "COMPATIBLE",
+  "testedVersion": null,
   "python": [
    "3.11"
   ],
@@ -2125,12 +2125,24 @@
   "description": "Visualisasi interaktif berbasis browser.",
   "useCases": [],
   "works": [
-   "DEVICE TESTED 2026-08-17 (Infinix SMART 9 HD, ARMv7, UAT sesi lanjutan) — v3.9.2 instal+smoke OK",
-   "ARMv7-import-verified 2026-08-16 (bionic311)"
+   "Kandidat ARMv7: bokeh==3.3.4 meminta contourpy>=1; wheel contourpy 1.0.5 tersedia untuk CPython 3.11 armeabi-v7a.",
+   "Bokeh 3.9.2 pernah DEVICE install+basic smoke, tetapi bukti itu dibatalkan sebagai TESTED karena contourpy>=1.2 tidak terpenuhi."
   ],
-  "doesNotWork": [],
-  "dependencies": [],
-  "risks": [],
+  "doesNotWork": [
+   "Bokeh 3.4+ membutuhkan contourpy>=1.2; indeks Chaquopy CPython 3.11 ARMv7 hanya menyediakan 1.0.5."
+  ],
+  "dependencies": [
+   "contourpy>=1",
+   "numpy>=1.16",
+   "pandas>=1.2",
+   "pillow>=7.1.0",
+   "PyYAML>=3.10",
+   "tornado>=5.1"
+  ],
+  "risks": [
+   "Bokeh 3.3.4 belum exact DEVICE VERIFIED; install manual kandidat sebelum promosi TESTED.",
+   "Pandas dan NumPy membuat instalasi besar pada perangkat rendah RAM."
+  ],
   "smokeTest": null,
   "license": "",
   "publisher": "",
@@ -2150,7 +2162,7 @@
     "url": "https://docs.bokeh.org"
    }
   ],
-  "curatedAt": "2026-08-16 (auto: metadata PyPI)"
+  "curatedAt": "2026-08-20 (audit constraint lintas-source)"
  },
  {
   "name": "bottleneck",
