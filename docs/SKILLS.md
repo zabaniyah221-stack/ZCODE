@@ -1297,18 +1297,28 @@ console Manual Install tersisa ±50dp. Lolos berbulan-bulan karena manifest
 `configChanges=orientation` (rotate tak crash → tak ada log) dan UAT selalu
 portrait.
 
-**Aturan:**
-1. Setiap layar/panel dengan konten TINGGI TETAP wajib salah satu:
-   scroll container di akar, ATAU strategi eksplisit layar-pendek
-   (`BoxWithConstraints` + ambang, pola ManualTab).
-2. `Spacer(weight)` / `weight(1f)` HANYA sah di kolom non-scrollable yang
+**Aturan (dikoreksi bukti device 2026-08-19):**
+1. Setiap layar/panel dengan konten TINGGI TETAP wajib punya jalur scroll atau
+   strategi ukuran pendek, tetapi **jenis modifier focus/scroll pada ancestor
+   input tidak boleh dipasang/dilepas akibat IME resize**.
+2. `verticalScroll` Foundation 1.6.1 mendelegasikan
+   `FocusTargetModifierNode`. Pola lama ManualTab
+   `.then(if (maxHeight < 480.dp) verticalScroll else Modifier)` memasukkan
+   focus target baru di atas TextField aktif saat `adjustResize` membuka IME;
+   Backspace berikutnya memicu Google b/274655703 dan force close.
+3. Gunakan topology permanen: scroll selalu terpasang; `BoxWithConstraints`
+   hanya boleh mengubah nilai ukuran seperti `consoleHeight`, bukan jenis node.
+4. `Spacer(weight)` / `weight(1f)` HANYA sah di kolom non-scrollable yang
    tingginya dijamin; di kolom scrollable weight kolaps jadi 0.
-3. Fix rotate wajib aditif: portrait harus identik piksel dgn sebelum fix
-   (scroll tak aktif bila konten muat).
-4. UAT fitur UI baru = DUA orientasi, selalu.
-5. Guard per titik + audit layar lain saat satu titik ketahuan (kelas,
-   bukan kejadian): korban 2026-08-18 = 3 titik; Settings/Diagnostics/
-   Samples/Terminal diaudit aman.
+5. Fix rotate wajib mempertahankan portrait dan landscape tanpa mutasi focus
+   tree. UAT wajib dua orientasi **dan** keyboard terbuka.
+6. Guard per titik + audit layar lain saat satu titik ketahuan (kelas, bukan
+   kejadian). Drawer/About aman; conditional focus-scroll hanya ditemukan di
+   ManualTab.
+
+**Sumber akar:**
+- https://issuetracker.google.com/issues/274655703
+- https://android.googlesource.com/platform/frameworks/support/+/e3680a88311050c74e2411d30f2e1d054ea9cb56
 
 
 ---
@@ -1381,3 +1391,29 @@ reverse-dependency check; telemetry juga dicatat oleh dua layer.
 5. Log dan breadcrumb request/OK/fail wajib terpisah.
 6. Lower transaction layer mengubah state; outer engine memiliki policy,
    telemetry, dan verdict user-facing.
+
+
+---
+
+## SKILL 21 — Transport gagal bukan bukti package tidak tersedia (2026-08-19)
+
+**Trigger:** device mendapatkan `IncompleteRead` dari PyPI dan `URLError` dari
+Chaquopy. Resolver mengubah kedua kegagalan sumber menjadi list kandidat kosong,
+lalu memvonis `PACKAGE_NOT_AVAILABLE`. Percobaan kedua pada jaringan lain
+memasang `rich` dengan sukses—bukti dua arah bahwa verdict pertama palsu.
+
+**Aturan:**
+
+1. Pisahkan `SOURCE_NOT_FOUND` (HTTP 404), `NETWORK` (transport gagal), dan
+   `COMPATIBILITY` (kandidat nyata ada tetapi tag tidak cocok).
+2. `http.client.IncompleteRead` adalah body response terpotong dan harus masuk
+   retry budget transient; jangan memakai partial JSON/wheel.
+3. Coba sumber berikutnya setelah satu source gagal. Jika kandidat local/remote
+   nyata ditemukan, ia boleh dipakai.
+4. Jika semua kandidat kosong **karena source gagal dibaca**, propagasikan
+   `NETWORK`; jangan mengarang `PACKAGE_NOT_AVAILABLE`.
+5. HTTP 404 tetap `target_not_found`, tidak diretry, dan boleh menjadi fallback
+   normal ke source lain.
+6. Cancel tetap control-flow tertinggi dan tidak boleh ditelan fallback.
+7. Mutation proof wajib mencakup: IncompleteRead tak diretry, 404 menjadi
+   NETWORK, dan dua transport error ditelan menjadi unavailable.

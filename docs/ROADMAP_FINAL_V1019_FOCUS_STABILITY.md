@@ -351,17 +351,45 @@ npm/editor supply-chain guard     : passed
 git diff --check                  : passed
 ```
 
-Belum ada kompilasi CI atau verifikasi perangkat untuk fix ini.
+CI run `32251390431` untuk tap-only commit `b7078e9` sukses, tetapi device UAT
+kemudian menemukan crash Backspace tetap terjadi. Status tap-only sebagai fix
+lengkap berubah menjadi **REGRESSION FOUND / INSUFFICIENT**.
 
-## 9. Status ringkas
+## 9. Revisi akar dan implementasi tanpa mengorbankan rotate
+
+Comparison terhadap v1.0.18 `f259745` membuktikan Compose 1.6.1, TextField, dan
+Install button sudah sama. Regresi pemicu berasal dari `292ba15`: kondisi
+`maxHeight < 480.dp` memasang `verticalScroll` hanya setelah IME `adjustResize`
+mengecilkan window. Foundation 1.6.1 membuktikan scrollable mendelegasikan
+`FocusTargetModifierNode`; ini persis kelas Google b/274655703—focus target baru
+disisipkan ke hierarchy yang sudah focused lalu key berikutnya crash.
+
+Commit `9e5aba3` membuat scroll topology permanen dan hanya mengubah angka
+`consoleHeight` (minimum 220dp), sehingga portrait, IME, dan landscape tetap
+terjangkau tanpa memasang/melepas focus node. Snapshot `activeRequirement` juga
+membekukan identitas operasi dan draft input secara logis tanpa toggle
+`enabled/readOnly`. Enam mutasi fokus/ownership merah→hijau.
+
+Commit `dbcb8d2` menutup gap network yang terungkap UAT: retry
+`IncompleteRead`, bedakan 404 `SOURCE_NOT_FOUND` dari `NETWORK`, dan jangan
+mengubah dua source transport-fail menjadi `PACKAGE_NOT_AVAILABLE`. Tiga mutasi
+network merah→hijau.
+
+Sumber:
+
+- https://issuetracker.google.com/issues/274655703
+- https://android.googlesource.com/platform/frameworks/support/+/e3680a88311050c74e2411d30f2e1d054ea9cb56
+
+## 10. Status ringkas
 
 ```text
-Crash                           : REGRESSION FOUND
-Package Engine sebagai akar     : RULED OUT (confidence 99,5%)
-Kelas masalah focus tree        : IDENTIFIED (confidence 99%)
-Tap-only release fix            : IMPLEMENTED + LOCALLY VERIFIED
-Mutation proof                  : 6 arah RED → restore GREEN
-CI/device verification          : BELUM untuk fix ini
-PR / merge / release            : BELUM
-v1.0.20 Focus Reliability Lab   : DESIGNED, bukan scope v1.0.19
+Crash pada artifact b7078e9        : REGRESSION FOUND
+Akar conditional scroll/focus node : IDENTIFIED (confidence 99%)
+Stable scroll + operation snapshot : IMPLEMENTED
+Network truthfulness extension     : IMPLEMENTED
+Mutation proof                      : 9 arah RED → restore GREEN
+Local full gate                     : 576 passed + 58 Kotlin + supply-chain
+CI/device verification              : BELUM untuk dua commit baru
+Compose upgrade                     : TIDAK dilakukan; fallback v1.0.20
+PR / merge / release                : BELUM
 ```

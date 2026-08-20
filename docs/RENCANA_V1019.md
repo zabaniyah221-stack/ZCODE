@@ -482,5 +482,45 @@ focused guard hijau. Validasi lokal: `tools/check.sh` **572 passed**, 58 Kotlin
 files lexical sanity, npm/editor supply-chain guard dan `git diff --check`
 hijau.
 
-Status: **IMPLEMENTED + LOCALLY VERIFIED**. Belum CI VERIFIED, belum DEVICE
-VERIFIED, dan belum PR/merge/release.
+Status saat itu: **IMPLEMENTED + LOCALLY VERIFIED**, tetapi UAT berikutnya
+menemukan crash tetap terjadi sehingga klaim stabilitas berubah menjadi
+**REGRESSION FOUND**. Belum PR/merge/release.
+
+### 2026-08-19 — Akar focus crash ditemukan: conditional scroll menyisipkan focus target
+UAT artifact `b7078e9` membuktikan tap-only belum cukup. Crash terjadi tepat
+saat Backspace/Delete pada Requirement, termasuk field kosong dan sebelum
+`PKG_ANALYZE_BEGIN`; Library Search dan editor aman. Perbandingan v1.0.18
+`f259745` menunjukkan Compose 1.6.1, TextField, dan dynamic Install button sudah
+sama. Perubahan pembeda paling awal adalah commit `292ba15`: ManualTab memasang
+`verticalScroll` hanya ketika `maxHeight < 480.dp`.
+
+Manifest memakai `adjustResize`; IME mengecilkan window dan membalik kondisi
+tersebut ketika TextField sudah focused. Source Foundation 1.6.1 membuktikan
+`ScrollableNode` mendelegasikan `FocusTargetModifierNode`. Jadi scroll
+kondisional menyisipkan focus target baru di atas child aktif—persis Google
+b/274655703, yang diperbaiki upstream dengan inisialisasi focus target baru:
+https://issuetracker.google.com/issues/274655703 dan
+https://android.googlesource.com/platform/frameworks/support/+/e3680a88311050c74e2411d30f2e1d054ea9cb56.
+
+Commit `9e5aba3` mempertahankan rotate fix tanpa topology dinamis:
+`verticalScroll(pageScroll)` selalu ada, sedangkan `consoleHeight` saja berubah
+dan tetap minimum 220dp. Ia juga menambahkan snapshot `activeRequirement`,
+mengunci perubahan draft secara logis saat operasi, memakai snapshot untuk
+breadcrumb Cancel, dan menjaga TextField/Button dari toggle enabled/readOnly.
+Enam mutasi focus/ownership dibuktikan merah lalu restore hijau.
+
+### 2026-08-19 — Network verdict diperluas dari fix v1.0.18
+Perbandingan membuktikan retry tiga kali dan `target_not_found` dari v1.0.18
+masih hidup. Log baru membuka gap lama: `IncompleteRead` tidak retryable, dan
+kegagalan PyPI+Chaquopy ditelan menjadi kandidat kosong lalu verdict palsu
+`PACKAGE_NOT_AVAILABLE`. Bukti dua arah: `rich` gagal unavailable, kemudian
+sukses `PKG_INSTALL_OK` pada percobaan berikut.
+
+Commit `dbcb8d2` menambahkan retry `IncompleteRead`, kode internal
+`SOURCE_NOT_FOUND` untuk 404, fallback antarsumber, dan propagasi `NETWORK` bila
+semua sumber gagal dibaca. Tiga mutasi dibuktikan merah: partial read tak
+diretry, 404 kembali menjadi NETWORK, dan dua transport error ditelan menjadi
+unavailable. Package runtime suite **90 passed**. Full gate setelah dokumentasi:
+**576 passed**, 58 Kotlin files lexical sanity, npm/editor supply-chain guard dan
+`git diff --check` hijau. Status kedua commit: **IMPLEMENTED + LOCALLY
+VERIFIED**, menunggu CI dan DEVICE VERIFIED; belum PR/merge/release.
