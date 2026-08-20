@@ -492,6 +492,20 @@ class PackageEngineV2(private val context: Context) {
             // Entri di installed.json hanya bisa ada karena pernah LOLOS smoke,
             // jadi melewatinya aman. Versi berbeda tetap diuji penuh.
             val activeVersions = activeInstalledVersions()
+
+            // Smoke receives every staging directory and may load a sibling
+            // extension before the loop reaches that native package. Record the
+            // whole transaction before the first smoke so an early root-package
+            // failure cannot leave an unmarked C/C++ registry in this process.
+            val transactionNativePackages = planPackages.filter { p ->
+                val dir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
+                dir.walkTopDown().any { it.isFile && it.name.contains(".so") }
+            }.map { it.canonicalName }
+            if (transactionNativePackages.isNotEmpty()) {
+                nativeTouched.addAll(transactionNativePackages)
+                NativeRuntimeState.markRequired(context, nativeTouched, "native-smoke-start")
+            }
+
             for (p in planPackages) {
                 val aktif = activeVersions[p.canonicalName]
                 if (!p.supportLibrary && aktif != null && aktif == p.version) {
@@ -586,15 +600,6 @@ class PackageEngineV2(private val context: Context) {
                 onStep(Step.Message("${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so)", SemanticLogKind.OK))
             }
             onStep(Step.Finish("Smoke Test", FinishResult.OK))
-
-            // Record native artifacts while staging still exists: activate may
-            // atomically move these directories out of staging.
-            planPackages.forEach { p ->
-                val dir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
-                if (dir.walkTopDown().any { it.isFile && it.name.contains(".so") }) {
-                    nativeTouched.add(p.canonicalName)
-                }
-            }
 
             // 8. Activate (atomic-ish + rollback)
             onStep(Step.Begin("Activate"))

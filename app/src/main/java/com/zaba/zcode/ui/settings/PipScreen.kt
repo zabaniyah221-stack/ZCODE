@@ -741,7 +741,8 @@ fun PipScreen(
             title = { Text("Belum dapat dimulai ulang", fontWeight = FontWeight.Bold) },
             text = {
                 Text(
-                    "File aktif atau workspace gagal disimpan. ZCODE tidak menutup process agar kode tidak hilang."
+                    "File, workspace, atau status mulai ulang gagal disimpan. " +
+                        "ZCODE tidak menutup process agar kode tidak hilang."
                 )
             },
             confirmButton = {

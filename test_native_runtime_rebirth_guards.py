@@ -112,10 +112,13 @@ class TestNativeStaleGates:
     def test_native_evidence_marks_stale_but_has_no_package_hardcode(self):
         engine = strip_kt_comments(text(KT / "core/packageengine/PackageEngineV2.kt"))
         assert "outcome.nativeLibs.isNotEmpty()" in engine
-        # Exactly three generic producers: native smoke, activated native artifacts,
-        # and native uninstall. An unconditional fourth producer would make pure
-        # Python installs stale and must fail this guard.
-        assert engine.count("NativeRuntimeState.markRequired") == 3
+        # Exactly four generic producers: transaction pre-smoke evidence,
+        # per-outcome native evidence, activated native environment, and native
+        # uninstall. An unconditional fifth producer would make pure Python
+        # installs stale and must fail this guard.
+        assert engine.count("NativeRuntimeState.markRequired") == 4
+        assert "transactionNativePackages.isNotEmpty()" in engine
+        assert engine.index('"native-smoke-start"') < engine.index("smokeRunner.run")
         assert "nativeTouched.isNotEmpty()" in engine
         assert "if (hadNative)" in engine
         lifecycle = "\n".join(strip_kt_comments(text(p)) for p in [
