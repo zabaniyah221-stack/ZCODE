@@ -47,8 +47,8 @@ fitur yang harus disalin semuanya. Lihat
 
 ## Tampilan di perangkat nyata
 
-Screenshot berikut berasal dari **Infinix SMART 9 HD, Android 12, userspace
-ARMv7**, bukan mockup.
+Screenshot berikut berasal dari perangkat runtime **INFINIX X6532C, Android
+14 / API 34, userspace ARMv7 (`armeabi-v7a`)**, bukan mockup.
 
 <table>
   <tr>

@@ -147,8 +147,9 @@ UAT Infinix SMART 9 HD, ARMv7, APK v1.0.19 commit `6fa90f5`:
   multi-file. Label chip akan dipoles bersama batch glyph, bukan build tunggal.
 
 ### 2026-08-19 — UAT Build 1 hardening + swipe + glyph: DEVICE VERIFIED
-UAT user pada Infinix SMART 9 HD, ARMv7, Android 12, APK v1.0.19 commit
-`bf5e7ef` (CI run `32196030398`, conclusion `success`): user mengonfirmasi
+UAT user pada INFINIX X6532C, ARMv7 (runtime diagnostics terbaru: Android
+14/API 34), APK v1.0.19 commit `bf5e7ef` (CI run `32196030398`, conclusion
+`success`): user mengonfirmasi
 seluruh checklist berfungsi lancar sesuai harapan.
 
 Cakupan yang naik status dari CI VERIFIED menjadi DEVICE VERIFIED:
@@ -372,8 +373,9 @@ guard dan diff-check hijau.
 GitHub Actions run `32222196121` sukses (`check` + `build`) pada commit
 `b0eb67e`; artifact `ZCODE-Fase12-APK` ID `9354329546`, SHA-256
 `1c3b5beb6940b107853ccd3bed3e5212acac59053ec8da489aca8df34ece7c86`.
-UAT Infinix SMART 9 HD, ARMv7, Android 12: user mengonfirmasi Undo/Redo kini
-aktif dan berfungsi seperti kontrak yang disepakati. Regresi tombol selalu
+UAT INFINIX X6532C, ARMv7 (runtime diagnostics terbaru: Android 14/API 34):
+user mengonfirmasi Undo/Redo kini aktif dan berfungsi seperti kontrak yang
+disepakati. Regresi tombol selalu
 redup dari artifact sebelumnya tertutup oleh callback gabungan
 `documentId + code + canUndo + canRedo`.
 
@@ -522,5 +524,29 @@ semua sumber gagal dibaca. Tiga mutasi dibuktikan merah: partial read tak
 diretry, 404 kembali menjadi NETWORK, dan dua transport error ditelan menjadi
 unavailable. Package runtime suite **90 passed**. Full gate setelah dokumentasi:
 **576 passed**, 58 Kotlin files lexical sanity, npm/editor supply-chain guard dan
-`git diff --check` hijau. Status kedua commit: **IMPLEMENTED + LOCALLY
+`git diff --check` hijau. Status kedua commit saat itu: **IMPLEMENTED + LOCALLY
 VERIFIED**, menunggu CI dan DEVICE VERIFIED; belum PR/merge/release.
+
+### 2026-08-20 — Stable focus topology: DEVICE VERIFIED
+CI run `32319191247` sukses untuk SHA `96ad556`; artifact
+`ZCODE-Fase12-APK` ID `9389208656`, ukuran 44.710.395 byte, SHA-256
+`7538fc8f9a1bb6d7737100f70d661317a16b6dd2b9aff38d1c9761b05bdabb41`.
+UAT pada INFINIX X6532C, Android 14/API 34, ARMv7 mengonfirmasi seluruh matriks
+focus: Backspace field kosong berulang, hapus sampai kosong, long-press,
+Library↔Manual, portrait↔landscape, dan logical operation lock berjalan tanpa
+force close. Diagnostics 104 baris menutup dengan `(belum pernah crash Java)`.
+
+Regresi inti tertutup tanpa membatalkan rotate fix. Bukti tambahan non-regresi:
+`requests` ter-resolve dan `PKG_INSTALL_OK` bersama empat dependency; kemudian
+`bokeh==3.9.2` ter-resolve dan `PKG_INSTALL_OK` bersama total 16 paket termasuk
+wheel native Chaquopy/ARMv7. Run Python selesai `code=0`; tab Manual, Samples,
+dan Undo/Redo tetap hidup setelah instalasi berat.
+
+Status jujur:
+- stable focus topology + operation lock: **DEVICE VERIFIED**;
+- resolver transport extension: **CI VERIFIED** dan device tidak regresi, tetapi
+  jalur kegagalan `IncompleteRead`/dua repository putus tidak muncul pada UAT
+  ini sehingga belum DEVICE VERIFIED untuk failure path tersebut;
+- semantic label/warna/copy visual dan dialog uninstall `Batal` belum dibuktikan
+  oleh log sesi ini;
+- PR, merge, dan release belum dilakukan.

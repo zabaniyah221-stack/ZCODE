@@ -48,7 +48,7 @@ Bisa dipasang di HP ARMv7 user **setelah** perbaikan pencocokan tag Android.
 | **pyyaml** | 6.0.3 | `cp311-android_24_armeabi_v7a` | 132 KB |
 | **psutil** | 7.1.3 | `cp311-android_24_armeabi_v7a` | 219 KB |
 
-**Semua API ≤ 26**, jadi lolos di HP user (API 31).
+**Semua API ≤ 26**, jadi lolos di perangkat runtime user Android 14 / API 34.
 
 Ini mengoreksi dua catatan lama ZCODE:
 - `tested-manifest.json` menulis `numpy==1.26.4` → **tidak ada**. Yang ada `1.26.2`.

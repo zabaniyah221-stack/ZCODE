@@ -108,7 +108,7 @@ berhenti mencari jalan.
 
 Satu orang, dan itu menentukan semua keputusan teknis:
 
-- HP **ARMv7**, Android 12, ~6.6 GB free
+- HP **INFINIX X6532C, ARMv7**, Android **14 / API 34**, ~6.6 GB free
 - **TIDAK punya PC.** Tidak ada `adb logcat`, tidak ada Android Studio.
 - Siklus uji **mahal**: 1 build CI + 1 unduh + 1 install per percobaan
 - Merangkap QA tester tunggal

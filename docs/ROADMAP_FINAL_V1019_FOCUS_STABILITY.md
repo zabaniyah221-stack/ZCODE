@@ -2,7 +2,7 @@
 
 Tanggal keputusan: **2026-08-19**
 
-Status: **IMPLEMENTED + LOCALLY VERIFIED — menunggu CI dan UAT perangkat**
+Status: **FOCUS FIX DEVICE VERIFIED — network failure path masih CI VERIFIED**
 
 Branch: `arena/v1019-fondasi`
 
@@ -385,11 +385,11 @@ Sumber:
 ```text
 Crash pada artifact b7078e9        : REGRESSION FOUND
 Akar conditional scroll/focus node : IDENTIFIED (confidence 99%)
-Stable scroll + operation snapshot : IMPLEMENTED
-Network truthfulness extension     : IMPLEMENTED
+Stable scroll + operation snapshot : DEVICE VERIFIED (INFINIX X6532C/API34)
+Network truthfulness extension     : CI VERIFIED; failure path belum device
 Mutation proof                      : 9 arah RED → restore GREEN
 Local full gate                     : 576 passed + 58 Kotlin + supply-chain
-CI/device verification              : BELUM untuk dua commit baru
+CI run / artifact                   : 32319191247 / 9389208656 / success
 Compose upgrade                     : TIDAK dilakukan; fallback v1.0.20
 PR / merge / release                : BELUM
 ```
