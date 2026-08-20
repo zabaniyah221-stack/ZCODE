@@ -734,3 +734,83 @@ merah: smoke membuang daftar extension termuat, dan engine mengabaikan daftar
 tersebut. Restore hijau; full local gate **594 passed**, 61 Kotlin files,
 supply-chain guard dan diff-check hijau. Status fix: IMPLEMENTED + LOCALLY
 VERIFIED; membutuhkan CI ketiga sebelum satu APK kandidat diberikan ke user.
+
+### 2026-08-20 — Artifact final: native rebirth dan release gate DEVICE VERIFIED
+GitHub Actions run `32348956505` sukses untuk check dan build pada SHA
+`efa56ad3370e2f69da4f069d614a0a466f0de1be`. Artifact
+`ZCODE-Fase12-APK` ID `9399175936`, ukuran archive 44.735.650 byte, digest
+`sha256:448af10bbfb0c3e7e8a833e2452dd08ae62852d4f6194deec6596135fff4a37b`.
+UAT dijalankan pada INFINIX X6532C, Android 14/API34, ABI
+`armeabi-v7a,armeabi`.
+
+Rantai immediate restart terbukti dari breadcrumb:
+
+```text
+WORKSPACE_FLUSH_OK
+RUNTIME_RESTART_REQUEST | oldPid=26441
+REBIRTH_HELPER_START    | helperPid=28225
+APP_START
+RUNTIME_RESTART_OK      | previousPid=26441 newPid=28569
+PYTHON_START_OK
+PREWARM_OK
+```
+
+PID lama, helper, dan main baru berbeda. Binary Rain terlihat tanpa launcher;
+file dan tiga tab kembali utuh; pesan `Python berhasil dimulai ulang. Program
+siap dijalankan.` muncul. Diagnostics berakhir dengan `(belum pernah crash
+Java)`.
+
+Pada process baru:
+
+- direct import Bokeh 3.3.4, ContourPy 1.0.5, NumPy 1.26.2, dan Pandas 2.1.3
+  berhasil;
+- standalone HTML berhasil;
+- contour HTML berhasil **646.935 byte**, exit code 0;
+- `generic_type: FillType already registered` tidak kembali.
+
+Dua kegagalan contour sebelum hasil tersebut berasal dari script UAT agent yang
+salah: `levels` diberi integer lalu visual `fill_color/line_color` tidak
+diberikan. Kesalahan diakui sebagai invalid test input, bukan regresi ZCODE.
+
+Jalur `Nanti` juga DEVICE VERIFIED: banner amber bertahan; Run dan package
+mutation diblokir dengan pesan jelas; editor/tab tetap dapat dipakai; tombol
+banner menjalankan Binary Rain/relaunch; Run kembali menghasilkan
+`Hello, ZCODE!` exit 0.
+
+Negative control pure-Python dan final UX:
+
+- Colorama 0.4.6 diinstall dari cache dengan smoke
+  `0 .so staging, 0 extension native termuat`;
+- tidak ada dialog/banner restart dan `PURE_OK 0.4.6` exit 0;
+- semantic label `[>]`, `[INFO]`, `[WAIT]`, `[OK]`, dan cancel `[STOP]`
+  terlihat serta tersalin;
+- dialog uninstall menjelaskan reverse dependency;
+- `Batal` mempertahankan Colorama installed;
+- konfirmasi Uninstall menghapusnya, lalu reinstall berhasil.
+
+Keputusan user: breadcrumb native yang ramai dipertahankan. Diagnostics adalah
+black-box recorder bagi user tanpa PC; raw evidence lebih penting daripada log
+yang kosmetik selama tidak memuat secret/isi kode dan tidak menyebabkan ANR.
+
+Status final batch:
+
+```text
+Native rebirth/Binary Rain         : DEVICE VERIFIED
+Workspace/tab restore              : DEVICE VERIFIED
+Nanti + Run/package gates          : DEVICE VERIFIED
+Pure-Python negative control       : DEVICE VERIFIED
+Semantic copy/STOP                 : DEVICE VERIFIED
+Uninstall Batal + confirm          : DEVICE VERIFIED
+Bokeh 3.3.4 basic + contour        : DEVICE VERIFIED
+Bokeh catalog status               : dipromosikan ke TESTED @3.3.4
+Release status                     : RELEASE CANDIDATE; belum merge/released
+```
+
+Ringkasan kandidat hidup di `docs/RELEASE_NOTES_V1.0.19.md`. Promosi katalog
+Bokeh dijaga empat mutasi: status diturunkan lagi, manifest diganti 3.9.2, bukti
+contour dihapus, dan generator menghidupkan klaim lama; semuanya merah lalu
+restore hijau. Full gate setelah data/dokumentasi: **594 passed**, 61 Kotlin
+files, supply-chain guard, generator check, py_compile, dan diff-check hijau.
+
+PR `arena/v1019-fondasi → main` boleh dibuka sesuai persetujuan user, tetapi
+merge dan distribusi release tetap membutuhkan keputusan terpisah.

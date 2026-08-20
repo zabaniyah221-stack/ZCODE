@@ -13,10 +13,10 @@ acceptance criteria, dan jalan mundur. Tidak boleh berubah diam-diam hanya
 karena teknologi baru terlihat lebih menarik.
 
 Versi saat ini: `1.0.19` (`gradle.properties` = sumber tunggal)
-Terakhir diperbarui: 2026-08-19
-Revisi: 2026-08-19 — prinsip kemampuan tanpa paywall dan tanpa jalan buntu:
-keterbatasan wajib dijelaskan, diberi alternatif, dan menjadi kandidat riset
-berbasis bukti. (PRD = pegangan, bukan acuan terkunci.)
+Terakhir diperbarui: 2026-08-20
+Revisi: 2026-08-20 — native-runtime auto-relaunch, semantic logs, dan uninstall
+final DEVICE VERIFIED; prinsip kemampuan tanpa paywall dan tanpa jalan buntu
+tetap berlaku. (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
@@ -126,14 +126,15 @@ satu — gabungkan dalam satu build.
 | Editor CodeMirror 6, `file://` murni, offline | ✅ |
 | Multi-file, tab, autosave 600ms | ✅ |
 | Undo/Redo touch + history terpisah per file | ✅ DEVICE VERIFIED (Infinix ARMv7) |
-| Semantic package logs `[OK]/[WARN]/…` | IMPLEMENTED, menunggu CI/device |
+| Semantic package logs `[OK]/[WARN]/…` | ✅ DEVICE VERIFIED (copy + STOP) |
 | Run Python (Chaquopy 3.11 in-process) | ✅ |
 | Terminal output + `input()` + Ctrl+C | ✅ |
 | Samples (pola 2 level) | ✅ |
 | Tema, font, true-black `#050806` | ✅ |
 | Breadcrumb + Crash Reporter | ✅ (cakupan masih berkembang) |
 | **Install Modules** transactional core | ✅ DEVICE VERIFIED (Infinix ARMv7) |
-| Uninstall confirmation/ownership hardening | IMPLEMENTED, menunggu CI/device |
+| Native-runtime auto-relaunch + workspace restore | ✅ DEVICE VERIFIED (Infinix API34/ARMv7) |
+| Uninstall confirmation/ownership hardening | ✅ DEVICE VERIFIED (`Batal` + confirm) |
 
 ---
 

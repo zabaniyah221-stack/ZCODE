@@ -133,7 +133,7 @@ Parse → Resolve → Storage Guard → Download → Verify → Extract
 ### Library dan Samples
 
 - **342 kartu package** pada snapshot v1.0.19.
-- **230 package berstatus TESTED** pada perangkat/lingkungan yang tercatat.
+- **231 package berstatus TESTED** pada perangkat/lingkungan yang tercatat.
 - Status dibedakan: TESTED, COMPATIBLE, EXPERIMENTAL, INCOMPATIBLE, UNAVAILABLE.
 - Detail package menjelaskan What/Why/How/Where/Who, versi, dependency, risiko,
   sumber, dan batas perangkat.
@@ -188,15 +188,27 @@ ZCODE menggunakan label bukti, bukan satu kata “done”.
 |---|---|
 | Unit/structural/mutation tests | 594 lulus pada snapshot dokumentasi ini |
 | Kotlin lexical sanity | 61 file |
-| GitHub Actions check + APK build | Gerbang canonical; native-rebirth terbaru belum CI VERIFIED |
+| GitHub Actions check + APK build | CI VERIFIED — run `32348956505`, artifact `9399175936` |
 | Editor security, focus topology, glyph, traceback, Undo/Redo | DEVICE VERIFIED di Infinix ARMv7 |
-| Package Engine core dan ratusan package | DEVICE VERIFIED bertahap; detail ada di katalog/docs |
-| Semantic package logs + uninstall hardening | IMPLEMENTED; visual/copy + `Batal` menunggu UAT final |
-| Native-runtime rebirth + Binary Rain | IMPLEMENTED + LOCALLY VERIFIED; belum CI/DEVICE VERIFIED |
-| Release v1.0.19 | Belum—branch fondasi belum di-merge ke `main` |
+| Package Engine core dan ratusan package | DEVICE VERIFIED bertahap; 231 kartu TESTED |
+| Semantic package logs + uninstall hardening | DEVICE VERIFIED, termasuk copy/STOP/`Batal`/uninstall |
+| Native-runtime rebirth + Binary Rain | DEVICE VERIFIED di INFINIX X6532C/API34/ARMv7 |
+| Bokeh 3.3.4 + ContourPy 1.0.5 | DEVICE VERIFIED; contour HTML 646.935 byte |
+| Release v1.0.19 | RELEASE CANDIDATE — branch belum di-merge ke `main` |
 
-Laporan eksekusi terbaru:
-[`docs/RENCANA_V1019.md`](docs/RENCANA_V1019.md).
+Artifact exact yang melewati UAT relaunch/native/package final:
+
+```text
+GitHub Actions run : 32348956505
+Commit SHA        : efa56ad3370e2f69da4f069d614a0a466f0de1be
+Artifact ID       : 9399175936
+Archive SHA-256   : 448af10bbfb0c3e7e8a833e2452dd08ae62852d4f6194deec6596135fff4a37b
+Device            : INFINIX X6532C · Android 14/API34 · armeabi-v7a
+```
+
+Laporan eksekusi lengkap:
+[`docs/RENCANA_V1019.md`](docs/RENCANA_V1019.md). Ringkasan kandidat rilis:
+[`docs/RELEASE_NOTES_V1.0.19.md`](docs/RELEASE_NOTES_V1.0.19.md).
 
 ---
 
@@ -306,6 +318,7 @@ Target terminal/interpreter:
 |---|---|
 | [`PRD_ZCODE.md`](docs/PRD_ZCODE.md) | Misi, prinsip, arsitektur, roadmap, batas |
 | [`RENCANA_V1019.md`](docs/RENCANA_V1019.md) | Log implementasi dan bukti UAT v1.0.19 |
+| [`RELEASE_NOTES_V1.0.19.md`](docs/RELEASE_NOTES_V1.0.19.md) | Ringkasan perubahan, bukti, dan batas release candidate |
 | [`RENCANA_UPDATE_2026_08.md`](docs/RENCANA_UPDATE_2026_08.md) | Keputusan redesign dan arah App Mode/ZPLAY |
 | [`SKILLS.md`](docs/SKILLS.md) | Playbook engineering khusus ZCODE |
 | [`AGENTS.md`](AGENTS.md) | Operating agreement universal untuk coding agent |
