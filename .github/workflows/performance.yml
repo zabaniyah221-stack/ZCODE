@@ -1,0 +1,131 @@
+name: Build ZCODE Performance — v1.0.20 Gate
+
+on:
+  push:
+    branches: [ "arena/v1020-performance" ]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run full local-equivalent gate
+        run: |
+          pip install --break-system-packages pillow pytest packaging
+          bash tools/check.sh
+          python3 tools/kotlin_sanity_check.py
+          python3 tools/npm_supply_chain_check.py
+          git diff --check
+
+  build-performance:
+    runs-on: ubuntu-22.04
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python 3.11 for Chaquopy
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-performance-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'settings.gradle.kts', 'app/build.gradle.kts', 'app/proguard-performance.pro') }}
+
+      - name: Build non-debuggable optimized APK
+        run: |
+          python3 --version
+          set -o pipefail
+          if gradle assemblePerformance --stacktrace --warning-mode all 2>&1 | tee performance-build.log; then
+            echo "BUILD_PERFORMANCE_OK"
+          else
+            rc=${PIPESTATUS[0]}
+            echo "BUILD_PERFORMANCE_FAILED rc=$rc"
+            tail -n 250 performance-build.log
+            exit "$rc"
+          fi
+
+      - name: Verify performance APK contract
+        run: |
+          set -euo pipefail
+          APK=$(find app/build/outputs/apk/performance -name "*.apk" -type f | head -n 1)
+          test -n "$APK"
+          AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
+
+          "$AAPT" dump badging "$APK" | tee performance-badging.txt
+          grep -q "package: name='com.zaba.zcode.performance'" performance-badging.txt
+          grep -q "application-label:'ZCODE Performance'" performance-badging.txt
+          if grep -q '^application-debuggable' performance-badging.txt; then
+            echo "Performance APK tidak boleh debuggable"
+            exit 1
+          fi
+
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | tee performance-manifest.txt
+          grep -q 'com.zaba.zcode.performance' performance-manifest.txt
+          grep -q ':rebirth' performance-manifest.txt
+          grep -q 'profileable' performance-manifest.txt
+
+          unzip -Z1 "$APK" > performance-apk-files.txt
+          grep -q 'assets/editor/codemirror.bundle.js' performance-apk-files.txt
+          grep -q 'assets/chaquopy' performance-apk-files.txt
+
+          mkdir -p "$RUNNER_TEMP/zcode-performance-apk"
+          cp "$APK" "$RUNNER_TEMP/zcode-performance-apk/ZCODE-v1.0.19-perf1.apk"
+          (
+            cd "$RUNNER_TEMP/zcode-performance-apk"
+            sha256sum ZCODE-v1.0.19-perf1.apk > ZCODE-v1.0.19-perf1.apk.sha256
+          )
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs "$APK" \
+            | tee "$RUNNER_TEMP/zcode-performance-apk/apksigner.txt"
+
+      - name: Upload one user-facing Performance APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZCODE-v1.0.19-perf1
+          path: ${{ runner.temp }}/zcode-performance-apk/*
+          if-no-files-found: error
+
+      - name: Collect R8 and build reports
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/zcode-performance-reports"
+          cp performance-build.log "$RUNNER_TEMP/zcode-performance-reports/" 2>/dev/null || true
+          cp performance-badging.txt "$RUNNER_TEMP/zcode-performance-reports/" 2>/dev/null || true
+          cp performance-manifest.txt "$RUNNER_TEMP/zcode-performance-reports/" 2>/dev/null || true
+          if [ -d app/build/outputs/mapping/performance ]; then
+            cp -R app/build/outputs/mapping/performance "$RUNNER_TEMP/zcode-performance-reports/r8-mapping"
+          fi
+
+      - name: Upload technical R8 reports separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZCODE-v1.0.19-perf1-technical-reports
+          path: ${{ runner.temp }}/zcode-performance-reports/*
+          if-no-files-found: warn
+          retention-days: 14
