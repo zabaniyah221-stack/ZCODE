@@ -65,8 +65,8 @@ CATALOG = [
      "Visualisasi statistik di atas matplotlib."),
     ("plotly", "plotly", "Data / Math / Science", "pure", "EXPERIMENTAL",
      "Plot interaktif (output HTML/JSON)."),
-    ("bokeh", "bokeh", "Data / Math / Science", "pure", "COMPATIBLE",
-     "Visualisasi interaktif berbasis browser; kandidat ARMv7 saat ini 3.3.4."),
+    ("bokeh", "bokeh", "Data / Math / Science", "pure", "TESTED",
+     "Visualisasi interaktif berbasis browser; v3.3.4 teruji di ARMv7."),
     ("xarray", "xarray", "Data / Math / Science", "pure", "COMPATIBLE",
      "Array berlabel untuk data multidimensi."),
     ("numba", "numba", "Data / Math / Science", "native", "EXPERIMENTAL",
@@ -733,17 +733,18 @@ RICH = {
         "source": "https://pypi.org/project/rich/",
     },
     "bokeh": {
-        "testedVersion": None, "python": ["3.11"], "abis": ["armeabi-v7a"],
+        "testedVersion": "3.3.4", "python": ["3.11"], "abis": [],
         "useCases": ["plot interaktif", "standalone HTML", "contour plot"],
         "works": [
-            "Kandidat ARMv7 bokeh==3.3.4: contourpy>=1 dipenuhi wheel 1.0.5.",
-            "Bokeh 3.9.2 basic smoke pernah lolos, tetapi dependency contract tidak.",
+            "DEVICE VERIFIED 2026-08-20: install dependency-correct dan auto-relaunch pada INFINIX X6532C/API34/armeabi-v7a.",
+            "Direct import bokeh 3.3.4 + contourpy 1.0.5 + numpy 1.26.2 + pandas 2.1.3 berhasil setelah relaunch.",
+            "Standalone HTML dan contour HTML 646935 byte berhasil, exit code 0.",
         ],
         "doesNotWork": [
             "Bokeh 3.4+ butuh contourpy>=1.2; CPython 3.11 ARMv7 hanya punya 1.0.5."
         ],
         "risks": [
-            "3.3.4 belum exact DEVICE VERIFIED.",
+            "Package native/dependency wajib memakai process baru setelah install; ZCODE menangani ini dengan auto-relaunch.",
             "Pandas/NumPy membuat instalasi besar pada perangkat rendah RAM.",
         ],
         "smokeTest": None,
@@ -942,6 +943,7 @@ TESTED_MANIFEST = {
     "httpx": ["0.27.2"],
     "flask": ["3.0.3"],
     "beautifulsoup4": ["4.12.3"],
+    "bokeh": ["3.3.4"],
     "tqdm": ["4.66.4"],
     "rich": ["13.7.1"],
     "openpyxl": ["3.1.5"],

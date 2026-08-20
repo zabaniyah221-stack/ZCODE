@@ -4123,37 +4123,41 @@ class TestLibrarySampleBridgeV1019:
 
 
 class TestBokehArmv7CandidateV1019:
-    """Bokeh terbaru tidak boleh mengalahkan constraint ContourPy ARMv7."""
+    """Hanya Bokeh 3.3.4 yang DEVICE VERIFIED; 3.9.2 tetap ditolak."""
 
-    def test_bokeh_39_diturunkan_dan_33_belum_diklaim_tested(self):
+    def test_bokeh_334_dipromosikan_dengan_batas_39_tetap_jujur(self):
         catalog = json.loads(read(
             ROOT / "app/src/main/assets/package_catalog/packages.json"))
         manifest = json.loads(read(
             ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
         bokeh = next(p for p in catalog if p["name"] == "bokeh")
-        assert bokeh["status"] == "COMPATIBLE"
-        assert bokeh.get("testedVersion") is None
-        assert "bokeh" not in manifest, (
-            "3.3.4 belum exact DEVICE VERIFIED; jangan masukkan tested-manifest"
-        )
+        assert bokeh["status"] == "TESTED"
+        assert bokeh.get("testedVersion") == "3.3.4"
+        assert manifest.get("bokeh") == ["3.3.4"]
         joined = " ".join(
             bokeh.get("works", []) + bokeh.get("doesNotWork", []) +
             bokeh.get("risks", []) + bokeh.get("dependencies", [])
         )
-        for fact in ("3.3.4", "3.9.2", "contourpy>=1", "contourpy>=1.2", "1.0.5"):
-            assert fact in joined, f"batas Bokeh ARMv7 hilang: {fact}"
+        for fact in (
+            "DEVICE VERIFIED 2026-08-20", "646935", "contourpy>=1",
+            "contourpy>=1.2", "1.0.5", "auto-relaunch",
+        ):
+            assert fact in joined, f"bukti/batas Bokeh ARMv7 hilang: {fact}"
+        assert "3.9.2" not in manifest.get("bokeh", [])
 
-    def test_generator_tidak_menghidupkan_klaim_lama(self):
+    def test_generator_menjaga_promosi_dan_batas_bokeh(self):
         generator = read(ROOT / "tools/generate_catalog.py")
-        assert '("bokeh", "bokeh", "Data / Math / Science", "pure", "COMPATIBLE"' in generator
+        assert '("bokeh", "bokeh", "Data / Math / Science", "pure", "TESTED"' in generator
         rich_start = generator.index('"bokeh": {')
         rich_end = generator.index('\n    },', rich_start)
         rich = generator[rich_start:rich_end]
-        assert '"testedVersion": None' in rich
-        assert "3.3.4" in rich and "contourpy>=1.2" in rich
+        assert '"testedVersion": "3.3.4"' in rich
+        assert "646935" in rich and "contourpy>=1.2" in rich
         manifest_start = generator.index("TESTED_MANIFEST = {")
         manifest_end = generator.index("\n}", manifest_start)
-        assert '"bokeh"' not in generator[manifest_start:manifest_end]
+        manifest_block = generator[manifest_start:manifest_end]
+        assert '"bokeh": ["3.3.4"]' in manifest_block
+        assert '"bokeh": ["3.9.2"]' not in manifest_block
 
 
 class TestLibraryP0CurationV1019:

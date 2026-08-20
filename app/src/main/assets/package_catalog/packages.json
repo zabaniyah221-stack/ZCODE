@@ -2116,17 +2116,22 @@
   "importName": "bokeh",
   "category": "Data / Math / Science",
   "type": "pure",
-  "status": "COMPATIBLE",
-  "testedVersion": null,
+  "status": "TESTED",
+  "testedVersion": "3.3.4",
   "python": [
    "3.11"
   ],
   "abis": [],
-  "description": "Visualisasi interaktif berbasis browser.",
-  "useCases": [],
+  "description": "Visualisasi interaktif berbasis browser; v3.3.4 teruji di ARMv7.",
+  "useCases": [
+   "plot interaktif",
+   "standalone HTML",
+   "contour plot"
+  ],
   "works": [
-   "Kandidat ARMv7: bokeh==3.3.4 meminta contourpy>=1; wheel contourpy 1.0.5 tersedia untuk CPython 3.11 armeabi-v7a.",
-   "Bokeh 3.9.2 pernah DEVICE install+basic smoke, tetapi bukti itu dibatalkan sebagai TESTED karena contourpy>=1.2 tidak terpenuhi."
+   "DEVICE VERIFIED 2026-08-20: install dependency-correct dan auto-relaunch pada INFINIX X6532C/API34/armeabi-v7a.",
+   "Direct import bokeh 3.3.4 + contourpy 1.0.5 + numpy 1.26.2 + pandas 2.1.3 berhasil setelah relaunch.",
+   "Standalone HTML dan contour HTML 646935 byte berhasil, exit code 0."
   ],
   "doesNotWork": [
    "Bokeh 3.4+ membutuhkan contourpy>=1.2; indeks Chaquopy CPython 3.11 ARMv7 hanya menyediakan 1.0.5."
@@ -2140,13 +2145,13 @@
    "tornado>=5.1"
   ],
   "risks": [
-   "Bokeh 3.3.4 belum exact DEVICE VERIFIED; install manual kandidat sebelum promosi TESTED.",
+   "Package native/dependency wajib memakai process baru setelah install; ZCODE menangani ini dengan auto-relaunch.",
    "Pandas dan NumPy membuat instalasi besar pada perangkat rendah RAM."
   ],
   "smokeTest": null,
-  "license": "",
-  "publisher": "",
-  "source": "https://pypi.org/project/bokeh/",
+  "license": "BSD-3-Clause",
+  "publisher": "Bokeh Team / NumFOCUS",
+  "source": "https://pypi.org/project/bokeh/3.3.4/",
   "sha256": null,
   "longDescription": "Interactive plots and applications in the browser from Python",
   "whoMadeIt": "Bokeh Team · BSD-3-Clause",
@@ -2162,7 +2167,7 @@
     "url": "https://docs.bokeh.org"
    }
   ],
-  "curatedAt": "2026-08-20 (audit constraint lintas-source)"
+  "curatedAt": "2026-08-20 (DEVICE VERIFIED native rebirth UAT)"
  },
  {
   "name": "bottleneck",
