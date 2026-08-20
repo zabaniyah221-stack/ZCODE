@@ -663,7 +663,7 @@ mencapai package `.so`. Restore kembali hijau.
 Validasi lokal setelah final task/queue review:
 
 ```text
-tools/check.sh                     : 592 passed
+tools/check.sh                     : 593 passed
 Kotlin lexical sanity             : 61 files passed
 npm/editor supply-chain guard     : passed
 git diff --check                  : passed
@@ -684,3 +684,25 @@ pulih → identity import/basic HTML/contour; jalur `Nanti` + seluruh gate;
 pure-Python install tanpa restart; save-failure tidak menutup app; uninstall
 native; semantic log visual/copy; dialog uninstall `Batal`; dan Diagnostics
 tanpa `FATAL_JAVA` untuk rebirth yang disengaja.
+
+### 2026-08-20 — CI pertama rebirth: REGRESSION FOUND sebelum artifact
+Push SHA `22d0cfb` memicu GitHub Actions run `32344397545`. Job `check` sukses,
+tetapi job `build` gagal pada step `Build Debug APK`; verify/upload dilewati dan
+tidak ada artifact. Halaman publik hanya membuka annotation exit code 1 dan
+menyembunyikan raw compiler log di balik autentikasi. Warning cache Gradle 400
+dan deprecation action ada, tetapi step setup tetap sukses sehingga bukan
+verdict akar build.
+
+Audit diff Kotlin baru menemukan satu import yang berbeda dari seluruh pola
+project: `import androidx.compose.foundation.layout.weight` di `PipScreen`.
+Pada Compose yang dipakai ZCODE, `weight` adalah member extension
+`RowScope`/`ColumnScope`; file ini sudah memakai `Modifier.weight` bertahun-tahun
+tanpa top-level import. Import baru tersebut dihapus. Guard permanen memindai
+semua Kotlin dan menolak top-level import yang sama. Mutation proof: import
+dikembalikan → guard merah; restore → hijau.
+
+Status koreksi: **IMPLEMENTED + LOCALLY VERIFIED (593 passed)**. Karena raw log
+tidak tersedia, penyebab compiler diberi confidence tinggi tetapi belum boleh
+disebut terbukti sampai CI kedua hijau. PAT push pertama sudah dihancurkan dan
+remote/config/workspace diverifikasi bebas credential; push koreksi membutuhkan
+PAT baru/sementara.

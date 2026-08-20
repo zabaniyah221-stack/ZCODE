@@ -158,6 +158,17 @@ class TestTabBoxRowScope:
             "TabBox harus extension RowScope (Modifier.weight unresolved di luar scope)."
         )
 
+    def test_weight_scope_extension_tidak_diimport_sebagai_top_level(self):
+        offenders = []
+        for f in APP.rglob("*.kt"):
+            active = strip_kt_comments(read(f))
+            if "import androidx.compose.foundation.layout.weight" in active:
+                offenders.append(str(f.relative_to(ROOT)))
+        assert not offenders, (
+            "Modifier.weight adalah member extension RowScope/ColumnScope pada "
+            f"Compose project ini, bukan top-level import. Offender: {offenders}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # 5. Local function dideklarasikan sebelum pemakaian (TerminalScreen)

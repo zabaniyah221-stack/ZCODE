@@ -186,7 +186,7 @@ ZCODE menggunakan label bukti, bukan satu kata “done”.
 
 | Lapisan | Status |
 |---|---|
-| Unit/structural/mutation tests | 592 lulus pada snapshot dokumentasi ini |
+| Unit/structural/mutation tests | 593 lulus pada snapshot dokumentasi ini |
 | Kotlin lexical sanity | 61 file |
 | GitHub Actions check + APK build | Gerbang canonical; native-rebirth terbaru belum CI VERIFIED |
 | Editor security, focus topology, glyph, traceback, Undo/Redo | DEVICE VERIFIED di Infinix ARMv7 |
