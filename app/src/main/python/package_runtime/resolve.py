@@ -14,6 +14,7 @@ sha256, size, requires_dist, extras, priority, compat_reason, reason?}],
 conflicts: [...], unavailable: [...]}
 """
 import contextvars
+import http.client
 import json
 import os
 import random
@@ -149,7 +150,8 @@ def _retryable_error(error: Exception) -> bool:
     # Sertifikat/hostname salah tidak akan sembuh dengan retry identik.
     if _is_certificate_error(error):
         return False
-    if isinstance(error, (socket.timeout, TimeoutError, ConnectionError)):
+    if isinstance(error, (socket.timeout, TimeoutError, ConnectionError,
+                          http.client.IncompleteRead)):
         return True
     if isinstance(error, urllib.error.URLError):
         return True
@@ -170,6 +172,7 @@ def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     source = _source_for_url(url)
     last_summary = "unknown"
+    last_status = None
     attempts_made = 0
     for attempt in range(1, _MAX_HTTP_ATTEMPTS + 1):
         attempts_made = attempt
@@ -194,6 +197,7 @@ def _http_get(url: str) -> bytes:
         except Exception as e:
             retry = _retryable_error(e) and attempt < _MAX_HTTP_ATTEMPTS
             status = getattr(e, "code", None)
+            last_status = status
             detail = "%s%s" % (
                 type(e).__name__, " HTTP %s" % status if status is not None else ""
             )
@@ -219,9 +223,12 @@ def _http_get(url: str) -> bytes:
             if not retry:
                 break
             _retry_wait(attempt)
+    not_found = last_status == 404
     raise ResolveError(
-        "NETWORK", "metadata",
-        "Tidak bisa menghubungi repository package (network error).",
+        "SOURCE_NOT_FOUND" if not_found else "NETWORK",
+        "metadata",
+        ("Package tidak ditemukan di repository ini." if not_found else
+         "Tidak bisa menghubungi repository package (network error)."),
         "GET source=%s package=%s attempts=%d → %s" % (
             source, _CURRENT_PACKAGE.get(), attempts_made, last_summary
         ),
@@ -458,7 +465,9 @@ def fetch_chaquopy_wheels(name: str, index_url: str = CHAQUOPY_INDEX_URL) -> lis
         html = _http_get(url).decode("utf-8", "replace")
     except ResolveError as e:
         _propagate_cancel(e)
-        return []  # package tidak ada di index Chaquopy → bukan error fatal
+        if e.code == "SOURCE_NOT_FOUND":
+            return []  # 404: package memang tidak dijual sumber ini
+        raise  # transport gagal: jangan disamarkan menjadi package unavailable
     out = []
     for href in _SIMPLE_HREF.findall(html):
         fn = href.split("/")[-1]
@@ -856,6 +865,7 @@ def _resolve_unlocked(
     def _collect(cname: str, specifier: str) -> list[dict]:
         # 1. local cache (offline)
         local = _local_wheel_candidates(wheels_dir or "", cname)
+        source_errors: list[ResolveError] = []
         # 2. PyPI
         pypi = []
         try:
@@ -863,10 +873,21 @@ def _resolve_unlocked(
             pypi = _pypi_candidates(data, {"specifier": specifier})
         except ResolveError as e:
             _propagate_cancel(e)
-            pypi = []
+            if e.code != "SOURCE_NOT_FOUND":
+                source_errors.append(e)
         # 3. Chaquopy index (native wheel)
-        chaq = fetch_chaquopy_wheels(cname)
+        chaq = []
+        try:
+            chaq = fetch_chaquopy_wheels(cname)
+        except ResolveError as e:
+            _propagate_cancel(e)
+            source_errors.append(e)
         all_cands = local + pypi + chaq
+        # Jangan memvonis PACKAGE_NOT_AVAILABLE ketika kandidat kosong karena
+        # repository gagal dibaca. Local/remote candidate yang nyata tetap
+        # boleh menang walau sumber lain sedang putus.
+        if not all_cands and source_errors:
+            raise source_errors[-1]
         return all_cands
 
     def _choose(cands: list[dict], cname: str) -> dict:

@@ -1070,6 +1070,51 @@ class TestBengkelMiniV1018:
             f"(_MAX_HTTP_ATTEMPTS=3); calls={len(calls)}"
         )
 
+    def test_incomplete_read_diretry_bukan_langsung_gagal(self, monkeypatch):
+        import http.client
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            if len(calls) == 1:
+                raise http.client.IncompleteRead(b"setengah", 20)
+            return _FakeHttpResponse(b"metadata-utuh")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"metadata-utuh"
+        assert len(calls) == 2, "IncompleteRead adalah gangguan transport sementara; wajib retry"
+
+    def test_404_memiliki_kode_source_not_found(self, monkeypatch):
+        from urllib.error import HTTPError
+
+        monkeypatch.setattr(
+            resolve_mod.urllib.request, "urlopen",
+            lambda req, timeout: (_ for _ in ()).throw(
+                HTTPError(req.full_url, 404, "not found", {}, None)
+            ),
+        )
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._http_get("https://chaquo.com/pypi-13.1/demo/")
+        assert exc.value.code == "SOURCE_NOT_FOUND"
+
+    def test_dua_repository_gagal_tetap_network_bukan_unavailable(self, monkeypatch):
+        def network_fail(*_args, **_kwargs):
+            raise resolve_mod.ResolveError(
+                "NETWORK", "metadata", "repository belum berhasil dibaca", "uji transport"
+            )
+
+        monkeypatch.setattr(resolve_mod, "fetch_pypi_metadata", network_fail)
+        monkeypatch.setattr(resolve_mod, "fetch_chaquopy_wheels", network_fail)
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._resolve_unlocked(
+                "demo", supported_tags=[Tag("py3", "none", "any")]
+            )
+        assert exc.value.code == "NETWORK", (
+            "kegagalan transport tidak boleh berubah menjadi PACKAGE_NOT_AVAILABLE"
+        )
+
     def test_manifest_pin_mypy_stable_pra_librt(self):
         # mypy>=1.19 menarik librt (C-ext mypyc, tak ada wheel ARMv7 —
         # https://mypy.readthedocs.io/en/stable/changelog.html). 1.18.2 =
