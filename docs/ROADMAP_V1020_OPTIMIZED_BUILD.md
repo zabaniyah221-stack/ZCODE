@@ -1,7 +1,7 @@
 # Roadmap v1.0.20 — One Optimized APK Performance Gate
 
 Tanggal audit: 2026-08-20
-Status: **IMPLEMENTED + LOCALLY VERIFIED; belum CI/DEVICE VERIFIED**
+Status: **OPTIMIZED BUILD CI + DEVICE VERIFIED; terminal keyboard fix LOCALLY VERIFIED**
 Basis: `main` merge commit `cd982da` (v1.0.19 correctness/stability)
 Target branch saat implementasi: `arena/v1020-performance`
 
@@ -851,7 +851,98 @@ npm/editor supply-chain guard  : passed
 workflow mirror/XML/diff check : passed
 ```
 
-Status tetap **LOCALLY VERIFIED**, bukan CI VERIFIED: sandbox tidak
-mengompilasi Kotlin/R8/manifest merge. Berikutnya adalah review diff, commit,
-push dengan credential berizin workflow, CI `assemblePerformance`, audit report
-R8/APK, lalu satu device UAT.
+Status pada titik implementasi awal adalah **LOCALLY VERIFIED**, bukan CI
+VERIFIED: sandbox tidak mengompilasi Kotlin/R8/manifest merge.
+
+## 3.5 CI dan device evidence pertama
+
+Push SHA `fe51b5652e88fcdd5fb584e70044e7cd6619f9d8` membuktikan token user memang
+memiliki izin workflow. Dua pipeline pada source yang sama selesai hijau:
+
+```text
+Canonical Debug regression : run 32422826514 · SUCCESS
+Performance/R8              : run 32422826694 · SUCCESS
+```
+
+Artifact:
+
+```text
+Debug artifact ID       : 9426420318
+Debug archive bytes     : 44,735,378
+Performance artifact ID : 9426425213
+Performance archive     : 33,178,943 bytes
+Performance archive SHA : 883a4403078c5713dbe75468f4983b2a2a5541b036de309ab2eb97228cec8d46
+Technical report ID     : 9426426175
+```
+
+Workflow Performance berhasil melewati build R8 serta verifikasi package ID,
+label, non-debuggable, profileable, task affinity, `:rebirth`, CM6 assets,
+Chaquopy assets, dan APK signature. Ukuran archive turun sekitar 25,8% dibanding
+Debug walau archive Performance juga membawa checksum/certificate report. Ini
+membuktikan stripping/variant difference nyata, tetapi size bukan target utama.
+
+UAT awal pada INFINIX X6532C/API34/ARMv7 memberi verdict user:
+
+> **"Sangat sangat lancar jaya pool."**
+
+Tap, scroll, swipe, dan pindah layar yang sebelumnya lag/patah/tertahan menjadi
+lancar. Keputusan produk: build optimized adalah akar dominan dan layak menjadi
+fondasi v1.0.20. Performance Recorder/JankStats tidak perlu dipasang untuk
+menjawab masalah utama.
+
+### Regresi tersisa: keyboard terminal tidak dapat dibuka ulang
+
+Skenario device:
+
+1. Run chatbot; terminal otomatis membuka keyboard.
+2. User menutup IME.
+3. Tap area output terminal; keyboard tidak muncul lagi.
+
+Akar source: `TerminalScreen` memakai TextField transparan 1dp. Menutup IME tidak
+selalu melepas focus dari field tersebut. Handler tap lama hanya menjalankan
+`focusRequester.requestFocus()`; karena field sudah focused, operasi menjadi
+no-op dan tidak meminta IME tampil lagi.
+
+Fix lokal:
+
+```text
+request focus
+→ tunggu satu frame
+→ LocalSoftwareKeyboardController.show()
+```
+
+Satu helper `requestTerminalKeyboard()` dipakai oleh:
+
+- tap area output;
+- insert dari terminal handle;
+- IME Done setelah input dikirim.
+
+Tidak ada pointer interceptor baru, sehingga scroll, fling, long-press selection,
+Salin/Bagikan, dan `^C` tetap memakai topology lama. Hanya kegagalan focus yang
+dicatat; tap sukses tidak membanjiri breadcrumb.
+
+Tiga mutasi keyboard terbukti merah:
+
+```text
+keyboard show dihapus
+output tap kembali focus-only
+jalur IME Done melewati helper
+```
+
+Restore hijau. Full local gate sesudah fix:
+
+```text
+tools/check.sh                : 613 passed
+Kotlin lexical sanity         : 61 files
+npm/editor supply-chain guard : passed
+git diff --check              : passed
+```
+
+Status:
+
+```text
+Optimized responsiveness      : DEVICE VERIFIED
+Performance build/R8          : CI VERIFIED
+Terminal keyboard reopen fix  : IMPLEMENTED + LOCALLY VERIFIED
+Final perf1 functional gate   : menunggu CI + focused device retest
+```
