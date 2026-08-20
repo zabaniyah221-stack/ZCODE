@@ -112,6 +112,9 @@ class TestNativeStaleGates:
     def test_native_evidence_marks_stale_but_has_no_package_hardcode(self):
         engine = strip_kt_comments(text(KT / "core/packageengine/PackageEngineV2.kt"))
         assert "outcome.nativeLibs.isNotEmpty()" in engine
+        assert "outcome.loadedNativeModules.isNotEmpty()" in engine
+        smoke = strip_kt_comments(text(APP / "python/package_runtime/smoke.py"))
+        assert 'native_info["loaded_native_modules"] = loaded_native' in smoke
         # Exactly four generic producers: transaction pre-smoke evidence,
         # per-outcome native evidence, activated native environment, and native
         # uninstall. An unconditional fifth producer would make pure Python

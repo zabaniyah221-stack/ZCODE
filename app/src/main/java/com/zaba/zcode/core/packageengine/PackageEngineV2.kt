@@ -558,7 +558,9 @@ class PackageEngineV2(private val context: Context) {
                 // Detection is generic and evidence-based: if smoke saw a .so,
                 // its loader/C++ registry may now survive sys.modules cleanup.
                 // Persist stale state even when smoke later fails and rolls back.
-                if (outcome.nativeLibs.isNotEmpty()) {
+                val loadedNative = outcome.nativeLibs.isNotEmpty() ||
+                    outcome.loadedNativeModules.isNotEmpty()
+                if (loadedNative) {
                     nativeTouched.add(p.canonicalName)
                     NativeRuntimeState.markRequired(
                         context,
@@ -568,7 +570,7 @@ class PackageEngineV2(private val context: Context) {
                 }
                 if (!outcome.ok) {
                     TelemetryStore.increment("smoke_test_failure")
-                    if (outcome.nativeLibs.isNotEmpty()) TelemetryStore.increment("native_load_failure")
+                    if (loadedNative) TelemetryStore.increment("native_load_failure")
                     val failMsg = outcome.results.firstOrNull { !it.optBoolean("ok") }
                         ?.optString("error") ?: "smoke test gagal"
                     // Sertakan SELURUH hasil + daftar .so yang ditemukan sebagai
@@ -578,7 +580,11 @@ class PackageEngineV2(private val context: Context) {
                     // tidak pernah sampai ke mana pun.
                     val teknis = buildString {
                         append("smoke gagal untuk ${p.canonicalName}==${p.version}\n")
-                        append("native .so terdeteksi: ${outcome.nativeLibs.size}\n")
+                        append("native .so di staging: ${outcome.nativeLibs.size}\n")
+                        append("extension native termuat: ${outcome.loadedNativeModules.size}\n")
+                        outcome.loadedNativeModules.take(20).forEach {
+                            append("  loaded: ").append(it).append('\n')
+                        }
                         // NATIVE-LOADER: tanpa baris ini tidak mungkin dibedakan
                         // antara "pustaka pendukung tidak pernah diunduh" dan
                         // "sudah ada tapi gagal dimuat" — dua sebab yang
@@ -597,7 +603,11 @@ class PackageEngineV2(private val context: Context) {
                     return fail("SMOKE_TEST", "smoke_test",
                         "Import/smoke test ${p.canonicalName} gagal: $failMsg", teknis)
                 }
-                onStep(Step.Message("${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so)", SemanticLogKind.OK))
+                onStep(Step.Message(
+                    "${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so staging, " +
+                        "${outcome.loadedNativeModules.size} extension native termuat)",
+                    SemanticLogKind.OK
+                ))
             }
             onStep(Step.Finish("Smoke Test", FinishResult.OK))
 

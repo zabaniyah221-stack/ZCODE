@@ -718,6 +718,28 @@ class TestSmoke:
         assert ok
         assert all(r["ok"] for r in results)
         assert native["native_libs"] == []
+        assert native["loaded_native_modules"] == []
+
+    def test_pure_root_reports_native_dependency_actually_loaded(self, tmp_path):
+        pkg = tmp_path / "pure_wrapper"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        code = (
+            "import sys, types; "
+            "m = types.ModuleType('active_native_dep'); "
+            "m.__file__ = '/active/native_dep.cpython-311.so'; "
+            "sys.modules['active_native_dep'] = m"
+        )
+        ok, results, native = smoke_mod.run_smoke(
+            "pure_wrapper", str(tmp_path),
+            [{"name": "loads-active-native", "type": "BASIC_API", "code": code}],
+        )
+        assert ok, results
+        assert native["native_libs"] == []
+        assert native["loaded_native_modules"] == [
+            "active_native_dep:/active/native_dep.cpython-311.so"
+        ]
+        assert "active_native_dep" not in sys.modules
 
     def test_failure_reported(self, tmp_path):
         pkg = tmp_path / "zsmoke"

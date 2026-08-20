@@ -706,3 +706,31 @@ tidak tersedia, penyebab compiler diberi confidence tinggi tetapi belum boleh
 disebut terbukti sampai CI kedua hijau. PAT push pertama sudah dihancurkan dan
 remote/config/workspace diverifikasi bebas credential; push koreksi membutuhkan
 PAT baru/sementara.
+
+### 2026-08-20 — CI kedua hijau, artifact ditahan oleh audit native dependency aktif
+Koreksi import pada SHA `38f401f` membuat GitHub Actions run `32346726238`
+sukses untuk job check dan build. Artifact `ZCODE-Fase12-APK` ID `9398359511`,
+ukuran archive 44.735.503 byte, digest archive
+`sha256:8c1bc5784312096fe03d80470d015b29d8fd704a5ab0e8889ae7506fe7b3bae5`.
+Ini menguatkan diagnosis import CI pertama.
+
+Artifact sengaja **tidak dinaikkan menjadi kandidat UAT**. Audit alur sebelum
+meminta user download menemukan kelas yang belum tertutup: transaksi package
+pure dapat mengimpor dependency native yang sudah aktif. Contoh kelas:
+seaborn pure-Python mengimpor NumPy/Matplotlib. Karena `.so` tidak berada di
+staging root seaborn, detektor staging dapat menganggap transaksi pure padahal
+smoke benar-benar memasukkan extension native ke `sys.modules`; cleanup lalu
+menghapus module Python tetapi registry C/C++ tetap hidup.
+
+Fix berikutnya membuat `smoke.py` mencatat `loaded_native_modules` dari delta
+`sys.modules` sebelum cleanup, berdasarkan `module.__file__` extension `.so`.
+`SmokeTestRunner` membawa evidence itu ke Kotlin dan PackageEngine menandai
+stale bila staging berisi `.so` **atau** smoke benar-benar memuat extension
+native dari dependency aktif. Negative control package pure tanpa extension
+tetap menghasilkan daftar kosong dan tidak meminta restart.
+
+Guard runtime + Kotlin menjaga kedua sisi kontrak. Dua mutasi tambahan terbukti
+merah: smoke membuang daftar extension termuat, dan engine mengabaikan daftar
+tersebut. Restore hijau; full local gate **594 passed**, 61 Kotlin files,
+supply-chain guard dan diff-check hijau. Status fix: IMPLEMENTED + LOCALLY
+VERIFIED; membutuhkan CI ketiga sebelum satu APK kandidat diberikan ke user.

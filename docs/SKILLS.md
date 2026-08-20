@@ -1472,7 +1472,10 @@ solusi kelas masalah.
 **Aturan:**
 
 1. Native smoke yang memuat `.so`, berhasil ataupun gagal, menandai runtime
-   process sebagai **stale**.
+   process sebagai **stale**. Bukti tidak boleh hanya mencari `.so` di staging
+   package root: package pure dapat mengimpor extension native dari dependency
+   yang sudah aktif. Catat module extension baru yang benar-benar masuk
+   `sys.modules` sebelum cleanup.
 2. Install/update/uninstall yang mengubah environment native juga menandai
    stale; deteksi berdasarkan artifact/evidence `.so`, bukan hardcode nama
    package tertentu.
