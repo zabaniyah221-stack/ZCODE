@@ -576,3 +576,111 @@ device UAT basic HTML + contour + restart lulus. Total katalog kini 230 TESTED,
 Guard: lima test resolver lintas-source dan dua guard data/generator. Enam
 mutasi resolver serta tiga mutasi katalog/generator terbukti merah lalu restore
 hijau. Status: **IMPLEMENTED lokal**, full gate/CI/device UAT kandidat belum.
+
+### 2026-08-20 — Bokeh 3.3.4 dependency-correct, tetapi runtime native stale
+UAT lanjutan pada INFINIX X6532C/API34/ARMv7 membuktikan dua hal yang harus
+dipisahkan:
+
+1. `bokeh==3.9.2` ditolak secara benar dengan
+   `DEPENDENCY_VERSION_UNAVAILABLE`: ContourPy membutuhkan `>=1.2`, sedangkan
+   runtime ZCODE hanya menyediakan 1.0.5.
+2. `bokeh==3.3.4` berhasil terpasang dengan dependency yang benar. Basic HTML
+   dapat dibuat pada process install yang sama, tetapi direct `import
+   contourpy` dan contour plot gagal dengan:
+
+   ```text
+   ImportError: generic_type: type "FillType" is already registered!
+   ```
+
+Setelah ZCODE ditutup dari Recent Apps dan dibuka kembali, `bokeh 3.3.4`,
+`contourpy 1.0.5`, `numpy 1.26.2`, dan `pandas 2.1.3` dapat diimpor; contour
+plot juga berhasil. Jadi dependency/version correctness Bokeh 3.3.4 berstatus
+**DEVICE VERIFIED**, sedangkan penggunaan native tepat setelah install berubah
+menjadi **REGRESSION FOUND**.
+
+Akar berada di `package_runtime/smoke.py`: smoke mengimpor extension `.so`, lalu
+cleanup hanya menghapus module baru dari `sys.modules`. Shared library,
+pybind11 global type registry, dan static C/C++ state tetap hidup. Import user
+berikutnya menginisialisasi extension kedua kali dan menabrak registry lama.
+Arbitrary native extension tidak mempunyai kontrak hot-unload yang aman;
+solusinya adalah process/interpreter baru, bukan cleanup Python yang semakin
+agresif.
+
+Sumber desain:
+
+- CPython embedded runtime/isolation:
+  https://bugs.python.org/issue34309
+- pybind11 embedding lifecycle:
+  https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
+- pola helper-process relaunch ProcessPhoenix:
+  https://github.com/JakeWharton/ProcessPhoenix
+- batas background activity launch Android:
+  https://developer.android.com/guide/components/activities/secure-bal
+
+### 2026-08-20 — Native-runtime rebirth + Binary Rain: IMPLEMENTED lokal
+Setelah diskusi UX dan persetujuan user, commit `87a1ca6`, `408b3e0`, dan
+`5526c21` mengimplementasikan kontrak berikut:
+
+- native smoke success/failure atau perubahan environment `.so` menandai
+  `NativeRuntimeState` sebagai stale; uninstall native memakai kontrak sama;
+- pure-Python install tidak menandai stale;
+- setelah operasi native, dialog menawarkan `Nanti` atau
+  `Simpan & mulai ulang`;
+- jalur `Nanti` mempertahankan banner amber dan memblokir Run,
+  install/update/uninstall, serta dispatch antrean package; edit, copy, save,
+  dan Diagnostics tetap boleh;
+- `WorkspaceViewModel.flushSaveSync(verifyAllDrafts = true)` memverifikasi
+  seluruh draft terbuka dan commit workspace secara sinkron. Kegagalan save
+  tidak boleh membunuh process dan UI menawarkan `Coba simpan lagi`;
+- receipt minimal (`restart_required`, package, timestamp, old PID) dipersist
+  sebelum helper dimulai;
+- `ZcodeRebirthActivity` private (`exported=false`) berjalan di process
+  `:rebirth`, memvalidasi PID, membunuh PID main lama, lalu membuka explicit
+  `MainActivity` dengan `NEW_TASK | CLEAR_TASK`;
+- helper hanya memanggil `finish()`, bukan `finishAndRemoveTask()`, agar task
+  berisi MainActivity baru tidak ikut terhapus;
+- `ZcodeApp` mendeteksi process helper, termasuk fallback API 26–27, dan
+  melewati init normal CrashReporter/telemetry/Chaquopy;
+- tidak memakai AlarmManager, exact-alarm permission, service background,
+  ProcessPhoenix dependency, atau package-name hardcode;
+- transisi memakai custom Canvas ringan ±24 FPS. Setiap trail vertikal hanya
+  mengulang binary ASCII `ZCODE`:
+  `0101101001000011010011110100010001000101`;
+- status transisi: `Memulai ulang Python…` lalu `Menyiapkan workspace…`;
+- process baru memvalidasi old PID/receipt, membersihkan stale state, kembali ke
+  editor, lalu menampilkan sekali:
+  `Python berhasil dimulai ulang. Program siap dijalankan.`
+
+Permanent guard hidup di `test_native_runtime_rebirth_guards.py` dan sekarang
+menjadi bagian `tools/check.sh`. Mutation proof terbukti merah untuk 13 arah:
+process suffix hilang, helper exported, intent implicit, save failure tetap
+melanjutkan kill, helper menjalankan init normal, process baru tidak
+membersihkan stale, AlarmManager masuk, native tidak menandai stale,
+pure-Python salah menandai stale, Run tidak digate, helper menghapus task,
+antrean tetap terkuras saat stale, dan native sibling gagal sebelum loop
+mencapai package `.so`. Restore kembali hijau.
+
+Validasi lokal setelah final task/queue review:
+
+```text
+tools/check.sh                     : 592 passed
+Kotlin lexical sanity             : 61 files passed
+npm/editor supply-chain guard     : passed
+git diff --check                  : passed
+```
+
+Status jujur:
+
+```text
+Native rebirth + Binary Rain      : IMPLEMENTED + LOCALLY VERIFIED
+Canonical Kotlin/APK compilation  : BELUM CI VERIFIED
+Automatic relaunch/task handoff   : BELUM DEVICE VERIFIED
+Bokeh 3.3.4 catalog promotion     : DITAHAN sampai exact artifact UAT
+PR / merge / release              : BELUM
+```
+
+UAT satu artifact wajib mencakup: native install → immediate relaunch → tab/file
+pulih → identity import/basic HTML/contour; jalur `Nanti` + seluruh gate;
+pure-Python install tanpa restart; save-failure tidak menutup app; uninstall
+native; semantic log visual/copy; dialog uninstall `Batal`; dan Diagnostics
+tanpa `FATAL_JAVA` untuk rebirth yang disengaja.

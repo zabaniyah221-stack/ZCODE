@@ -124,6 +124,11 @@ Parse → Resolve → Storage Guard → Download → Verify → Extract
   `[ERR]`, dan `[STOP]`.
 - Uninstall meminta konfirmasi dan menjelaskan bahwa reverse-dependency graph
   belum tersedia; ZCODE tidak auto-clean dependency secara sembarangan.
+- Setelah package native dimuat/diubah, ZCODE menyimpan workspace lalu
+  **relaunch otomatis** ke process Python yang bersih. Jika dipilih `Nanti`,
+  banner tetap terlihat dan Run/package mutation dikunci sampai restart.
+- Transisi relaunch memakai Binary Rain ringan: trail vertikal hanya mengulang
+  binary ASCII `ZCODE`, tanpa Python, dependency tambahan, atau delay palsu.
 
 ### Library dan Samples
 
@@ -181,12 +186,13 @@ ZCODE menggunakan label bukti, bukan satu kata “done”.
 
 | Lapisan | Status |
 |---|---|
-| Unit/structural/mutation tests | 570 lulus pada snapshot dokumentasi ini |
-| Kotlin lexical sanity | 58 file |
-| GitHub Actions check + APK build | Digunakan sebagai gerbang setiap batch |
-| Editor security, swipe, glyph, traceback, Undo/Redo | DEVICE VERIFIED di Infinix ARMv7 |
+| Unit/structural/mutation tests | 592 lulus pada snapshot dokumentasi ini |
+| Kotlin lexical sanity | 61 file |
+| GitHub Actions check + APK build | Gerbang canonical; native-rebirth terbaru belum CI VERIFIED |
+| Editor security, focus topology, glyph, traceback, Undo/Redo | DEVICE VERIFIED di Infinix ARMv7 |
 | Package Engine core dan ratusan package | DEVICE VERIFIED bertahap; detail ada di katalog/docs |
-| Semantic package logs + uninstall hardening | IMPLEMENTED lokal; menunggu CI/UAT final |
+| Semantic package logs + uninstall hardening | IMPLEMENTED; visual/copy + `Batal` menunggu UAT final |
+| Native-runtime rebirth + Binary Rain | IMPLEMENTED + LOCALLY VERIFIED; belum CI/DEVICE VERIFIED |
 | Release v1.0.19 | Belum—branch fondasi belum di-merge ke `main` |
 
 Laporan eksekusi terbaru:
@@ -226,6 +232,7 @@ Jetpack Compose UI
 ├── CodeMirror 6 dalam WebView file:// yang local-only
 ├── WorkspaceViewModel + FileManager
 ├── ExecutionEngine + Chaquopy Python 3.11
+├── NativeRuntimeState + private :rebirth process handoff
 ├── Package Engine V2
 │   ├── RequirementParser / DependencyResolver
 │   ├── Verifier / SmokeTestRunner / TransactionManager

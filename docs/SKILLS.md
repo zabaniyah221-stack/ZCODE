@@ -581,14 +581,22 @@ Inti pelajarannya:
    beberapa build dan katakan alasannya.
 4. **Beri kemenangan yang terlihat.** Perbaikan 2 jam yang kelihatan hasilnya
    lebih berharga daripada arsitektur 3 hari yang belum tentu jalan.
-5. **Jangan bertanya soal kredensial.** Git/gh sudah terkonfigurasi.
+5. **Jangan menganggap kredensial selalu tersedia.** Snapshot/session dapat
+   menghapus konfigurasi Git/gh. Periksa lebih dulu. Jika push membutuhkan
+   autentikasi, minta PAT baru/sementara secara eksplisit untuk push tersebut;
+   jangan memakai ulang token lama yang pernah muncul di chat.
 
 ### Yang sudah terbukti soal alur kerja
 
-- **Push BISA dilakukan asisten sendiri.** Field `permissions` dari `gh api`
-  melaporkan `push:false`, tapi `git push` nyata **berhasil**. Jangan jadikan
-  alasan menolak push.
-- Yang benar-benar terhalang hanya **isi log CI**.
+- **Push BISA dilakukan asisten sendiri bila autentikasi tersedia.** Field
+  `permissions` dari `gh api` pernah melaporkan `push:false`, tetapi push nyata
+  berhasil. Namun konfigurasi credential dapat hilang pada session berikutnya.
+- PAT hanya boleh dipakai melalui askpass sementara di `/var/tmp`, lalu dihapus;
+  remote, config, credential helper, workspace, log, dan dokumentasi wajib
+  diverifikasi bebas token. Token yang pernah ditempel di chat dianggap
+  terekspos dan harus direvoke.
+- Yang sering benar-benar terhalang adalah **isi log CI**; status job/step dan
+  artifact masih dapat diperiksa.
 
 ---
 
@@ -1444,3 +1452,69 @@ dasar lolos walau environment melanggar metadata.
    versi baru belum boleh masuk tested-manifest sebelum exact device UAT.
 8. Mutation proof wajib menghapus filter tiap source, membiarkan tested priority
    menang, menelan network, dan menghilangkan available-version detail.
+
+
+---
+
+## SKILL 23 — Native extension yang sudah dimuat membutuhkan process baru (2026-08-20)
+
+**Trigger:** smoke Bokeh 3.3.4 mengimpor `contourpy._contourpy`, lalu cleanup
+menghapus module baru dari `sys.modules`. Direct import user pada process yang
+sama gagal `generic_type: type "FillType" is already registered!`; setelah
+process ZCODE benar-benar baru, import dan contour plot berhasil.
+
+**Akar:** `sys.modules` hanya registry object Python. Ia tidak membongkar `.so`,
+tidak mereset pybind11 global type registry, dan tidak menghapus static C/C++
+state. Arbitrary native extension tidak memiliki kontrak hot-unload/reload yang
+aman. Cleanup module yang lebih agresif dapat merusak extension lain dan bukan
+solusi kelas masalah.
+
+**Aturan:**
+
+1. Native smoke yang memuat `.so`, berhasil ataupun gagal, menandai runtime
+   process sebagai **stale**.
+2. Install/update/uninstall yang mengubah environment native juga menandai
+   stale; deteksi berdasarkan artifact/evidence `.so`, bukan hardcode nama
+   package tertentu.
+3. Pure-Python package tidak boleh meminta restart.
+4. Selama stale: Run dan seluruh package mutation/queue diblokir. Editing,
+   copy, save, dan Diagnostics tetap tersedia.
+5. Semua draft terbuka dan topology workspace wajib disimpan serta diperiksa
+   hasilnya sebelum PID lama boleh dibunuh. Save gagal = fail closed, process
+   tetap hidup.
+6. Receipt stale/restart wajib dipersist sinkron sebelum helper dimulai agar
+   process death tidak kehilangan recovery path.
+7. Relaunch Android memakai private helper process, explicit intent, dan PID
+   validation. Helper tidak boleh menginisialisasi runtime normal.
+8. Helper yang hidup di task aplikasi hanya memanggil `finish()`. Jangan
+   `finishAndRemoveTask()`, karena itu dapat menghapus MainActivity baru.
+9. Process baru hanya membersihkan stale receipt jika old PID valid dan berbeda
+   dari PID baru. Relaunch gagal harus meninggalkan state stale agar user dapat
+   mencoba lagi.
+10. Intentional rebirth bukan `FATAL_JAVA`; breadcrumb lama/baru harus dapat
+    membuktikan `REQUEST → WORKSPACE_FLUSH_OK → HELPER → APP_START → OK`.
+11. Jangan memakai AlarmManager/exact alarm untuk foreground handoff ini; ia
+    menambah permission/restriction tanpa menyelesaikan ownership.
+12. Animasi transisi tidak boleh menambah delay palsu atau menjalankan Python.
+    Pada target low-end gunakan Canvas deterministik, frame rate terbatas, dan
+    hentikan callback segera setelah view lepas.
+13. Guard wajib mencakup manifest process/export, explicit intent, save-before-
+    kill, helper-init skip, stale producer/consumer, Run/package gates, no alarm,
+    task preservation, dan pure-Python negative control; semua dibuktikan dengan
+    mutation red→green.
+
+**Sumber:**
+
+- CPython embedded lifecycle/isolation:
+  https://bugs.python.org/issue34309
+- pybind11 embedding warning:
+  https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
+- ProcessPhoenix helper-process pattern:
+  https://github.com/JakeWharton/ProcessPhoenix
+- Android background activity launch security:
+  https://developer.android.com/guide/components/activities/secure-bal
+
+**Batas saat ini:** implementasi `:rebirth` ZCODE berstatus IMPLEMENTED +
+LOCALLY VERIFIED. CI compile, Android task handoff, visual transition, workspace
+restore, dan post-install native import masih wajib dibuktikan oleh canonical
+CI + UAT INFINIX X6532C/API34/ARMv7 sebelum disebut DEVICE VERIFIED.
