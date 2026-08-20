@@ -13,7 +13,7 @@ class ZcodeRebirthActivity : Activity() {
         setContentView(BinaryRainView(this))
         val oldPid = intent.getIntExtra(EXTRA_OLD_PID, -1)
         if (oldPid <= 0 || oldPid == Process.myPid()) {
-            finishAndRemoveTask()
+            finish()
             return
         }
         Breadcrumb.init(this)
@@ -27,7 +27,9 @@ class ZcodeRebirthActivity : Activity() {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             }
             startActivity(restart)
-            finishAndRemoveTask()
+            // Helper shares the app task record. finishAndRemoveTask() here can
+            // remove the freshly launched MainActivity as well; finish only the helper.
+            finish()
             Runtime.getRuntime().exit(0)
         }
     }

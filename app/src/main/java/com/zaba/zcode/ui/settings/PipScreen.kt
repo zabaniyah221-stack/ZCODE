@@ -433,8 +433,10 @@ fun PipScreen(
     // antrian berisi, ambil item berikutnya. Risky-dialog otomatis menahan
     // antrian (isInstalling masih true selama dialog tampil). Item di-pop
     // SEBELUM dieksekusi sehingga item gagal tidak mengulang selamanya.
-    LaunchedEffect(installQueue, isInstalling, isAnalyzing, isCancelling) {
-        if (installQueue.isNotEmpty() && !isInstalling && !isAnalyzing && !isCancelling) {
+    LaunchedEffect(installQueue, isInstalling, isAnalyzing, isCancelling, runtimeStale) {
+        if (installQueue.isNotEmpty() && !runtimeStale &&
+            !isInstalling && !isAnalyzing && !isCancelling
+        ) {
             val next = installQueue.first()
             installQueue = installQueue.drop(1)
             packageName = next

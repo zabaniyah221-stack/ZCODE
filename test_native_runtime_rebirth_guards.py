@@ -78,6 +78,8 @@ class TestRebirthSafety:
         assert "Process.killProcess(oldPid)" in src
         assert "oldPid == Process.myPid()" in src
         assert "FLAG_ACTIVITY_NEW_TASK" in src and "FLAG_ACTIVITY_CLEAR_TASK" in src
+        assert "finishAndRemoveTask" not in src
+        assert "finish()" in src
 
     def test_helper_process_skips_normal_application_init(self):
         src = strip_kt_comments(text(KT / "ZcodeApp.kt"))
@@ -130,6 +132,7 @@ class TestNativeStaleGates:
         assert "RUN_BLOCKED_RUNTIME_STALE" in workbench
         assert "NativeRuntimeState.isRequired(context)" in workbench
         assert pip.count("runtimeStale || NativeRuntimeState.isRequired(context)") >= 3
+        assert "installQueue.isNotEmpty() && !runtimeStale" in pip
 
     def test_binary_rain_uses_only_repeating_zcode_ascii_binary(self):
         src = strip_kt_comments(text(KT / "BinaryRainView.kt"))
