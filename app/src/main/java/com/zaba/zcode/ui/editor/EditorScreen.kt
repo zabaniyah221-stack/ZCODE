@@ -35,24 +35,35 @@ import com.zaba.zcode.WorkspaceViewModel
 @SuppressLint("ClickableViewAccessibility")
 @Composable
 fun EditorScreen(
+    documentId: String,
     code: String,
-    onCodeChange: (String) -> Unit,
+    onCodeChange: (documentId: String, code: String) -> Unit,
+    onHistoryStateChange: (canUndo: Boolean, canRedo: Boolean) -> Unit = { _, _ -> },
     webViewRef: MutableState<WebView?> = remember { mutableStateOf(null) },
     vm: WorkspaceViewModel? = null // F1.7 & F1.8: untuk apply editor settings ke CM6 bridge
 ) {
     // Menghindari stale state capture pada factory blok AndroidView
     val bridge = androidx.compose.runtime.remember {
         EditorBridge(
-            onChange = { onCodeChange(it) },
+            onChange = { id, changedCode, undo, redo ->
+                onCodeChange(id, changedCode)
+                onHistoryStateChange(undo, redo)
+            },
             onReady = {}
         )
     }
 
     // Perbarui callback dan nilai code pada bridge setiap kali recomposition terjadi
-    bridge.onChange = onCodeChange
+    bridge.onChange = { id, changedCode, undo, redo ->
+        onCodeChange(id, changedCode)
+        onHistoryStateChange(undo, redo)
+    }
     bridge.onReady = {
         webViewRef.value?.post {
-            webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+            webViewRef.value?.evaluateJavascript(
+                "openDocument(${escapeJavaScriptString(documentId)},${escapeJavaScriptString(code)});",
+                null
+            )
             applyEditorFontFamily(webViewRef.value, vm?.appFontFamily ?: "Monospace")
             webViewRef.value?.requestLayout()
             webViewRef.value?.invalidate()
@@ -83,6 +94,34 @@ fun EditorScreen(
             val highlightSelectionMatches = vm?.highlightSelectionMatchesEnabled ?: true
             wv.evaluateJavascript("if(typeof setCloseBrackets==='function')setCloseBrackets($closeBrackets);", null)
             wv.evaluateJavascript("if(typeof setHighlightSelectionMatches==='function')setHighlightSelectionMatches($highlightSelectionMatches);", null)
+            // Gerbong A v1.0.19: lint gutter + whitespace guard + diagnostik.
+            // Satu sumber kebenaran: vm.problems (Checker, debounce 800ms) —
+            // VPP dan lint gutter membaca data yang sama. Guard typeof sisi
+            // JS + runCatching sisi Kotlin (pola BUG H yang sudah teruji).
+            val lintOn = vm?.lintGutterEnabled ?: true
+            val wsOn = vm?.whitespaceGuardEnabled ?: false
+            wv.evaluateJavascript("if(typeof setLintEnabled==='function')setLintEnabled($lintOn);", null)
+            wv.evaluateJavascript("if(typeof setWhitespaceEnabled==='function')setWhitespaceEnabled($wsOn);", null)
+            if (lintOn) {
+                val diagJson = org.json.JSONArray().apply {
+                    (vm?.problems ?: emptyList()).forEach { p ->
+                        put(org.json.JSONObject().apply {
+                            put("from_line", p.line)
+                            p.column?.let { put("column", it) }
+                            put("severity", when (p.severity) {
+                                com.zaba.zcode.core.editor.Severity.ERROR -> "error"
+                                com.zaba.zcode.core.editor.Severity.WARNING -> "warning"
+                                else -> "info"
+                            })
+                            put("message", p.message)
+                        })
+                    }
+                }.toString()
+                wv.evaluateJavascript(
+                    "if(typeof setDiagnostics==='function')setDiagnostics(${escapeJavaScriptString(diagJson)});",
+                    null
+                )
+            }
             applyEditorFontFamily(wv, vm?.appFontFamily ?: "Monospace")
         }.onFailure {
             com.zaba.zcode.core.diagnostics.Breadcrumb.log("WEBVIEW_APPLY_FAIL", it.message ?: "")
@@ -97,8 +136,15 @@ fun EditorScreen(
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        // Editor memuat HTML/bundle/font milik APK dari file://,
+                        // tetapi JavaScript-nya tidak boleh membaca file lain,
+                        // content://, atau origin internet. blockNetworkLoads
+                        // adalah lapis native di samping CSP connect-src 'none'.
                         allowFileAccess = true
-                        allowContentAccess = true
+                        allowContentAccess = false
+                        allowFileAccessFromFileURLs = false
+                        allowUniversalAccessFromFileURLs = false
+                        blockNetworkLoads = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                     }
                     layoutParams = android.view.ViewGroup.LayoutParams(
@@ -141,9 +187,29 @@ fun EditorScreen(
                     }
 
                     webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView?,
+                            request: android.webkit.WebResourceRequest?
+                        ): Boolean {
+                            val trusted = isTrustedEditorUrl(request?.url?.toString())
+                            if (!trusted) {
+                                // Jangan log URL penuh: query dapat memuat data
+                                // sensitif. Scheme cukup untuk diagnosis.
+                                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                    "WEBVIEW_NAV_BLOCKED",
+                                    request?.url?.scheme ?: "unknown"
+                                )
+                            }
+                            return !trusted
+                        }
+
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            view?.evaluateJavascript("setCode(${escapeJavaScriptString(code)});", null)
+                            if (!isTrustedEditorUrl(url)) return
+                            view?.evaluateJavascript(
+                                "openDocument(${escapeJavaScriptString(documentId)},${escapeJavaScriptString(code)});",
+                                null
+                            )
                             view?.post {
                                 view.requestLayout()
                                 view.invalidate()
@@ -163,6 +229,10 @@ fun EditorScreen(
         )
     }
 }
+
+/** Hanya dokumen editor bundled yang boleh hidup di WebView ber-EditorBridge. */
+private fun isTrustedEditorUrl(url: String?): Boolean =
+    url != null && url.startsWith("file:///android_asset/editor/")
 
 /**
  * Audit 2026-08: jenis font editor mengikuti pilihan user (Settings → UI & editor).
@@ -192,11 +262,11 @@ private const val FONT_FACE_JS =
     "(function(){if(document.getElementById('zcode-fontfaces'))return;" +
         "var s=document.createElement('style');s.id='zcode-fontfaces';" +
         "s.textContent=\"@font-face{font-family:'ZCodeJetBrainsMono';" +
-        "src:url('file:///android_asset/editor/fonts/jetbrains_mono.ttf')}" +
+        "src:url('fonts/jetbrains_mono.ttf')}" +
         "@font-face{font-family:'ZCodeFiraCode';" +
-        "src:url('file:///android_asset/editor/fonts/fira_code.ttf')}" +
+        "src:url('fonts/fira_code.ttf')}" +
         "@font-face{font-family:'ZCodeSourceCodePro';" +
-        "src:url('file:///android_asset/editor/fonts/source_code_pro.ttf')}\";" +
+        "src:url('fonts/source_code_pro.ttf')}\";" +
         "document.head.appendChild(s);})();"
 
 /** Escape string ke JS string literal yang aman (baris baru, kutip, backslash, unicode). */
@@ -224,13 +294,23 @@ fun escapeJavaScriptString(value: String): String {
 }
 
 class EditorBridge(
-    var onChange: (String) -> Unit,
+    var onChange: (
+        documentId: String,
+        code: String,
+        canUndo: Boolean,
+        canRedo: Boolean
+    ) -> Unit,
     var onReady: () -> Unit = {}
 ) {
     @android.webkit.JavascriptInterface
-    fun onCodeChange(code: String) {
+    fun onCodeChange(
+        documentId: String,
+        code: String,
+        canUndo: Boolean,
+        canRedo: Boolean
+    ) {
         android.os.Handler(android.os.Looper.getMainLooper()).post {
-            onChange(code)
+            onChange(documentId, code, canUndo, canRedo)
         }
     }
 

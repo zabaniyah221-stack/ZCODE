@@ -86,6 +86,7 @@ import com.zaba.zcode.core.plugins.PluginRegistry
 import com.zaba.zcode.core.plugins.SnippetLibrary
 import com.zaba.zcode.core.plugins.TodoExtractor
 import com.zaba.zcode.core.plugins.TodoItem
+import com.zaba.zcode.core.runtime.NativeRuntimeState
 import com.zaba.zcode.ui.components.ZIcons
 import com.zaba.zcode.ui.editor.EditorScreen
 import com.zaba.zcode.ui.editor.escapeJavaScriptString
@@ -144,6 +145,8 @@ fun WorkbenchScreen(
     var lastEggTap by remember { mutableStateOf(0L) }
     var showEgg by remember { mutableStateOf(false) }
     val webViewRef = remember { mutableStateOf<WebView?>(null) }
+    var canUndo by remember { mutableStateOf(false) }
+    var canRedo by remember { mutableStateOf(false) }
     var showTerminalOverlay by rememberSaveable { mutableStateOf(false) }
 
     // state dialog
@@ -152,6 +155,8 @@ fun WorkbenchScreen(
     var fileToDelete by remember { mutableStateOf<String?>(null) }
     var confirmClearAll by remember { mutableStateOf(false) }
     var showPalette by remember { mutableStateOf(false) }
+    // A5 v1.0.19: Reference Card (tombol "?" di terowongan symbol bar)
+    var showReferenceCard by remember { mutableStateOf(false) }
     // Tap nama file aktif di topbar → dialog Rename/Delete (pengganti FILES MANAGER)
     var showFileActions by remember { mutableStateOf(false) }
     // Redesign 2026-08: drawer TOOLS expandable (plugin + settings satu kotak)
@@ -186,7 +191,28 @@ fun WorkbenchScreen(
     }
 
     fun pushCode() {
-        webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
+        val id = vm.activeFile ?: return
+        webViewRef.value?.evaluateJavascript(
+            "openDocument(${escapeJavaScriptString(id)},${escapeJavaScriptString(vm.activeCode)});",
+            null
+        )
+    }
+
+    fun dropDocumentState(filename: String) {
+        webViewRef.value?.evaluateJavascript(
+            "dropDocument(${escapeJavaScriptString(filename)});",
+            null
+        )
+    }
+
+    fun runHistoryAction(action: String) {
+        webViewRef.value?.evaluateJavascript("$action();") { changed ->
+            if (changed == "true") {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "EDITOR_${action.uppercase()}", vm.activeFile ?: "-"
+                )
+            }
+        }
     }
 
     // 📁 Ikon folder topbar → file manager HP (SAF), filter text/* (keputusan user).
@@ -203,6 +229,26 @@ fun WorkbenchScreen(
 
     fun gotoLine(n: Int) {
         webViewRef.value?.evaluateJavascript("gotoLine($n);", null)
+    }
+
+    // A3 v1.0.19: konsumsi pendingGotoLine dari traceback tap (terminal →
+    // navigateUp → sini). LaunchedEffect pada nilai pending; delay singkat
+    // memberi WebView waktu selesai load (kelas BUG H about:blank) — best
+    // effort: kalau tetap kalah cepat, user tinggal tap lagi di terminal.
+    androidx.compose.runtime.LaunchedEffect(vm.pendingGotoLine) {
+        val line = vm.pendingGotoLine
+        if (line > 0) {
+            // requestGotoLine dapat memilih helper.py. AndroidView.update sengaja
+            // tidak setCode saat recompose (anti kursor loncat), jadi sinkronkan
+            // file terpilih secara eksplisit sebelum mengirim gotoLine.
+            pushCode()
+            kotlinx.coroutines.delay(350)
+            gotoLine(line)
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "TRACEBACK_GOTO_DISPATCHED", "${vm.activeFile ?: "-"}:$line"
+            )
+            vm.pendingGotoLine = 0
+        }
     }
 
     // Eksekusi satu plugin (drawer tap & palette — satu logika, dua pintu).
@@ -258,13 +304,11 @@ fun WorkbenchScreen(
             // F1.9: Transform teks kecil (Kotlin/JS murni, tanpa pip)
             "sort_lines" -> {
                 webViewRef.value?.evaluateJavascript("sortLines();", null)
-                pushCode()
             }
             "change_case" -> {
                 // F1.9: Cycle upper → lower → title → upper…
                 val mode = changeCaseMode
                 webViewRef.value?.evaluateJavascript("changeCase('$mode');", null)
-                pushCode()
                 // Cycle ke mode berikutnya
                 changeCaseMode = when (mode) {
                     "upper" -> "lower"
@@ -275,7 +319,6 @@ fun WorkbenchScreen(
             }
             "trim_now" -> {
                 webViewRef.value?.evaluateJavascript("trimNow();", null)
-                pushCode()
             }
             "auto_trim_on_run" -> {
                 // BEHAVIOR: tidak ada eksekusi manual — jelaskan statusnya
@@ -304,6 +347,15 @@ fun WorkbenchScreen(
                 drawerContainerColor = MaterialTheme.colorScheme.background,
                 modifier = Modifier.width(300.dp)
             ) {
+                // A0 v1.0.19 (laporan user 2026-08-18, screenshot landscape):
+                // seluruh isi drawer dibungkus SATU kolom scrollable. Tanpa ini,
+                // di landscape Infinix (tinggi ±360dp) item bawah (TOOLS
+                // expanded, SETTINGS, About) BUKAN sekadar terpotong — tak
+                // terjangkau sama sekali karena Column biasa tidak scroll.
+                // Scroll sumbu Y tidak bentrok dgn gesture swipe-close drawer
+                // (sumbu X). Portrait: konten muat → scroll tak aktif → layout
+                // identik dengan sebelum fix.
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // Header drawer — "ZCODE" + logo app baru di kanan (tanpa subtitle, permintaan user)
                 // EASTER EGG: tap logo 7x (jeda <800ms) → header melar mulus,
                 // wordmark+logo crossfade ke Frieren bawa papan 2.8 dtk, fade out,
@@ -424,13 +476,20 @@ fun WorkbenchScreen(
                             .border(1.dp, Color(0xFF1B4D2E), RoundedCornerShape(10.dp))
                             .padding(vertical = 2.dp)
                     ) {
-                        // Plugin di area scroll sendiri; Symbol bar/THEME/Clear All
-                        // selalu terlihat di luar scroll (anti scroll-dalam-scroll).
+                        // A4 v1.0.19 (keputusan user 2026-08-18): SATU kotak
+                        // scroll utk PLUGINS + EDITOR (dulu: plugin scroll
+                        // sendiri, Symbol bar dipaku — sah saat penghuni pinned
+                        // cuma 2; dgn 3 toggle editor baru, area pinned akan
+                        // makan setengah drawer 720p). THEME TETAP dipaku di
+                        // dasar kotak (ketokan user: ganti tema tanpa scroll).
+                        // Drawer induk sudah scrollable (A0) — heightIn menjaga
+                        // kotak ini tidak menelan seluruh drawer.
                         LazyColumn(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 176.dp) // ≈3 baris — sisanya scroll di dalam
+                                .heightIn(max = 300.dp)
                         ) {
+                            item { ToolsSectionLabel("PLUGINS") }
                             items(PluginRegistry.plugins) { plugin ->
                                 PluginRow(
                                     plugin = plugin,
@@ -439,27 +498,35 @@ fun WorkbenchScreen(
                                     onRun = { pluginAction(plugin)() }
                                 )
                             }
-                        }
-                        Divider(color = Color.White.copy(alpha = 0.06f))
-
-                        // Toggle Symbol bar (QuickTools) — persist SharedPreferences via VM
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { vm.setSymbolBar(!vm.symbolBarEnabled) }
-                                .padding(horizontal = 12.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                "Symbol bar",
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Switch(
-                                checked = vm.symbolBarEnabled,
-                                onCheckedChange = { vm.setSymbolBar(it) }
-                            )
+                            item { ToolsSectionLabel("EDITOR") }
+                            item {
+                                ToolsToggleRow(
+                                    "Lint gutter",
+                                    "Garis merah di baris yang bermasalah",
+                                    vm.lintGutterEnabled
+                                ) { vm.setLintGutter(it) }
+                            }
+                            item {
+                                ToolsToggleRow(
+                                    "Whitespace guard",
+                                    "Sorot spasi buntut & campuran tab/spasi",
+                                    vm.whitespaceGuardEnabled
+                                ) { vm.setWhitespaceGuard(it) }
+                            }
+                            item {
+                                ToolsToggleRow(
+                                    "Traceback jump",
+                                    "Tap error di terminal → lompat ke barisnya",
+                                    vm.tracebackJumpEnabled
+                                ) { vm.setTracebackJump(it) }
+                            }
+                            item {
+                                ToolsToggleRow(
+                                    "Symbol bar",
+                                    "Baris simbol cepat di bawah editor",
+                                    vm.symbolBarEnabled
+                                ) { vm.setSymbolBar(it) }
+                            }
                         }
                         Divider(color = Color.White.copy(alpha = 0.06f))
 
@@ -499,6 +566,7 @@ fun WorkbenchScreen(
                 DrawerItem("About & Contribute") {
                     closeDrawerThen { onNavigateToAbout() }
                 }
+                } // penutup Column scrollable A0 (rotate resilience)
             }
         }
     ) {
@@ -525,6 +593,11 @@ fun WorkbenchScreen(
                 )
                 FloatingActionButton(
                     onClick = {
+                        if (NativeRuntimeState.isRequired(context)) {
+                            com.zaba.zcode.core.diagnostics.Breadcrumb.log("RUN_BLOCKED_RUNTIME_STALE")
+                            toast("Python perlu dimulai ulang sebelum program dijalankan.")
+                            return@FloatingActionButton
+                        }
                         // Breadcrumb: titik paling awal jalur Run. Kalau file jejak
                         // berhenti tepat setelah baris ini, berarti crash terjadi
                         // sebelum layar terminal sempat dikomposisi (diagnostik 2026-08-12).
@@ -598,6 +671,7 @@ fun WorkbenchScreen(
                                             pushCode()
                                         },
                                         onLongClick = {
+                                            dropDocumentState(filename)
                                             vm.closeFile(filename)
                                             pushCode()
                                         }
@@ -619,8 +693,15 @@ fun WorkbenchScreen(
                 // Editor (CodeMirror 6 WebView)
                 Box(modifier = Modifier.weight(1f)) {
                     EditorScreen(
+                        documentId = vm.activeFile ?: "main.py",
                         code = vm.activeCode,
-                        onCodeChange = { vm.updateCode(it) },
+                        onCodeChange = { id, changedCode ->
+                            vm.updateCodeForFile(id, changedCode)
+                        },
+                        onHistoryStateChange = { undo, redo ->
+                            canUndo = undo
+                            canRedo = redo
+                        },
                         webViewRef = webViewRef,
                         vm = vm // F1.7 & F1.8: apply editor settings ke CM6 bridge
                     )
@@ -628,11 +709,29 @@ fun WorkbenchScreen(
 
                 // QuickTools / symbol bar — bisa dimatikan user lewat drawer (EDITOR → Symbol bar)
                 if (vm.symbolBarEnabled) {
-                    // EDITOR HANDLE (build #3) — komponen yang sama dipakai di
-                    // terminal. Di editor terowongannya kosong: tidak ada yang
-                    // perlu dihentikan, jadi hanya "kereta"-nya yang tampak.
+                    // Terowongan editor selalu terlihat: pemulihan Undo/Redo +
+                    // jangkar Reference Card. Kereta simbol tetap scrollable.
                     com.zaba.zcode.ui.common.EditorHandle(
                         keys = com.zaba.zcode.ui.common.pythonEditorKeys(),
+                        tunnelKeys = listOf(
+                            com.zaba.zcode.ui.common.HandleKey(
+                                label = "↶",
+                                enabled = canUndo,
+                                contentDescription = "Undo",
+                                onClick = { runHistoryAction("undo") }
+                            ),
+                            com.zaba.zcode.ui.common.HandleKey(
+                                label = "↷",
+                                enabled = canRedo,
+                                contentDescription = "Redo",
+                                onClick = { runHistoryAction("redo") }
+                            ),
+                            com.zaba.zcode.ui.common.HandleKey(
+                                label = "?",
+                                contentDescription = "Referensi Python",
+                                onClick = { showReferenceCard = true }
+                            )
+                        ),
                         onInsert = { text ->
                             webViewRef.value?.evaluateJavascript(
                                 "insertText(${escapeJavaScriptString(text)});", null
@@ -660,7 +759,18 @@ fun WorkbenchScreen(
             showPythonIndicator = vm.showPythonIndicator,
             terminalOutputLimit = vm.terminalOutputLimit,
             themeType = vm.themeType,
-            terminalFontSize = vm.terminalFontSize
+            terminalFontSize = vm.terminalFontSize,
+            // FAB produksi memakai overlay ini, BUKAN route output lama di
+            // MainActivity. Tanpa wiring berikut, default callback = null dan
+            // syarat parser mematikan link traceback sekaligus fallback chip.
+            onGotoEditorLine = { tracebackFile, line ->
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "TRACEBACK_OVERLAY_CALLBACK", "$tracebackFile:$line"
+                )
+                vm.requestGotoLine(tracebackFile, line)
+                showTerminalOverlay = false
+            },
+            tracebackJumpEnabled = vm.tracebackJumpEnabled
         )
     }
 
@@ -679,9 +789,17 @@ fun WorkbenchScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val ok = vm.renameFile(oldName, renameNewName)
+                    val newName = renameNewName
+                    val ok = vm.renameFile(oldName, newName)
                     fileToRename = null
-                    if (ok) pushCode()
+                    if (ok) {
+                        val actualNewName = vm.activeFile ?: newName
+                        webViewRef.value?.evaluateJavascript(
+                            "renameDocument(${escapeJavaScriptString(oldName)},${escapeJavaScriptString(actualNewName)});",
+                            null
+                        )
+                        pushCode()
+                    }
                 }) { Text("Rename") }
             },
             dismissButton = {
@@ -700,7 +818,10 @@ fun WorkbenchScreen(
                 TextButton(onClick = {
                     val ok = vm.deleteFile(name)
                     fileToDelete = null
-                    if (ok) pushCode()
+                    if (ok) {
+                        dropDocumentState(name)
+                        pushCode()
+                    }
                 }) { Text("Delete", color = Color(0xFFFFB4AB)) }
             },
             dismissButton = {
@@ -749,6 +870,19 @@ fun WorkbenchScreen(
         )
     }
 
+    // ---------- Dialog: Reference Card (A5 v1.0.19) ----------
+    if (showReferenceCard) {
+        com.zaba.zcode.ui.common.ReferenceCardDialog(
+            context = context,
+            onInsert = { text ->
+                webViewRef.value?.evaluateJavascript(
+                    "insertText(${escapeJavaScriptString(text)});", null
+                )
+            },
+            onDismiss = { showReferenceCard = false }
+        )
+    }
+
     // ---------- Dialog: Clear All ----------
     if (confirmClearAll) {
         AlertDialog(
@@ -758,6 +892,7 @@ fun WorkbenchScreen(
             confirmButton = {
                 TextButton(onClick = {
                     confirmClearAll = false
+                    webViewRef.value?.evaluateJavascript("clearDocumentStates();", null)
                     vm.clearAllDrafts()
                     pushCode()
                 }) { Text("Clear All", color = Color(0xFFFFB4AB)) }
@@ -1040,7 +1175,11 @@ private fun WorkbenchTopBar(
                     modifier = Modifier
                         .clickable {
                             vm.createNewFile()
-                            webViewRef.value?.evaluateJavascript("setCode(${escapeJavaScriptString(vm.activeCode)});", null)
+                            val id = vm.activeFile ?: return@clickable
+                            webViewRef.value?.evaluateJavascript(
+                                "openDocument(${escapeJavaScriptString(id)},${escapeJavaScriptString(vm.activeCode)});",
+                                null
+                            )
                         }
                         .padding(10.dp)
                         .size(20.dp)
@@ -1103,9 +1242,9 @@ private fun PaletteDialog(
     fun attemptJump() {
         val target = filter.toIntOrNull()
         lineError = when {
-            filter.isBlank() -> "Ketik nomor barisnya dulu ya 😅"
+            filter.isBlank() -> "Ketik nomor barisnya dulu."
             target == null -> "Itu bukan angka — isi nomor baris ya (1..$totalLines)"
-            target !in 1..totalLines -> "Baris $target nggak ada njiir — file lo cuma $totalLines baris 😭"
+            target !in 1..totalLines -> "Baris $target tidak tersedia — file ini hanya memiliki $totalLines baris."
             else -> {
                 onGotoLine(target)
                 onDismiss()
@@ -1252,6 +1391,46 @@ private fun PaletteModeChip(label: String, active: Boolean, onClick: () -> Unit)
 // Komponen PLUGINS drawer (batch anti-sepi S1/S2)
 // =====================================================================
 
+// A4 v1.0.19: label seksi tipis di dalam kotak TOOLS satu-scroll —
+// pemisah visual PLUGINS/EDITOR, bukan header collapsible.
+@Composable
+private fun ToolsSectionLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+    )
+}
+
+// A4: baris toggle seragam utk seksi EDITOR (judul + deskripsi 1 baris + switch).
+@Composable
+private fun ToolsToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!checked) }
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                description,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+            )
+        }
+        Switch(checked = checked, onCheckedChange = onToggle)
+    }
+}
+
 @Composable
 private fun PluginRow(
     plugin: PluginInfo,
@@ -1294,10 +1473,10 @@ private fun TodoResultsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("✅ TODO / FIXME / HACK (${items.size})", fontSize = 14.sp) },
+        title = { Text("TODO / FIXME / HACK (${items.size})", fontSize = 14.sp) },
         text = {
             if (items.isEmpty()) {
-                Text("Tidak ada penanda TODO/FIXME/HACK di file aktif 🎉", fontSize = 12.sp, color = Color.Gray)
+                Text("Tidak ada penanda TODO/FIXME/HACK di file aktif.", fontSize = 12.sp, color = Color.Gray)
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth().height(240.dp)) {
                     items(items) { item ->
@@ -1339,7 +1518,7 @@ private fun SnippetsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("📜 Snippet Pack — pilih template", fontSize = 14.sp) },
+        title = { Text("SNIPPET PACK — pilih template", fontSize = 14.sp) },
         text = {
             Column(
                 modifier = Modifier
@@ -1399,7 +1578,7 @@ private fun ProblemsBanner(
 
     val bgColor = Color(0x1AFF4B4B)
     val textColor = Color(0xFFFFB4AB)
-    val icon = "❌"
+    val icon = "×"
 
     Surface(
         color = bgColor,
@@ -1478,7 +1657,7 @@ private fun ProblemsBanner(
                                 .padding(vertical = 4.dp)
                         ) {
                             Text(
-                                text = "❌ Baris ${problem.line}: ",
+                                text = "× Baris ${problem.line}: ",
                                 fontSize = 11.sp,
                                 color = textColor,
                                 fontWeight = FontWeight.Bold
@@ -1512,17 +1691,17 @@ fun OutlineDialog(
         title = { Text("Outline / Symbols", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
         text = {
             if (items.isEmpty()) {
-                Text("Tidak ada kelas atau fungsi ditemukan njiir 🤷", fontSize = 13.sp)
+                Text("Tidak ada kelas atau fungsi yang ditemukan.", fontSize = 13.sp)
             } else {
                 Column(modifier = Modifier.heightIn(max = 280.dp)) {
                     Text("Pilih simbol untuk lompat ke baris:", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 8.dp))
                     LazyColumn(modifier = Modifier.weight(1f)) {
                         items(items) { item ->
                             val icon = when (item.type) {
-                                "CLASS" -> "🗂️"
-                                "FUNC" -> "λ"
-                                "METHOD" -> "⚙️"
-                                else -> "⚓"
+                                "CLASS" -> "C"
+                                "FUNC" -> "ƒ"
+                                "METHOD" -> "m"
+                                else -> "·"
                             }
                             Row(
                                 modifier = Modifier

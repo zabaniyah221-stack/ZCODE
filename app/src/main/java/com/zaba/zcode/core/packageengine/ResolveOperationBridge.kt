@@ -1,5 +1,6 @@
 package com.zaba.zcode.core.packageengine
 
+import com.zaba.zcode.core.logging.SemanticLogKind
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicLong
 
@@ -14,7 +15,8 @@ class ResolveOperationBridge(
     private val onProgress: (
         displayText: String,
         rawEvent: String,
-        diagnosticsWorthKeeping: Boolean
+        diagnosticsWorthKeeping: Boolean,
+        kind: SemanticLogKind
     ) -> Unit
 ) {
     val operationId: Long = nextId.incrementAndGet()
@@ -63,8 +65,16 @@ class ResolveOperationBridge(
         // membuat ratusan coroutine scroll dan I/O Diagnostics di ARMv7.
         if (eventStage != "http_ok") {
             val diagnostic = eventStage in DIAGNOSTIC_STAGES
-            runCatching { onProgress(display, raw, diagnostic) }
+            runCatching { onProgress(display, raw, diagnostic, kindFor(eventStage)) }
         }
+    }
+
+    private fun kindFor(stage: String): SemanticLogKind = when (stage) {
+        "package_begin", "http_begin" -> SemanticLogKind.WAIT
+        "http_retry", "http_fail", "package_unavailable" -> SemanticLogKind.WARN
+        "cancelled" -> SemanticLogKind.STOP
+        "package_chosen", "target_not_found" -> SemanticLogKind.INFO
+        else -> SemanticLogKind.RAW
     }
 
     private fun attemptLabel(attempt: Int, max: Int): String =

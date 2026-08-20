@@ -65,8 +65,8 @@ CATALOG = [
      "Visualisasi statistik di atas matplotlib."),
     ("plotly", "plotly", "Data / Math / Science", "pure", "EXPERIMENTAL",
      "Plot interaktif (output HTML/JSON)."),
-    ("bokeh", "bokeh", "Data / Math / Science", "pure", "EXPERIMENTAL",
-     "Visualisasi interaktif berbasis browser."),
+    ("bokeh", "bokeh", "Data / Math / Science", "pure", "TESTED",
+     "Visualisasi interaktif berbasis browser; v3.3.4 teruji di ARMv7."),
     ("xarray", "xarray", "Data / Math / Science", "pure", "COMPATIBLE",
      "Array berlabel untuk data multidimensi."),
     ("numba", "numba", "Data / Math / Science", "native", "EXPERIMENTAL",
@@ -732,6 +732,25 @@ RICH = {
         "license": "MIT", "publisher": "Will McGugan",
         "source": "https://pypi.org/project/rich/",
     },
+    "bokeh": {
+        "testedVersion": "3.3.4", "python": ["3.11"], "abis": [],
+        "useCases": ["plot interaktif", "standalone HTML", "contour plot"],
+        "works": [
+            "DEVICE VERIFIED 2026-08-20: install dependency-correct dan auto-relaunch pada INFINIX X6532C/API34/armeabi-v7a.",
+            "Direct import bokeh 3.3.4 + contourpy 1.0.5 + numpy 1.26.2 + pandas 2.1.3 berhasil setelah relaunch.",
+            "Standalone HTML dan contour HTML 646935 byte berhasil, exit code 0.",
+        ],
+        "doesNotWork": [
+            "Bokeh 3.4+ butuh contourpy>=1.2; CPython 3.11 ARMv7 hanya punya 1.0.5."
+        ],
+        "risks": [
+            "Package native/dependency wajib memakai process baru setelah install; ZCODE menangani ini dengan auto-relaunch.",
+            "Pandas/NumPy membuat instalasi besar pada perangkat rendah RAM.",
+        ],
+        "smokeTest": None,
+        "license": "BSD-3-Clause", "publisher": "Bokeh Team / NumFOCUS",
+        "source": "https://pypi.org/project/bokeh/3.3.4/",
+    },
     "openpyxl": {
         "testedVersion": "3.1.5", "python": ["3.11"], "abis": [],
         "useCases": ["baca/tulis Excel", "laporan data", "template xlsx"],
@@ -924,12 +943,36 @@ TESTED_MANIFEST = {
     "httpx": ["0.27.2"],
     "flask": ["3.0.3"],
     "beautifulsoup4": ["4.12.3"],
+    "bokeh": ["3.3.4"],
     "tqdm": ["4.66.4"],
     "rich": ["13.7.1"],
     "openpyxl": ["3.1.5"],
     "numpy": ["1.26.4"],
     "matplotlib": ["3.6.0"],
     "pillow": ["10.3.0"],
+}
+
+
+# Satu sample utama per kartu Library. Sample lengkap tetap hidup di
+# SampleLibrary/assets; snippet `example` hanya contoh pendek.
+SAMPLE_LINKS = {
+    "numpy": "numpy_basics",
+    "requests": "requests_api",
+    "rich": "rich_table",
+    "tqdm": "tqdm_progress",
+    "openpyxl": "openpyxl_excel",
+    "pillow": "pillow_image",
+    "python-docx": "docx_laporan",
+    "qrcode": "qr_generator",
+    "pandas": "pandas_nilai",
+    "sympy": "sympy_aljabar",
+    "matplotlib": "matplotlib_chart",
+    "httpx": "httpx_api",
+    "beautifulsoup4": "beautifulsoup_links",
+    "python-pptx": "pptx_presentasi",
+    "tinydb": "tinydb_catatan",
+    "pyotp": "pyotp_2fa",
+    "pyyaml": "pyyaml_config",
 }
 
 
@@ -992,6 +1035,7 @@ def main():
             "publisher": rich.get("publisher", ""),
             "source": rich.get("source", "https://pypi.org/project/%s/" % name),
             "sha256": rich.get("sha256"),
+            "sampleId": SAMPLE_LINKS.get(c),
         })
     packages.sort(key=lambda p: (p["category"], p["name"].lower()))
     (OUT / "packages.json").write_text(json.dumps(packages, indent=1, ensure_ascii=False), encoding="utf-8")

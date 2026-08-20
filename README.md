@@ -1,148 +1,352 @@
 <div align="center">
-  <img src="app/src/main/res/drawable/zcode_logo.png" alt="Logo ZCODE" width="96" />
-  <h1>ZCODE — Zabacode Kotlin Edition</h1>
-  <p><em>Editor Python mobile, offline-first, true-black OLED — untuk HP kentang sekalipun.</em></p>
+  <img src="app/src/main/res/drawable/zcode_logo.png" alt="ZCODE logo" width="112" />
+  <h1>ZCODE</h1>
+  <p><strong>IDE Python Android yang gratis, offline-first, dan menjadikan ARMv7/HP terbatas sebagai target kelas satu.</strong></p>
+  <p><em>Bukan tentang punya perangkat terbaik. Tentang tetap bisa berkarya dengan perangkat yang kita punya.</em></p>
 
   <p>
-    <a href="https://github.com/muzape28-blip/ZCODE/actions/workflows/build.yml"><img src="https://github.com/muzape28-blip/ZCODE/actions/workflows/build.yml/badge.svg" alt="CI Build ZCODE APK" /></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License MIT" /></a>
-    <img src="https://img.shields.io/badge/Kotlin-1.9.22-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 1.9.22" />
-    <img src="https://img.shields.io/badge/Python-3.11%20(Chaquopy)-3776AB?logo=python&logoColor=white" alt="Python 3.11 Chaquopy" />
-    <img src="https://img.shields.io/badge/minSdk-26%20(Android%208.0)-brightgreen" alt="minSdk 26" />
+    <a href="https://github.com/muzape28-blip/ZCODE/actions/workflows/build.yml"><img src="https://github.com/muzape28-blip/ZCODE/actions/workflows/build.yml/badge.svg" alt="CI Build" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f.svg" alt="MIT License" /></a>
+    <img src="https://img.shields.io/badge/Python-3.11%20%7C%20Chaquopy-3776AB?logo=python&logoColor=white" alt="Python 3.11 Chaquopy" />
+    <img src="https://img.shields.io/badge/Android-minSdk%2026-3DDC84?logo=android&logoColor=white" alt="Android minSdk 26" />
     <img src="https://img.shields.io/badge/Editor-CodeMirror%206-1B4D2E" alt="CodeMirror 6" />
-    <img src="https://img.shields.io/badge/Offline--First-100%25%20tanpa%20CDN-050806" alt="Offline-first" />
+    <img src="https://img.shields.io/badge/ABI-ARMv7%20%7C%20ARM64%20%7C%20x86__64-59636e" alt="Supported ABIs" />
   </p>
 </div>
 
-**Filosofi:** *full free, tanpa premium lock* — untuk pelajar, pemburu hobi coding, dan developer dengan perangkat terbatas & budget tipis. Semua fitur bebas dipakai siapa saja, offline-first, dan sebisanya tetap ringan di HP kentang. 💚
-
-Menggabungkan **kesederhanaan Pydroid**, **detail arsitektur VS Code**, dan **optimasi touch Acode** menjadi editor Python mobile offline-first dengan true-black OLED. Referensi proyek: [muzape28-blip/ZABACODE](https://github.com/muzape28-blip/ZABACODE).
-
 ---
 
-## 📸 Tampilan
+## Apa itu ZCODE?
 
-<div align="center">
-  <img src="docs/mockup-workbench-retro.png" alt="Workbench ZCODE tema Retro" width="280" />
-</div>
+ZCODE adalah IDE Python untuk Android yang dirancang agar seseorang dapat
+**menulis, menjalankan, memahami, memperbaiki, menyimpan, dan membagikan project
+Python tanpa PC**.
 
-> Mockup desain tema Retro (phosphor green di atas OLED). 10 tema tersedia:
-> Retro, Dracula, Tokyo Night, Solarized Dark, Monokai, Nord, One Dark,
-> Gruvbox Dark, GitHub Dark, Cobalt2 — editor & terminal tetap true-black `#050806`.
+Pusat produknya bukan jumlah menu atau kemiripan dengan editor desktop, tetapi
+satu alur yang utuh:
 
----
-
-## 🚀 Fitur yang Sudah Dibangun
-
-### 🎨 1. Desain Total & Estetika
-
-- **True-Black OLED (`#050806`)** — ruang editor dan terminal output selalu hitam legam, hemat baterai AMOLED dan nyaman untuk begadang. Warna ini **tidak berubah** walau tema diganti.
-- **10 Tema Sinkron** — tema menyentuh bagian dekoratif (topbar, drawer, dialog, tombol) secara harmonis; pembatas visual dibuat soft (opacity rendah), bukan garis tegas.
-- **Drawer swipe-only (audit 2026-08)** — sidebar dibuka dengan swipe dari pinggir kiri; topbar bersih tanpa ikon menu. Tip swipe tertera di `main.py` bawaan.
-- **Jenis font pilihan (audit 2026-08)** — Monospace device, **JetBrains Mono, Fira Code, Source Code Pro** (dibundel offline, lisensi SIL OFL) berlaku untuk UI + editor; **ukuran font terminal** bisa diatur terpisah di Settings; editor fix 14px.
-- **Tab Bar Multi-File** — hanya muncul bila ≥ 2 tab (tidak menuhin editor); long-press/hold tab untuk menutup file (tanpa tombol × yang rawan salah pencet).
-- **QuickTools & FAB ▶** — chips (`Tab`, `:`, `;`, `'`, `#`, `(`, `)`, `[`, `]`, `def`, `return`, `import`) di bawah editor (bisa dimatikan via drawer), FAB Run melayang di atasnya.
-- **Topbar** — nama file (tap → dialog Rename/Delete), ikon folder → menu file **Open / Save / Save as**, kaca pembesar (palette Line & Find), plus (file baru). Semua ikon **vektor polos ber-tint mengikuti tema** (bukan emoji — seragam di semua merk HP).
-- **Keyboard cerdas (audit 2026-08)** — keyboard editor hanya muncul saat tap terkonfirmasi; swipe buka drawer / scroll tidak lagi memunculkan keyboard.
-
-### 📁 2. File Manager, Menu File & Persistensi Workspace
-
-- **CRUD penuh** di `filesDir/` internal (anti `files/files` double nesting, `secure_filename`, `MAX_FILE_BYTES` 512KB, `MAX_FILENAME_LEN` 128, anti traversal).
-- **Menu file di topbar (audit 2026-08)** — *Open* (import dari file manager HP via SAF, salin ke workspace), *Save* (timpa file asli di device — izin tulis SAF persisten), *Save as* (file device baru via SAF, lalu di-link untuk Save berikutnya). File internal tersimpan otomatis.
-- **Frictionless creation** — tap `+` langsung membuat `untitled_N.py`; ganti nama belakangan via tap judul.
-- **Import aman** — cap 512KB, deteksi biner (NUL byte) & encoding non-UTF-8 (U+FFFD) dengan pesan ramah, nama bentrok dapat suffix unik.
-- **Workspace Recovery** — isi file tersimpan otomatis tiap perubahan + daftar tab & file aktif dipersist, sehingga alur kerja pulih walau aplikasi ditutup paksa / di-swipe dari Recent Apps.
-
-### 💻 3. Terminal Interaktif Full-Screen (Python di HP — Chaquopy 3.11)
-
-- **Runtime Python di-embed (Chaquopy 3.11)** — APK membawa interpreter Python arm64 + armeabi-v7a, jadi `▶ Run` & `input()` **benar-benar berjalan di HP ARMv7** (dual-backend: Chaquopy in-process di Android, `python3` subprocess untuk dev/desktop).
-- **Pindah layer** — `▶` membuka terminal full-screen (bukan panel); `◀ Back` di pojok kiri atas kembali ke editor.
-- **Ketik langsung** — sentuh terminal untuk memunculkan keyboard; Enter mengirim baris ke stdin (tanpa kotak stdin / tombol Send). `input()` di script langsung berfungsi.
-- **Ctrl+C** — tombol merah di toolbar bawah: deterministik untuk script yang nge-blok di `input()` (KeyboardInterrupt), best-effort interrupt thread worker untuk loop CPU.
-- **Guard output** — ring buffer dapat diatur (64KB / 256KB / 1MB), cap antrian input 10k; proses dibersihkan saat keluar terminal.
-- **cwd = folder workspace** — `plt.savefig("out.png")` / `open("data.txt")` relatif bekerja seperti di desktop.
-
-### 📦 4. Pip Package Manager Layer
-
-- **Real-time log streaming** — `Drawer → INSTALL MODULES` → ketik nama package → log unduhan/instalasi/traceback mengalir langsung (pip in-process Chaquopy di Android, pip 23.3.1 dibundel build-time).
-- **Guard** — validasi nama package (anti shell injection) + cap log.
-
-### 🔍 5. Command Palette & Quick Open
-
-- Tombol kaca pembesar di topbar (akses jempol, tanpa keyboard fisik).
-- Ketik nama file → Quick Open; awali dengan `>` → perintah (plugin transforms, Pip, About); chips `[Line][Find]` → Go to Line ber-validasi & Find dengan hasil `L<n>:` yang bisa di-tap.
-
-### ⚡ 6. Real-time Syntax Diagnostic + Visual Problems Panel
-
-- Scanner offline single-pass: strip komentar & string (aman untuk `print(' :)')`), deteksi string tak tertutup, keseimbangan `() [] {}` dengan nomor baris.
-- Debounce 800ms + pembatalan job lama → tanpa race, UI tetap 60fps.
-- **VPP** — banner daftar masalah yang bisa di-expand in-place; tap item → lompat ke baris.
-
-### 🔧 7. Plugin Transformasi Kode
-
-- **Beautifier Pro** — spasi operator rapi dengan prioritas longest-first (`->`, `**`, `//=`, `<<`, ...); string & komentar tidak pernah disentuh; unary (`-1`, `*args`, `~x`) & unpacking (`**kwargs`) aman.
-- **Optimize Auto-Imports**, **Smart Docstring Generator**, **Type Hint Generator**, **Find Duplicate Lines** (port ZABACODE, GPLv3 same-author), **Duplicate Active Line**, **Toggle Line Comment**, **TODO Extractor** (tap → lompat), **Snippet Pack** (Flask/BS4/AsyncIO/REST).
-- Semua plugin toggle-able di drawer TOOLS, persist SharedPreferences satu sumber kebenaran.
-
-### 🧩 Editor
-
-- **CodeMirror 6 bundled offline** (migrasi penuh dari Ace 1.44.0, 2026-08 — `docs/MIGRASI_CM6.md`; tanpa CDN, single-file bundle esbuild target es2018, armv7/arm64/x86_64 aman) di WebView `file://` — font fix 14px, gutter line numbers, tema tomorrow-night-eighties deklaratif di atas OLED, Python syntax via Lezer parser, autocomplete kasta 1+2, panel Find built-in. Sumber bundle: `editor-src/` (`npm ci && node build.mjs`).
-- **Bridge `addJavascriptInterface`** — tanpa loopback HTTP (kelas bug F-01/S-27/C-50 dari Zabacode terhapus).
-- **Bridge pengaturan live** — `setCloseBrackets`, `setHighlightSelectionMatches`, `setFontFamily` via Compartment (reconfigure tanpa recreate editor — anti jank di HP kentang).
-
-### 🥚 8. Rahasia Kecil
-
-> Psst… ada yang bilang logo `{Z}` di drawer suka ditekan **7 kali**.
-> Tidak ada easter egg di sini. Kembalilah ke bugs-mu. 🪧
-
----
-
-## 🎯 Target Pengembangan Masa Depan (Roadmap)
-
-> 📘 **Rencana Update terkini & keputusan desain (2026-08): lihat [`docs/RENCANA_UPDATE_2026_08.md`](docs/RENCANA_UPDATE_2026_08.md)** — berisi redesign sidebar/topbar/palette, halaman SAMPLES, strategi "App Mode" (GUI via Flask+WebView), catatan jujur keterbatasan GUI native, dan ide fork **ZPLAY** yang diarsip untuk masa depan.
-
-- [ ] **App Mode (GUI via Flask + WebView)** — script `# ZCODE:WEBAPP` → preview web app full-screen di dalam ZCODE.
-- [ ] **Runtime traceback bridge** — traceback Python masuk VPP (tap → lompat ke baris).
-- [ ] **Matplotlib Inline Image** — `plt.savefig("out.png")` tampil inline/expandable di terminal.
-- [ ] **CRT Scanlines toggle** (tema CRT rahasia sudah ada via easter egg 👀).
-- [ ] **Encrypted Keystore UI + Privacy Toggle** (persist draf teks polos off).
-- [ ] **Alpine proot terminal** (apk add, git) — Zmux pending, tidak dibundle.
-- [ ] **LSP Python (jedi) → autocomplete ala VS Code** (kasta 3; menunggu user ramai + build desktop 😄).
-- [ ] **Build desktop** — rencana jangka menengah.
-- [ ] *(Garasi — jujur tanpa janji jadwal)* **ZPLAY**: saudari ZCODE berbasis buildozer/p4a untuk menjalankan sampel pygame/kivy.
-
----
-
-## 🛠️ Build & Test
-
-```bash
-# Test struktural + anti-regresi (tanpa JDK/SDK)
-bash tools/check.sh
-python -m pytest test_zcode_fase0.py test_zcode_fase1.py test_zcode_fase3.py -v
-
-# Build APK (butuh JDK 17 + Android SDK; CI mengerjakan ini)
-gradle assembleDebug
-
-# Regenerasi bundle editor (setelah mengubah editor-src/)
-cd editor-src && npm ci && node build.mjs
+```text
+Editor → Run/Input → Terminal → Package Engine → Library/Samples → Diagnostics
 ```
 
-Guard yang dijaga CI/lokal: CodeMirror 6 bundled asli (bukan stub, kontrak bridge lengkap), tanpa unverified SSL, `taskAffinity=com.zaba.zcode singleTop allowBackup=false`, `MAX_CODE_BYTES` 512KB, `MAX_INTERACTIVE_QUEUE` 10k, SIGINT asli, drawer swipe-only (marker `DRAWER-SWIPE-ONLY`), topbar faded grey `#3A4452` referensi.
+Pembanding produk terdekatnya adalah Pydroid. VS Code dan Acode dipelajari
+sebagai sumber pola editor, workbench, terminal, dan arsitektur plugin—bukan
+fitur yang harus disalin semuanya. Lihat
+[`RISET_VSCODE_ACODE_PYDROID_2026_08_19.md`](docs/RISET_VSCODE_ACODE_PYDROID_2026_08_19.md).
 
-Catatan jujur: eksekusi Python memakai **Chaquopy 3.11 in-process** di Android (bukan PTY OS-level; terminal ini ala Pydroid — output teks + ketik langsung + Enter + Ctrl+C). PTY penuh (escape sequence, `apk add`, git) tetap menjadi target Fase 3 via ZMUX/proot. Build APK diverifikasi oleh CI (sandbox tanpa JDK/Android SDK).
+### Empat komitmen
+
+1. **Gratis, tanpa premium lock.** Fitur yang didukung tersedia untuk semua.
+2. **Offline-first, bukan offline-only.** Editor dan runtime bekerja offline;
+   script tetap boleh memakai internet.
+3. **ARMv7 kelas satu.** HP murah bukan warga kelas dua.
+4. **Keterbatasan bukan jalan buntu.** Yang belum didukung dijelaskan dengan
+   jujur, diberi alternatif, dan dapat menjadi target riset tanpa janji palsu.
 
 ---
 
-## 🔤 Font Bundel & Lisensi
+## Tampilan di perangkat nyata
 
-Font coding dibundel di `app/src/main/res/font/` + `assets/editor/fonts/` (offline-first):
-**JetBrains Mono**, **Fira Code**, **Source Code Pro** — masing-masing dengan lisensi
-**SIL Open Font License 1.1** (teks lisensi ikut di `assets/editor/fonts/OFL_*.txt`).
+Screenshot berikut berasal dari perangkat runtime **INFINIX X6532C, Android
+14 / API 34, userspace ARMv7 (`armeabi-v7a`)**, bukan mockup.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/v1019/splash.png" alt="Splash ZCODE" width="210" /><br/><sub>Splash</sub></td>
+    <td align="center"><img src="docs/screenshots/v1019/drawer.png" alt="Drawer ZCODE" width="210" /><br/><sub>Drawer</sub></td>
+    <td align="center"><img src="docs/screenshots/v1019/settings.png" alt="Settings ZCODE" width="210" /><br/><sub>Settings</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/v1019/samples.png" alt="Samples ZCODE" width="210" /><br/><sub>Samples</sub></td>
+    <td align="center"><img src="docs/screenshots/v1019/library.png" alt="Library package ZCODE" width="210" /><br/><sub>Library</sub></td>
+    <td align="center"><img src="docs/screenshots/v1019/manual-install.png" alt="Manual Install ZCODE" width="210" /><br/><sub>Manual Install</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/v1019/editor.png" alt="Editor ZCODE" width="210" /><br/><sub>Editor</sub></td>
+    <td align="center"><img src="docs/screenshots/v1019/palette.png" alt="Palette ZCODE" width="210" /><br/><sub>Line &amp; Find</sub></td>
+    <td align="center"><img src="docs/screenshots/v1019/terminal.png" alt="Terminal ZCODE" width="210" /><br/><sub>Terminal</sub></td>
+  </tr>
+</table>
 
 ---
 
-## 🤝 Contribute & Feedback
+## Kemampuan utama
 
-Lapor bug / saran langsung lewat [GitHub Issues](https://github.com/muzape28-blip/ZCODE/issues) — tanpa telemetri, tanpa iklan, offline-first.
+### Editor mobile yang benar-benar offline
 
-**Lisensi proyek:** [MIT](LICENSE) — Copyright (c) 2026 ZCODE contributors.
+- **CodeMirror 6** dan parser Python Lezer dibundel di APK—tanpa CDN.
+- Syntax highlight, line number, fold gutter, bracket matching, Find, dan
+  autocomplete offline.
+- Lint gutter dan whitespace guard dari pemeriksa ZCODE.
+- Multi-file tabs dengan autosave dan pemulihan workspace.
+- **Undo/Redo touch dengan history terpisah per file**; pindah tab tidak
+  mencampur isi/history.
+- Reference Card, symbol bar, dan tombol Run yang ramah jempol.
+- Go to line dan Find dalam palette.
+- Traceback terminal dapat ditap untuk kembali ke baris sumber.
+- Font offline: Monospace, JetBrains Mono, Fira Code, dan Source Code Pro.
+
+### File dan workspace
+
+- File internal tersimpan otomatis.
+- Open/Save/Save as melalui Android Storage Access Framework.
+- Import text dengan validasi ukuran, binary, UTF-8, nama file, dan traversal.
+- Rename/delete dari judul file; tab aktif dan daftar tab dipersist.
+- Project multi-file Python dapat saling import dalam workspace.
+
+### Python 3.11 di Android
+
+- Python 3.11 melalui **Chaquopy 17.0.0**.
+- ABI APK: `armeabi-v7a`, `arm64-v8a`, dan `x86_64`.
+- `print()`, `input()`, file I/O, network, import antar-file, dan package user.
+- Terminal full-screen dengan output realtime dan input langsung.
+- `^C` deterministik saat script menunggu `input()`; penghentian CPU/native loop
+  masih memiliki batas in-process yang dijelaskan di bawah.
+- Working directory script adalah workspace ZCODE.
+
+### Install Modules yang transaksional
+
+ZCODE tidak sekadar menjalankan `pip install` lalu menganggap sukses.
+
+```text
+Parse → Resolve → Storage Guard → Download → Verify → Extract
+→ Native Dependency Scan → Smoke Test → Activate → Rollback bila gagal
+```
+
+- Requirement PEP 508, extras, version pin, dan antrean `requirements.txt`.
+- Sumber PyPI dan indeks wheel Android Chaquopy.
+- Penolakan wheel platform yang tidak cocok (`glibc` bukan Android `bionic`).
+- Tested-version pin, dependency transitif, cache, progress, dan cancel
+  kooperatif.
+- Smoke test sebelum package diaktifkan.
+- Rollback menjaga environment lama ketika instalasi gagal.
+- Log semantic yang dapat disalin: `[>]`, `[INFO]`, `[WARN]`, `[WAIT]`, `[OK]`,
+  `[ERR]`, dan `[STOP]`.
+- Uninstall meminta konfirmasi dan menjelaskan bahwa reverse-dependency graph
+  belum tersedia; ZCODE tidak auto-clean dependency secara sembarangan.
+- Setelah package native dimuat/diubah, ZCODE menyimpan workspace lalu
+  **relaunch otomatis** ke process Python yang bersih. Jika dipilih `Nanti`,
+  banner tetap terlihat dan Run/package mutation dikunci sampai restart.
+- Transisi relaunch memakai Binary Rain ringan: trail vertikal hanya mengulang
+  binary ASCII `ZCODE`, tanpa Python, dependency tambahan, atau delay palsu.
+
+### Library dan Samples
+
+- **342 kartu package** pada snapshot v1.0.19.
+- **231 package berstatus TESTED** pada perangkat/lingkungan yang tercatat.
+- Status dibedakan: TESTED, COMPATIBLE, EXPERIMENTAL, INCOMPATIBLE, UNAVAILABLE.
+- Detail package menjelaskan What/Why/How/Where/Who, versi, dependency, risiko,
+  sumber, dan batas perangkat.
+- Tombol **Coba contoh lengkap** menghubungkan kartu package ke Samples.
+- **37 sample runnable dalam 11 kategori**: Basics, NumPy, Matplotlib, Web & API,
+  File & Office, Database, Data & Matematika, Gambar & QR, Security, Utilities,
+  dan Project Mini.
+- Sample package memeriksa dependency sebelum file dibuat dan menawarkan
+  `Install dulu`, `Buka kode`, atau `Batal`.
+
+### Diagnostics tanpa PC
+
+- Breadcrumb untuk Run, editor, traceback, package resolve/install/uninstall,
+  file, dan lifecycle penting.
+- Crash report dan run log dapat dibaca/disalin dari aplikasi.
+- Output teknis tidak disembunyikan ketika user hanya memiliki HP.
+- Status pekerjaan dibedakan secara jujur: designed, implemented, CI verified,
+  device verified, dan released.
+
+---
+
+## Quick start
+
+1. Buka ZCODE dan edit `main.py`, atau tap `+` untuk file baru.
+2. Tap tombol biru **Run**.
+3. Lihat output dan jawab `input()` langsung di terminal.
+4. Untuk package tambahan, buka **INSTALL MODULES**:
+   - **Library** untuk package terkurasi;
+   - **Manual Install** untuk requirement spesifik.
+5. Buka **Samples** untuk membuat contoh runnable ke workspace.
+6. Jika terjadi masalah, buka **Diagnostics** dan salin detailnya.
+
+Contoh sederhana:
+
+```python
+import urllib.request
+
+with urllib.request.urlopen("https://httpbin.org/get", timeout=10) as response:
+    print(response.status)
+```
+
+Python network tetap bekerja; pembatasan network yang ketat hanya berlaku pada
+WebView editor lokal.
+
+---
+
+## Status verifikasi v1.0.19
+
+ZCODE menggunakan label bukti, bukan satu kata “done”.
+
+| Lapisan | Status |
+|---|---|
+| Unit/structural/mutation tests | 594 lulus pada snapshot dokumentasi ini |
+| Kotlin lexical sanity | 61 file |
+| GitHub Actions check + APK build | CI VERIFIED — run `32348956505`, artifact `9399175936` |
+| Editor security, focus topology, glyph, traceback, Undo/Redo | DEVICE VERIFIED di Infinix ARMv7 |
+| Package Engine core dan ratusan package | DEVICE VERIFIED bertahap; 231 kartu TESTED |
+| Semantic package logs + uninstall hardening | DEVICE VERIFIED, termasuk copy/STOP/`Batal`/uninstall |
+| Native-runtime rebirth + Binary Rain | DEVICE VERIFIED di INFINIX X6532C/API34/ARMv7 |
+| Bokeh 3.3.4 + ContourPy 1.0.5 | DEVICE VERIFIED; contour HTML 646.935 byte |
+| Release v1.0.19 | RELEASE CANDIDATE — branch belum di-merge ke `main` |
+
+Artifact exact yang melewati UAT relaunch/native/package final:
+
+```text
+GitHub Actions run : 32348956505
+Commit SHA        : efa56ad3370e2f69da4f069d614a0a466f0de1be
+Artifact ID       : 9399175936
+Archive SHA-256   : 448af10bbfb0c3e7e8a833e2452dd08ae62852d4f6194deec6596135fff4a37b
+Device            : INFINIX X6532C · Android 14/API34 · armeabi-v7a
+```
+
+Laporan eksekusi lengkap:
+[`docs/RENCANA_V1019.md`](docs/RENCANA_V1019.md). Ringkasan kandidat rilis:
+[`docs/RELEASE_NOTES_V1.0.19.md`](docs/RELEASE_NOTES_V1.0.19.md).
+
+---
+
+## Batas yang sengaja dikatakan terang-terangan
+
+- **Python tetap 3.11.** Chaquopy berhenti menyediakan wheel native 32-bit pada
+  Python 3.12+, sehingga upgrade akan mengorbankan NumPy/ARMv7.
+- Python user berjalan **in-process**. `while True: pass` atau native call yang
+  macet belum selalu dapat dibunuh tanpa mematikan process aplikasi.
+- ZCODE belum memiliki Linux shell, compiler native, Git penuh, atau Alpine
+  terintegrasi.
+- SciPy/scikit-learn tidak tersedia untuk CPython 3.11 ARMv7 melalui indeks
+  Chaquopy saat ini.
+- Kivy, Tkinter, Qt/PySide, Pygame, TensorFlow, PyTorch, dan OpenCV bukan sekadar
+  masalah RAM; mereka membutuhkan binary/surface/runtime yang belum dimiliki
+  ZCODE.
+- Uninstall belum memiliki reverse-dependency ownership graph.
+- Bukti perangkat utama saat ini berasal dari satu Infinix ARMv7; ini bukan
+  klaim universal untuk seluruh ROM/WebView Android.
+- CSP editor melindungi editor JavaScript, **bukan** mengisolasi script Python
+  yang sengaja dijalankan user.
+
+Roadmap tidak mengubur keterbatasan tersebut. ZCODE mencatat alasan, alternatif,
+dan premis yang dapat membuka riset kembali.
+
+---
+
+## Arsitektur singkat
+
+```text
+Jetpack Compose UI
+├── Workbench / Settings / Library / Samples / Diagnostics
+├── CodeMirror 6 dalam WebView file:// yang local-only
+├── WorkspaceViewModel + FileManager
+├── ExecutionEngine + Chaquopy Python 3.11
+├── NativeRuntimeState + private :rebirth process handoff
+├── Package Engine V2
+│   ├── RequirementParser / DependencyResolver
+│   ├── Verifier / SmokeTestRunner / TransactionManager
+│   └── PackageDb / TelemetryStore / semantic logs
+└── Local assets: editor bundle, fonts, catalog, samples, Python runtime helpers
+```
+
+Editor WebView, Python networking, dan target App Mode adalah tiga trust/runtime
+layer berbeda. Detail security dan arah terminal tersedia di dokumentasi.
+
+---
+
+## Build dan test
+
+### Local checks
+
+```bash
+bash tools/check.sh
+```
+
+Check ini menjalankan guard editor offline, supply-chain npm, Kotlin lexical
+sanity, security invariants, dan seluruh pytest utama.
+
+### Build APK
+
+Butuh JDK 17, Android SDK 34, Gradle 8.5, dan Python 3.11 untuk buildPython
+Chaquopy:
+
+```bash
+gradle assembleDebug
+```
+
+GitHub Actions adalah hakim kompilasi/build canonical proyek.
+
+### Regenerasi CodeMirror bundle
+
+```bash
+cd editor-src
+npm ci
+npm run build
+```
+
+Bundle hasil build harus di-commit karena editor APK tetap offline-first.
+
+---
+
+## Roadmap setelah v1.0.19
+
+Roadmap mengikuti kebutuhan karya nyata, bukan perlombaan jumlah fitur.
+
+1. Project backup/export/import dan recovery yang semakin kuat.
+2. Project model yang lebih jelas (`main.py`, data, output, requirements).
+3. Test runner dan debugger Python bertahap.
+4. Private-process Python untuk hard-stop dan crash isolation.
+5. Command Console / Python REPL.
+6. App Mode dengan Preview WebView terpisah dan loopback aman.
+7. Code intelligence berbasis provider/Jedi/LSP.
+8. Git ringan.
+9. Alpine/PRoot **opt-in** hanya bila shell/compiler/SciPy benar-benar dibutuhkan.
+10. Plugin API eksternal hanya setelah permission, lifecycle, update, dan crash
+    isolation memiliki kontrak yang kuat.
+
+Target terminal/interpreter:
+[`docs/TARGET_TERMINAL_ZCODE.md`](docs/TARGET_TERMINAL_ZCODE.md).
+
+---
+
+## Peta dokumentasi
+
+| Dokumen | Isi |
+|---|---|
+| [`PRD_ZCODE.md`](docs/PRD_ZCODE.md) | Misi, prinsip, arsitektur, roadmap, batas |
+| [`RENCANA_V1019.md`](docs/RENCANA_V1019.md) | Log implementasi dan bukti UAT v1.0.19 |
+| [`RELEASE_NOTES_V1.0.19.md`](docs/RELEASE_NOTES_V1.0.19.md) | Ringkasan perubahan, bukti, dan batas release candidate |
+| [`RENCANA_UPDATE_2026_08.md`](docs/RENCANA_UPDATE_2026_08.md) | Keputusan redesign dan arah App Mode/ZPLAY |
+| [`SKILLS.md`](docs/SKILLS.md) | Playbook engineering khusus ZCODE |
+| [`AGENTS.md`](AGENTS.md) | Operating agreement universal untuk coding agent |
+| [`AUDIT_LIBRARY_SAMPLES_V1019.md`](docs/AUDIT_LIBRARY_SAMPLES_V1019.md) | Audit Library dan Samples |
+| [`SPEC-001_IMPLEMENTATION_2026_08.md`](docs/SPEC-001_IMPLEMENTATION_2026_08.md) | Package/terminal reliability platform |
+| [`MIGRASI_CM6.md`](docs/MIGRASI_CM6.md) | Migrasi dan kontrak CodeMirror 6 |
+| [`RISET_VSCODE_ACODE_PYDROID_2026_08_19.md`](docs/RISET_VSCODE_ACODE_PYDROID_2026_08_19.md) | Posisi produk dan pelajaran pembanding |
+
+---
+
+## Kontribusi dan feedback
+
+- Bug/saran: [GitHub Issues](https://github.com/muzape28-blip/ZCODE/issues)
+- Source dan fork dipersilakan sesuai lisensi MIT.
+- Jangan memasukkan secret, token, atau data pribadi ke issue/log.
+- Kontribusi package wajib menyebut versi, Python, Android/ABI, sumber wheel, dan
+  tingkat verifikasinya.
+
+## Lisensi
+
+ZCODE dirilis di bawah [MIT License](LICENSE).
+
+Font JetBrains Mono, Fira Code, dan Source Code Pro memakai SIL Open Font License
+1.1; teks lisensi tersedia bersama asset font.
+
+---
+
+<div align="center">
+  <strong>ZCODE</strong><br/>
+  <em>Tetap bisa berkarya dengan perangkat yang kita punya.</em>
+</div>

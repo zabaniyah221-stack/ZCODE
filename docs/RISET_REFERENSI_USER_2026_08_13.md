@@ -79,7 +79,7 @@ Tiga hal yang langsung berguna:
 
 2. **API level adalah bagian tag, dan pencocokannya "wheel ≤ device"** —
    persis aturan yang sudah dirancang ZCODE. Default upstream 24; wheel Chaquopy
-   ada yang `android_21` dan `android_24`; perangkat user API 31 → keduanya lolos.
+   ada yang `android_21` dan `android_24`; perangkat runtime user API 34 → keduanya lolos.
 
 3. **`armeabi_v7a` TIDAK ADA di daftar arch cibuildwheel.**
    Ekosistem Python resmi **tidak mendukung ARMv7 Android sama sekali** —

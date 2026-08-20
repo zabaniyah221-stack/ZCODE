@@ -1,7 +1,10 @@
 package com.zaba.zcode
 
 import android.os.Bundle
+import android.os.Process
 import android.widget.Toast
+import com.zaba.zcode.core.diagnostics.Breadcrumb
+import com.zaba.zcode.core.runtime.NativeRuntimeState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -11,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.samples.SampleEntry
 import com.zaba.zcode.ui.samples.SamplesScreen
 import com.zaba.zcode.ui.settings.AboutScreen
 import com.zaba.zcode.ui.settings.DiagnosticsScreen
@@ -29,29 +33,86 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            // Audit 2026-08: jenis font pilihan user berlaku untuk seluruh UI.
-            ZcodeTheme(
-                themeType = vm.themeType,
-                fontFamily = fontFamilyFor(vm.appFontFamily)
-            ) {
-                AppNavHost(vm = vm)
+        val previousPid = intent.getIntExtra(EXTRA_REBIRTH_FROM_PID, -1)
+        val restarted = previousPid > 0 && NativeRuntimeState.completeRestart(this, previousPid)
+
+        fun showWorkspace() {
+            setContent {
+                // Audit 2026-08: jenis font pilihan user berlaku untuk seluruh UI.
+                ZcodeTheme(
+                    themeType = vm.themeType,
+                    fontFamily = fontFamilyFor(vm.appFontFamily)
+                ) {
+                    AppNavHost(vm = vm, onRestartRuntime = ::requestRuntimeRestart)
+                }
             }
         }
+
+        if (restarted) {
+            setContentView(BinaryRainView(this, "Menyiapkan workspace…"))
+            // One frame is a real process-handoff frame, not a cosmetic delay.
+            window.decorView.postOnAnimation {
+                showWorkspace()
+                window.decorView.post {
+                    Toast.makeText(
+                        this,
+                        "Python berhasil dimulai ulang.\nProgram siap dijalankan.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        } else {
+            showWorkspace()
+        }
+    }
+
+    private fun requestRuntimeRestart(): Boolean {
+        if (!vm.flushSaveSync(verifyAllDrafts = true)) {
+            return false
+        }
+        if (!NativeRuntimeState.prepareRestart(this)) {
+            Breadcrumb.log("RUNTIME_RESTART_ABORT", "receipt gagal disimpan")
+            return false
+        }
+        val oldPid = Process.myPid()
+        setContentView(BinaryRainView(this))
+        startActivity(ZcodeRebirthActivity.intent(this, oldPid))
+        overridePendingTransition(0, 0)
+        return true
     }
 
     override fun onPause() {
         super.onPause()
         vm.flushSaveSync()
     }
+
+    companion object {
+        const val EXTRA_REBIRTH_FROM_PID = "zcode.rebirth.from_pid"
+    }
 }
 
 @Composable
-private fun AppNavHost(vm: WorkspaceViewModel) {
+private fun AppNavHost(
+    vm: WorkspaceViewModel,
+    onRestartRuntime: () -> Boolean,
+) {
     val nav = rememberNavController()
     // FIX: `applicationContext` tidak resolvable di scope composable —
     // ambil dari LocalContext.current (compile error sebelumnya: unresolved reference)
     val appContext = LocalContext.current.applicationContext
+
+    fun openSampleInEditor(entry: SampleEntry) {
+        val (ok, msg) = vm.createSampleFromAsset(
+            entry.assetPath,
+            entry.id,
+            companionAssets = entry.companionAssets
+        )
+        Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
+        if (ok && !nav.popBackStack("editor", inclusive = false)) {
+            nav.navigate("editor") { launchSingleTop = true }
+        }
+    }
+
     NavHost(navController = nav, startDestination = "editor") {
         composable("editor") {
             WorkbenchScreen(
@@ -72,11 +133,9 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
         composable("samples") {
             SamplesScreen(
                 onBack = { nav.navigateUp() },
-                onPick = { entry ->
-                    val (ok, msg) = vm.createSampleFromAsset(entry.assetPath, entry.id)
-                    Toast.makeText(appContext, msg, Toast.LENGTH_SHORT).show()
-                    if (ok) nav.navigateUp() // balik ke editor — vm.selectFile sudah aktif
-                }
+                onPick = ::openSampleInEditor,
+                // Gerbong B (v1.0.19): dialog "butuh paket X" → INSTALL MODULES
+                onGoToInstallModules = { nav.navigate("pip") }
             )
         }
         composable("output/{filename}") { backStackEntry ->
@@ -90,13 +149,21 @@ private fun AppNavHost(vm: WorkspaceViewModel) {
                 terminalOutputLimit = vm.terminalOutputLimit,
                 themeType = vm.themeType,
                 // Audit 2026-08: ukuran font setting kini khusus terminal.
-                terminalFontSize = vm.terminalFontSize
+                terminalFontSize = vm.terminalFontSize,
+                // A3 v1.0.19: tap traceback → balik ke editor di baris salah.
+                onGotoEditorLine = { tracebackFile, line ->
+                    vm.requestGotoLine(tracebackFile, line)
+                    nav.navigateUp()
+                },
+                tracebackJumpEnabled = vm.tracebackJumpEnabled
             )
         }
         composable("pip") {
             PipScreen(
                 context = appContext,
-                onBack = { nav.navigateUp() }
+                onBack = { nav.navigateUp() },
+                onOpenSample = ::openSampleInEditor,
+                onRestartRuntime = onRestartRuntime
             )
         }
         // DIAGNOSTICS (build #3): layar penuh sendiri, bukan kotak kecil di About.

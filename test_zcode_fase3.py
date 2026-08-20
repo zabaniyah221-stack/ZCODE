@@ -120,8 +120,9 @@ class TestPaletteRedesign:
     def test_validasi_go_to_line(self):
         txt = read(WORKBENCH)
         assert "attemptJump" in txt and "lineError" in txt
-        # Pesan receh hasil diskusi (tone playful disepakati user)
-        assert "Baris $target nggak ada njiir" in txt, "pesan receh go-to-line hilang"
+        # Batch glyph v1.0.19: pesan tetap jelas tetapi tanpa emoji/dekorasi OEM.
+        assert "Baris $target tidak tersedia" in txt
+        assert "file ini hanya memiliki $totalLines baris" in txt
 
     def test_mode_rahasia_tetap_hidup(self):
         txt = read(WORKBENCH)
@@ -141,7 +142,21 @@ class TestSamples:
                   "try_except", "classes_oop", "file_io", "json_data",
                   "datetime_random", "requests_api", "rich_table",
                   "tqdm_progress", "openpyxl_excel", "pillow_image",
-                  "matplotlib_chart"]
+                  "matplotlib_chart",
+                  # A7 v1.0.19: sample multi-file pertama (entri katalog).
+                  "project_mini",
+                  # Gerbong D v1.0.19: gelombang awal
+                  "docx_laporan", "qr_generator", "crypto_pesan",
+                  "sqlite_catatan", "pandas_nilai", "sympy_aljabar",
+                  # Gelombang lanjutan: jalur belajar + lintas kegunaan
+                  "numpy_slicing", "matplotlib_subplots", "httpx_api",
+                  "beautifulsoup_links", "pptx_presentasi", "tinydb_catatan",
+                  "pyotp_2fa", "pyyaml_config"]
+
+    # A7: file .py di assets yang BUKAN entri katalog — companion yang
+    # ditulis ke workspace dgn nama tetap saat sample induknya dibuka.
+    # Tetap wajib lolos py_compile (glob *.py menangkapnya otomatis).
+    COMPANION_IDS = ["helper_util"]
 
     def test_route_halaman_samples(self):
         assert '"samples"' in read(MAIN), "route samples hilang di MainActivity"
@@ -151,13 +166,27 @@ class TestSamples:
         txt = read(CORE / "samples/SampleLibrary.kt")
         for sid in self.SAMPLE_IDS:
             assert f'"{sid}"' in txt, f"sample {sid} hilang dari katalog"
-        for cat in ['"basics"', '"numpy"', '"web"']:
-            assert cat in txt, f"kategori {cat} hilang"
+        categories = ["basics", "numpy", "matplotlib", "web_api", "office",
+                      "database", "data_math", "image_qr", "security",
+                      "utilities", "projects"]
+        for cat in categories:
+            assert f'"{cat}"' in txt, f"kategori {cat} hilang"
+        assert '"paket", "Paket Populer"' not in txt, (
+            "kategori keranjang Paket Populer kembali — sample harus mudah dicari berdasarkan tujuan"
+        )
 
     def test_asset_sama_dengan_katalog(self):
         ids_assets = sorted(p.stem for p in (ASSETS / "samples").glob("*.py"))
-        assert ids_assets == sorted(self.SAMPLE_IDS), \
-            f"isian assets/samples tidak sinkron dengan katalog: {ids_assets}"
+        assert ids_assets == sorted(self.SAMPLE_IDS + self.COMPANION_IDS), \
+            f"isian assets/samples tidak sinkron dengan katalog+companion: {ids_assets}"
+
+    def test_companion_terdaftar_di_katalog_sebagai_companion(self):
+        # companion bukan entri, tapi WAJIB direferensikan companionAssets
+        # oleh minimal satu entri — file assets yatim = kode mati.
+        txt = read(CORE / "samples/SampleLibrary.kt")
+        for cid in self.COMPANION_IDS:
+            assert f'samples/{cid}.py' in txt, \
+                f"companion {cid} tidak direferensikan entri katalog mana pun"
 
     def test_semua_sample_lolos_py_compile(self):
         # Rule #2 (meticulous): sample rusak syntax = test merah, bukan crash di HP user
@@ -185,3 +214,35 @@ class TestDokumentasi:
     def test_readme_nunjuk_ke_dok(self):
         assert "RENCANA_UPDATE_2026_08" in read(ROOT / "README.md"), \
             "README harus menunjuk ke dok rencana update"
+
+    def test_readme_gallery_memakai_bukti_device(self):
+        txt = read(ROOT / "README.md")
+        gallery = ROOT / "docs/screenshots/v1019"
+        wajib = ["splash.png", "drawer.png", "settings.png", "samples.png",
+                 "library.png", "manual-install.png", "editor.png",
+                 "palette.png", "terminal.png"]
+        for name in wajib:
+            assert (gallery / name).exists(), f"bukti screenshot hilang: {name}"
+            assert f"docs/screenshots/v1019/{name}" in txt, (
+                f"README tidak menampilkan screenshot {name}"
+            )
+
+    def test_readme_angka_katalog_dan_sample_sinkron(self):
+        import json as _json
+        txt = read(ROOT / "README.md")
+        catalog = _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        total = len(catalog)
+        tested = sum(p.get("status") == "TESTED" for p in catalog)
+        lib = read(CORE / "samples/SampleLibrary.kt")
+        samples = len(re.findall(r'\bSampleEntry\(\s*\n\s*"', lib))
+        categories = len(re.findall(r'\bSampleCategory\(\s*\n\s*"', lib))
+        assert f"**{total} kartu package**" in txt
+        assert f"**{tested} package berstatus TESTED**" in txt
+        assert f"**{samples} sample runnable dalam {categories} kategori**" in txt
+
+    def test_readme_menyebut_batas_utama(self):
+        txt = read(ROOT / "README.md")
+        for limit in ("Python tetap 3.11", "in-process", "reverse-dependency",
+                      "belum memiliki Linux shell", "klaim universal"):
+            assert limit in txt, f"README menyembunyikan batas: {limit}"

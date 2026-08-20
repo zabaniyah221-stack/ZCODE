@@ -294,13 +294,15 @@ class TestResolve:
         assert np_pkg["filename"].endswith("android_21_arm64_v8a.whl")
 
     def test_no_compatible_wheel_never_sdist(self, mock_net):
-        # requests 1.0.0 hanya punya sdist; constraint harus memilih 2.32.3,
-        # dan kalau cuma ada sdist → unavailable, BUKAN install palsu.
-        plan = resolve_mod.resolve(
-            "requests==1.0.0",
-            supported_tags=[Tag("py3", "none", "any")],
-        )
-        assert not plan["packages"]  # sdist tidak pernah dipilih → tidak ada package
+        # requests 1.0.0 hanya punya sdist; resolver wheel-only wajib menolak
+        # exact pin dan menjelaskan versi wheel runtime yang benar-benar ada.
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod.resolve(
+                "requests==1.0.0",
+                supported_tags=[Tag("py3", "none", "any")],
+            )
+        assert exc.value.code == "DEPENDENCY_VERSION_UNAVAILABLE"
+        assert "==1.0.0" in exc.value.human and "2.32.3" in exc.value.human
 
     def test_conflict_detected(self, mock_net):
         # A butuh charset==3.3.2, root minta charset==2.0.0 → konflik
@@ -373,6 +375,117 @@ class TestResolve:
         r = Requirement(te)
         # di Python 3.11 marker false → tidak perlu diinstall
         assert r.marker.evaluate(env) is False
+
+class TestCrossSourceSpecifierV1019:
+    """Constraint versi wajib berlaku sama untuk PyPI, Chaquopy, dan cache."""
+
+    @staticmethod
+    def _candidate(version, source):
+        return {
+            "filename": f"contourpy-{version}-py3-none-any.whl",
+            "url": f"{source}://contourpy-{version}.whl",
+            "source": source,
+        }
+
+    def test_filter_semua_source_dan_exact_pin(self):
+        candidates = [
+            self._candidate("1.0.5", "local"),
+            self._candidate("1.1.0", "chaquopy"),
+            self._candidate("1.2.1", "pypi"),
+        ]
+        valid = resolve_mod._filter_candidates_by_specifier(candidates, ">=1.2")
+        assert [c["source"] for c in valid] == ["pypi"]
+        exact = resolve_mod._filter_candidates_by_specifier(candidates, "==1.0.5")
+        assert [c["source"] for c in exact] == ["local"]
+
+    def test_tested_priority_tidak_boleh_mengalahkan_constraint(self):
+        candidates = [
+            self._candidate("1.0.5", "chaquopy"),
+            self._candidate("1.2.1", "pypi"),
+        ]
+        valid = resolve_mod._filter_candidates_by_specifier(candidates, ">=1.2")
+        best = whl_mod.best_wheel(
+            valid,
+            tested_versions=["1.0.5"],
+            supported_tags=[Tag("py3", "none", "any")],
+        )
+        assert best["filename"].startswith("contourpy-1.2.1")
+
+    @staticmethod
+    def _parent_metadata(specifier):
+        return {
+            "info": {
+                "name": "parent",
+                "version": "1.0.0",
+                "requires_dist": [f"contourpy{specifier}"],
+            },
+            "releases": {
+                "1.0.0": [{
+                    "filename": "parent-1.0.0-py3-none-any.whl",
+                    "packagetype": "bdist_wheel",
+                    "url": "https://files.pythonhosted.org/parent.whl",
+                    "digests": {"sha256": "11" * 32},
+                    "size": 100,
+                    "yanked": False,
+                }],
+            },
+        }
+
+    def _wire_bokeh_like_sources(self, monkeypatch, child_spec, pypi_child_error=False):
+        parent = self._parent_metadata(child_spec)
+
+        def metadata(name):
+            if name == "parent":
+                return parent
+            if pypi_child_error:
+                raise resolve_mod.ResolveError(
+                    "NETWORK", "metadata", "PyPI belum terbaca", "uji"
+                )
+            return {
+                "info": {"name": "contourpy", "version": "1.0.5", "requires_dist": []},
+                "releases": {},
+            }
+
+        def chaquopy(name):
+            if name != "contourpy":
+                return []
+            return [self._candidate("1.0.5", "chaquopy")]
+
+        monkeypatch.setattr(resolve_mod, "fetch_pypi_metadata", metadata)
+        monkeypatch.setattr(resolve_mod, "fetch_chaquopy_wheels", chaquopy)
+
+    def test_bokeh_39_like_dependency_ditolak_dengan_versi_tersedia(self, monkeypatch):
+        self._wire_bokeh_like_sources(monkeypatch, ">=1.2")
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._resolve_unlocked(
+                "parent==1.0.0",
+                supported_tags=[Tag("py3", "none", "any")],
+                tested_versions={"contourpy": ["1.0.5"]},
+            )
+        assert exc.value.code == "DEPENDENCY_VERSION_UNAVAILABLE"
+        assert ">=1.2" in exc.value.human and "1.0.5" in exc.value.human
+
+    def test_bokeh_33_like_dependency_menerima_contourpy_105(self, monkeypatch):
+        self._wire_bokeh_like_sources(monkeypatch, ">=1")
+        plan = resolve_mod._resolve_unlocked(
+            "parent==1.0.0",
+            supported_tags=[Tag("py3", "none", "any")],
+            tested_versions={"contourpy": ["1.0.5"]},
+        )
+        versions = {p["name"]: p["version"] for p in plan["packages"]}
+        assert versions["contourpy"] == "1.0.5"
+
+    def test_source_gagal_menang_atas_vonis_versi(self, monkeypatch):
+        self._wire_bokeh_like_sources(
+            monkeypatch, ">=1.2", pypi_child_error=True
+        )
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._resolve_unlocked(
+                "parent==1.0.0",
+                supported_tags=[Tag("py3", "none", "any")],
+            )
+        assert exc.value.code == "NETWORK"
+
 
 # =====================================================================
 # Resolver reliability — timeout/retry/progress/cancellation (v1.0.15 regression)
@@ -605,6 +718,28 @@ class TestSmoke:
         assert ok
         assert all(r["ok"] for r in results)
         assert native["native_libs"] == []
+        assert native["loaded_native_modules"] == []
+
+    def test_pure_root_reports_native_dependency_actually_loaded(self, tmp_path):
+        pkg = tmp_path / "pure_wrapper"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        code = (
+            "import sys, types; "
+            "m = types.ModuleType('active_native_dep'); "
+            "m.__file__ = '/active/native_dep.cpython-311.so'; "
+            "sys.modules['active_native_dep'] = m"
+        )
+        ok, results, native = smoke_mod.run_smoke(
+            "pure_wrapper", str(tmp_path),
+            [{"name": "loads-active-native", "type": "BASIC_API", "code": code}],
+        )
+        assert ok, results
+        assert native["native_libs"] == []
+        assert native["loaded_native_modules"] == [
+            "active_native_dep:/active/native_dep.cpython-311.so"
+        ]
+        assert "active_native_dep" not in sys.modules
 
     def test_failure_reported(self, tmp_path):
         pkg = tmp_path / "zsmoke"
@@ -1070,6 +1205,51 @@ class TestBengkelMiniV1018:
             f"(_MAX_HTTP_ATTEMPTS=3); calls={len(calls)}"
         )
 
+    def test_incomplete_read_diretry_bukan_langsung_gagal(self, monkeypatch):
+        import http.client
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(timeout)
+            if len(calls) == 1:
+                raise http.client.IncompleteRead(b"setengah", 20)
+            return _FakeHttpResponse(b"metadata-utuh")
+
+        monkeypatch.setattr(resolve_mod.urllib.request, "urlopen", fake_urlopen)
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"metadata-utuh"
+        assert len(calls) == 2, "IncompleteRead adalah gangguan transport sementara; wajib retry"
+
+    def test_404_memiliki_kode_source_not_found(self, monkeypatch):
+        from urllib.error import HTTPError
+
+        monkeypatch.setattr(
+            resolve_mod.urllib.request, "urlopen",
+            lambda req, timeout: (_ for _ in ()).throw(
+                HTTPError(req.full_url, 404, "not found", {}, None)
+            ),
+        )
+        monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._http_get("https://chaquo.com/pypi-13.1/demo/")
+        assert exc.value.code == "SOURCE_NOT_FOUND"
+
+    def test_dua_repository_gagal_tetap_network_bukan_unavailable(self, monkeypatch):
+        def network_fail(*_args, **_kwargs):
+            raise resolve_mod.ResolveError(
+                "NETWORK", "metadata", "repository belum berhasil dibaca", "uji transport"
+            )
+
+        monkeypatch.setattr(resolve_mod, "fetch_pypi_metadata", network_fail)
+        monkeypatch.setattr(resolve_mod, "fetch_chaquopy_wheels", network_fail)
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod._resolve_unlocked(
+                "demo", supported_tags=[Tag("py3", "none", "any")]
+            )
+        assert exc.value.code == "NETWORK", (
+            "kegagalan transport tidak boleh berubah menjadi PACKAGE_NOT_AVAILABLE"
+        )
+
     def test_manifest_pin_mypy_stable_pra_librt(self):
         # mypy>=1.19 menarik librt (C-ext mypyc, tak ada wheel ARMv7 —
         # https://mypy.readthedocs.io/en/stable/changelog.html). 1.18.2 =
@@ -1195,3 +1375,67 @@ class TestSignalShim:
         assert err and "jejak:" in err and "pelaku_signal.py" in err, (
             f"pesan error harus menyebut file pelaku, dapat: {err}"
         )
+
+
+class TestProvidedPackages:
+    """PROVIDED-PACKAGES v1.0.19: setuptools/wheel/pip/packaging dibawa APK
+    (build.gradle.kts pip{}). Membelanjakannya dari PyPI = kelas shadowing
+    stdlib (setuptools 84 AssertionError distutils; zope-interface korban —
+    device 2026-08-17 01:37). Requirement terhadapnya = terpenuhi runtime;
+    specifier yang menolak versi beku = vonis jujur."""
+
+    def test_peta_sinkron_dengan_build_gradle(self):
+        # Guard dua sisi: peta resolver WAJIB sama dgn pip{} di build.gradle.
+        # Drift = provided palsu (resolver bilang ada versi X, APK bawa Y).
+        gradle = open(os.path.join(ROOT, "app/build.gradle.kts")).read()
+        for name, ver in resolve_mod.RUNTIME_PROVIDED.items():
+            assert 'install("%s==%s")' % (name, ver) in gradle, (
+                f"RUNTIME_PROVIDED[{name}]={ver} tidak cocok dgn "
+                "build.gradle.kts pip{} — sinkronkan dua-duanya"
+            )
+
+    def test_deps_provided_terpenuhi_tanpa_download(self, monkeypatch):
+        # zope-interface case: deps 'setuptools' TIDAK boleh memicu network.
+        called = []
+        monkeypatch.setattr(resolve_mod, "_http_get",
+                            lambda url: called.append(url) or (_ for _ in ()).throw(
+                                AssertionError("network tak boleh disentuh")))
+        out = resolve_mod._resolve_unlocked("setuptools") \
+            if hasattr(resolve_mod, "_resolve_unlocked") else None
+        if out is None:
+            import json as _json
+            out = _json.loads(resolve_mod.resolve_json("setuptools"))
+        assert out["packages"] == []
+        hits = out.get("stdlib") or []
+        assert hits and "disediakan runtime ZCODE v68.2.2" in hits[0]["reason"], (
+            f"root provided harus pulang via kontrak stdlib-info; out={out}"
+        )
+        assert not called, "resolve paket provided tidak boleh menyentuh network"
+
+    def test_specifier_menolak_versi_beku_vonis_jujur(self, monkeypatch):
+        monkeypatch.setattr(resolve_mod, "_http_get",
+                            lambda url: (_ for _ in ()).throw(
+                                AssertionError("network tak boleh disentuh")))
+        import json as _json
+        out = _json.loads(resolve_mod.resolve_json("setuptools>=80"))
+        assert out["packages"] == []
+        un = out.get("unavailable") or []
+        assert un and "v68.2.2" in un[0]["reason"] and "tidak terpenuhi" in un[0]["reason"], (
+            f"specifier >=80 harus vonis jujur, bukan pura-pura terpenuhi; out={out}"
+        )
+
+    def test_specifier_cocok_versi_beku_terpenuhi(self, monkeypatch):
+        monkeypatch.setattr(resolve_mod, "_http_get",
+                            lambda url: (_ for _ in ()).throw(
+                                AssertionError("network tak boleh disentuh")))
+        import json as _json
+        out = _json.loads(resolve_mod.resolve_json("packaging>=20"))
+        hits = out.get("stdlib") or []
+        assert hits and "v24.1" in hits[0]["reason"], (
+            f"packaging>=20 terpenuhi oleh 24.1 beku; out={out}"
+        )
+
+    def test_paket_biasa_tidak_kena_provided(self):
+        assert resolve_mod.runtime_provided_version("requests") is None
+        assert resolve_mod.runtime_provided_version("numpy") is None
+        assert resolve_mod.runtime_provided_version("setuptools") == "68.2.2"

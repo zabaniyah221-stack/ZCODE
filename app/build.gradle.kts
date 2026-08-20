@@ -120,6 +120,10 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
+    // Dipakai langsung oleh HorizontalPager INSTALL MODULES. BOM 2024.02.00
+    // memetakan Foundation 1.6.1; deklarasi eksplisit menghindari bergantung
+    // secara kebetulan pada dependency transitif Material3.
+    implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.1.2")
     implementation("androidx.navigation:navigation-compose:2.7.7")

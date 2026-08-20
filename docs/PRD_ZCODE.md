@@ -1,28 +1,97 @@
 # 📘 PRD — ZCODE
 
-**Status: BLUEPRINT — bukan kontrak.**
-Dokumen ini boleh diubah kapan saja: ada permintaan fitur baru, bug, error, atau
-temuan riset yang mematahkan asumsi di sini. Kalau kenyataan bertentangan dengan
-PRD, **kenyataan yang menang** dan PRD diperbarui — bukan sebaliknya.
+**Status: BLUEPRINT — bukan hukum permanen.**
+Dokumen ini boleh di-upgrade, disederhanakan, di-downgrade, atau diganti ketika
+kebutuhan user, ancaman, kemampuan tim, atau bukti teknis berubah. Kalau
+kenyataan bertentangan dengan PRD, **kenyataan yang menang** dan PRD diperbarui
+— bukan sebaliknya.
 
-Versi saat ini: `1.0.18` (`gradle.properties` = sumber tunggal)
-Terakhir diperbarui: 2026-08-13
-Revisi: 2026-08-13 — §5 Bug L/M (timeout lifecycle + cancellation fallback),
-full Android ARMv7 API 24 emulator, dan verifikasi bionic311. (PRD = pegangan, bukan acuan terkunci.)
+Komitmen dan kontrak di dokumen ini mengikat **arah/versi yang sedang berlaku**,
+bukan masa depan selamanya. Perubahannya harus eksplisit: jelaskan masalah yang
+dihadapi, bukti, kemampuan mengoperasikan solusi, biaya belajar/migrasi, risiko,
+acceptance criteria, dan jalan mundur. Tidak boleh berubah diam-diam hanya
+karena teknologi baru terlihat lebih menarik.
+
+Versi saat ini: `1.0.19` (`gradle.properties` = sumber tunggal)
+Terakhir diperbarui: 2026-08-20
+Revisi: 2026-08-20 — native-runtime auto-relaunch, semantic logs, dan uninstall
+final DEVICE VERIFIED; prinsip kemampuan tanpa paywall dan tanpa jalan buntu
+tetap berlaku. (PRD = pegangan, bukan acuan terkunci.)
 
 ---
 
 ## 1. Apa itu ZCODE
 
-IDE Python untuk Android, setara Pydroid/Acode/VS Code mobile, dengan tiga
-komitmen yang tidak bisa ditawar:
+IDE Python untuk Android. Pembanding produk langsungnya adalah Pydroid;
+VS Code dan Acode menjadi sumber pola workbench/editor/plugin, bukan kategori
+pesaing yang sama. Audit: `docs/RISET_VSCODE_ACODE_PYDROID_2026_08_19.md`.
+Arah saat ini memiliki empat komitmen:
 
 1. **100% gratis, tanpa premium lock.** Tidak ada fitur di balik bayaran.
 2. **Offline-first, bukan offline-only.** Jalan tanpa internet; script yang
    butuh jaringan tetap bisa jalan.
 3. **ARMv7 kelas satu.** HP murah bukan warga kelas dua.
+4. **Keterbatasan bukan jalan buntu.** Kemampuan yang belum didukung wajib
+   dijelaskan secara jujur, diberi alternatif yang dapat dipakai sekarang, dan
+   dinilai sebagai kandidat target pengembangan agar suatu hari ZCODE juga bisa.
 
-### Kenapa ketiganya penting
+### North star
+
+> **Bukan tentang punya perangkat terbaik. Tentang tetap bisa berkarya dengan
+> perangkat yang kita punya.**
+
+Misi ZCODE adalah memperkecil jarak antara "aku punya ide" dan "aku berhasil
+membuat sesuatu dari ide itu" bagi pengguna Android terbatas tanpa PC. ZCODE
+harus membantu user membuat, menjalankan, memahami, memperbaiki, menyimpan, dan
+membagikan project Python—tanpa paywall dan tanpa berbohong tentang batasnya.
+
+Ukuran sukses utama bukan jumlah menu/plugin atau kemiripan dengan produk besar,
+melainkan:
+
+- karya nyata yang dapat dibuat user tanpa PC;
+- force-close dan kehilangan data mendekati nol;
+- error dapat dipahami dan disalin;
+- package bekerja sesuai klaim;
+- project dapat disimpan, dipulihkan, dan dibagikan;
+- ZCODE membuat user lebih sering berkarya daripada sebelum memilikinya.
+
+ZCODE tidak wajib menjadi editor semua bahasa, workstation desktop, atau clone
+penuh VS Code/Acode/Pydroid. Berhenti menambah fitur saat alatnya sudah cukup
+untuk berkarya adalah hasil yang sah, bukan kegagalan.
+
+### Prinsip kemampuan: gratis, jujur, dan terus mencari jalan
+
+> **Kalau sudah didukung → gratis untuk semua.**
+>
+> **Kalau belum didukung → jelaskan keterbatasannya secara jujur, catat bukti
+> teknisnya, tawarkan alternatif yang bisa dipakai sekarang, lalu jadikan
+> kandidat target pengembangan—tanpa menjanjikan dukungan sebelum jalur
+> teknisnya terbukti.**
+
+Prinsip ini bukan izin memasukkan semua nama paket populer ke roadmap aktif.
+Setiap kandidat tetap disaring berdasarkan kebutuhan nyata, kemungkinan jalur
+teknis, keamanan, ukuran, beban pemeliharaan, dukungan ABI/Python/Android,
+dampak pada ARMv7 dan perangkat low-end, serta manfaat dibanding alternatif
+yang sudah tersedia.
+
+Status kemampuan harus dibedakan dengan jujur:
+
+- **BELUM DIAUDIT** — belum ada bukti cukup.
+- **SEDANG DITELITI** — kebutuhan nyata ada; jalur teknis sedang dicari.
+- **TERKENDALA** — penyebab teknis diketahui, tetapi solusi belum terbukti.
+- **DIRENCANAKAN** — jalur, scope, risiko, dan acceptance criteria sudah jelas.
+- **EXPERIMENTAL** — bisa dicoba, belum stabil atau belum cukup bukti device.
+- **TESTED** — versi dan lingkungan uji tercatat serta bukti yang disyaratkan
+  telah lulus.
+- **TIDAK LAYAK SAAT INI** — biaya/risiko belum sebanding; boleh dibuka kembali
+  hanya jika ada premis atau bukti baru.
+
+`Samples` hanya menjanjikan contoh yang benar-benar dapat dijalankan di ZCODE
+setelah dependency yang disebutkan dipasang. Paket yang belum runnable tetap
+dijelaskan di `Library` beserta kendala, alternatif, dan status risetnya—bukan
+disamarkan sebagai fitur premium atau sample mati.
+
+### Kenapa keempatnya penting
 
 Pydroid menaruh PyTorch di balik paywall
 ([Grokipedia — Mobile Python](https://grokipedia.com/page/Mobile_Python)).
@@ -31,13 +100,15 @@ PocketCode membuang jaringan sepenuhnya
 VSCodroid hanya ARM64
 ([github.com/rmyndharis/VSCodroid](https://github.com/rmyndharis/VSCodroid)).
 
-Ketiga komitmen ZCODE adalah **ceruk yang secara harfiah kosong**.
+Keempat komitmen itu membentuk arah produk ZCODE: gratis, offline-first,
+ramah ARMv7, dan tidak menjadikan keterbatasan hari ini sebagai alasan untuk
+berhenti mencari jalan.
 
 ### Pengguna utama
 
 Satu orang, dan itu menentukan semua keputusan teknis:
 
-- HP **ARMv7**, Android 12, ~6.6 GB free
+- HP **INFINIX X6532C, ARMv7**, Android **14 / API 34**, ~6.6 GB free
 - **TIDAK punya PC.** Tidak ada `adb logcat`, tidak ada Android Studio.
 - Siklus uji **mahal**: 1 build CI + 1 unduh + 1 install per percobaan
 - Merangkap QA tester tunggal
@@ -54,12 +125,16 @@ satu — gabungkan dalam satu build.
 |---|---|
 | Editor CodeMirror 6, `file://` murni, offline | ✅ |
 | Multi-file, tab, autosave 600ms | ✅ |
+| Undo/Redo touch + history terpisah per file | ✅ DEVICE VERIFIED (Infinix ARMv7) |
+| Semantic package logs `[OK]/[WARN]/…` | ✅ DEVICE VERIFIED (copy + STOP) |
 | Run Python (Chaquopy 3.11 in-process) | ✅ |
 | Terminal output + `input()` + Ctrl+C | ✅ |
 | Samples (pola 2 level) | ✅ |
 | Tema, font, true-black `#050806` | ✅ |
-| Breadcrumb + Crash Reporter | ✅ (cakupan masih sempit) |
-| **Install Modules** | ❌ **rusak — 4 bug** |
+| Breadcrumb + Crash Reporter | ✅ (cakupan masih berkembang) |
+| **Install Modules** transactional core | ✅ DEVICE VERIFIED (Infinix ARMv7) |
+| Native-runtime auto-relaunch + workspace restore | ✅ DEVICE VERIFIED (Infinix API34/ARMv7) |
+| Uninstall confirmation/ownership hardening | ✅ DEVICE VERIFIED (`Batal` + confirm) |
 
 ---
 
@@ -215,9 +290,12 @@ A–J + ralat `tested-manifest.json` (`numpy 1.26.4`→`1.26.2`,
 - **DIAGNOSTICS** layar penuh di sidebar, tab Semua/Run/Install/File/Crash
 - Export Log pindah ke Diagnostics + daftar run lama + rotasi 50 file
 
-### Build #4 — Alpine
-Terminal shell di sidebar · script bisa dihentikan · `apk add py3-scipy` ·
-tombol ZMUX yang butuh PTY baru diaktifkan di sini
+### Target pasca-v1.0.19 — terminal & interpreter pribadi
+Jangan langsung membundel Alpine. Tangga riset: ZCODE Command Console → spike
+Chaquopy pada private process `:python` untuk hard-stop/crash isolation → audit
+standalone CPython bionic → Alpine/PRoot opt-in hanya bila kebutuhan sudah
+mencakup shell Linux, `apk`, compiler, atau SciPy. Rancangan dan batas:
+`docs/TARGET_TERMINAL_ZCODE.md`.
 
 ### Build #5 — Library "perpustakaan mini"
 50 entri bertahap, pola SAMPLES 2 level, prosa ditulis tangan.

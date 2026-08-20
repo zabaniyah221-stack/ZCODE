@@ -4,6 +4,9 @@ import android.content.Context
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.logging.SemanticLog
+import com.zaba.zcode.core.logging.SemanticLogKind
+import com.zaba.zcode.core.runtime.NativeRuntimeState
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -28,10 +31,19 @@ import java.security.MessageDigest
  */
 class PackageEngineV2(private val context: Context) {
 
+    enum class FinishResult { OK, FAIL, STOP }
+
     sealed interface Step {
         data class Begin(val label: String) : Step
-        data class Log(val text: String) : Step
-        data class Finish(val label: String, val ok: Boolean, val detail: String = "") : Step
+        data class Message(
+            val text: String,
+            val kind: SemanticLogKind = SemanticLogKind.RAW,
+        ) : Step
+        data class Finish(
+            val label: String,
+            val result: FinishResult,
+            val detail: String = "",
+        ) : Step
     }
 
     data class InstallResult(
@@ -41,7 +53,8 @@ class PackageEngineV2(private val context: Context) {
         val humanMessage: String?,
         val technicalMessage: String?,
         val rollbackPerformed: Boolean,
-        val installed: List<String>
+        val installed: List<String>,
+        val restartRequired: Boolean = false
     )
 
     private val resolver = DependencyResolver(context)
@@ -124,8 +137,8 @@ class PackageEngineV2(private val context: Context) {
         requirementText: String,
         onStep: (Step) -> Unit
     ): DependencyResolver.ResolvePlan {
-        val bridge = ResolveOperationBridge { display, raw, keepDiagnostic ->
-            onStep(Step.Log("  $display"))
+        val bridge = ResolveOperationBridge { display, raw, keepDiagnostic, kind ->
+            onStep(Step.Message(display, kind))
             if (keepDiagnostic) {
                 Breadcrumb.log("PKG_RESOLVE_PROGRESS", "op=${activeResolveBridge?.operationId} $raw")
             }
@@ -154,7 +167,7 @@ class PackageEngineV2(private val context: Context) {
         onStep: (Step) -> Unit
     ): InstallResult {
         if (!tryAcquire()) {
-            onStep(Step.Finish("engine", false, "Instalasi lain masih berjalan."))
+            onStep(Step.Finish("engine", FinishResult.FAIL, "Instalasi lain masih berjalan."))
             return InstallResult(
                 false, "BUSY", "engine",
                 "Instalasi lain masih berjalan. Tunggu selesai; jangan tap Install berulang.",
@@ -178,6 +191,7 @@ class PackageEngineV2(private val context: Context) {
         var tx: TransactionManager.Transaction? = null
         var rollbackPerformed = false
         var pkgName = requirementText.trim()
+        val nativeTouched = linkedSetOf<String>()
 
         fun fail(
             code: String,
@@ -194,7 +208,11 @@ class PackageEngineV2(private val context: Context) {
                 rollbackPerformed = true
             }
             if (rollbackPerformed) TelemetryStore.increment("rollback_count")
-            onStep(Step.Finish(stage, false, human))
+            onStep(Step.Finish(
+                stage,
+                if (code == "CANCELLED") FinishResult.STOP else FinishResult.FAIL,
+                human
+            ))
             return InstallResult(false, code, stage, human, technical, rollbackPerformed, emptyList())
         }
 
@@ -207,8 +225,8 @@ class PackageEngineV2(private val context: Context) {
                 return fail("REQUIREMENT", "parse", e.message ?: "Requirement tidak valid.", e.toString())
             }
             pkgName = req.canonicalName
-            onStep(Step.Finish("Requirement", true, "${req.name}${if (req.specifier.isNotBlank()) req.specifier else ""}"))
-            onStep(Step.Log("  extras: ${req.extras.joinToString(",") { "[$it]" }.ifEmpty { "-" }}"))
+            onStep(Step.Finish("Requirement", FinishResult.OK, "${req.name}${if (req.specifier.isNotBlank()) req.specifier else ""}"))
+            onStep(Step.Message("extras: ${req.extras.joinToString(",") { "[$it]" }.ifEmpty { "-" }}", SemanticLogKind.INFO))
 
             // 2. Resolve dependencies (reuse plan dari analyze bila diberikan)
             onStep(Step.Begin("Resolve"))
@@ -227,8 +245,8 @@ class PackageEngineV2(private val context: Context) {
             // BUG C: modul stdlib bukan kegagalan — beri tahu apa adanya.
             if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
                 val msg = plan.stdlib.joinToString(" ") { it.reason }
-                onStep(Step.Finish("Resolve", true, "modul bawaan Python"))
-                onStep(Step.Log("  ℹ️ $msg"))
+                onStep(Step.Finish("Resolve", FinishResult.OK, "modul bawaan Python"))
+                onStep(Step.Message(msg, SemanticLogKind.INFO))
                 return InstallResult(
                     ok = true,
                     code = null,
@@ -244,13 +262,13 @@ class PackageEngineV2(private val context: Context) {
                 val msg = plan.unavailable.joinToString("; ") { "${it.name}: ${it.reason}" }
                 return fail("PACKAGE_NOT_AVAILABLE", "resolve", "Tidak tersedia: $msg", null)
             }
-            onStep(Step.Finish("Resolve", true, "${plan.packages.size} package dalam plan"))
+            onStep(Step.Finish("Resolve", FinishResult.OK, "${plan.packages.size} package dalam plan"))
             // Jejak resolver — memperlihatkan pustaka pendukung yang diambil
             // ATAU yang gagal diambil. Tanpa ini kegagalan native tidak bisa
             // dibedakan dari "peta tidak terbaca" (pelajaran v1.0.8).
-            plan.notes.forEach { onStep(Step.Log("  · $it")) }
+            plan.notes.forEach { onStep(Step.Message(it, SemanticLogKind.INFO)) }
             plan.packages.forEach {
-                onStep(Step.Log("  - ${it.canonicalName}==${it.version} [${it.source}] ${it.filename}"))
+                onStep(Step.Message("${it.canonicalName}==${it.version} [${it.source}] ${it.filename}", SemanticLogKind.INFO))
             }
 
             // 3. Storage guard (keputusan forum: 1.5× estimasi atau 100MB)
@@ -262,13 +280,13 @@ class PackageEngineV2(private val context: Context) {
                     "Storage tidak cukup: butuh ±${(estBytes + margin) / 1024 / 1024}MB (termasuk margin), " +
                         "free ${free / 1024 / 1024}MB.", null)
             }
-            onStep(Step.Log("  storage: estimasi ${estBytes / 1024 / 1024}MB + margin ${margin / 1024 / 1024}MB, free ${free / 1024 / 1024}MB"))
+            onStep(Step.Message("storage: estimasi ${estBytes / 1024 / 1024}MB + margin ${margin / 1024 / 1024}MB, free ${free / 1024 / 1024}MB", SemanticLogKind.INFO))
 
             // 4. Transaction
             tx = txManager.create("install")
             onStep(Step.Begin("Transaction"))
-            onStep(Step.Log("  tx: ${tx.id}"))
-            onStep(Step.Finish("Transaction", true))
+            onStep(Step.Message("tx: ${tx.id}", SemanticLogKind.INFO))
+            onStep(Step.Finish("Transaction", FinishResult.OK))
 
             // 5. Download + verify per package
             onStep(Step.Begin("Download"))
@@ -285,13 +303,13 @@ class PackageEngineV2(private val context: Context) {
                     val local = File(p.localPath)
                     if (!wheelFile.exists()) local.copyTo(wheelFile, overwrite = true)
                     sha = Verifier.sha256(wheelFile)
-                    onStep(Step.Log("  ${p.canonicalName}: salin wheel lokal (sha256=$sha)"))
+                    onStep(Step.Message("${p.canonicalName}: salin wheel lokal (sha256=$sha)", SemanticLogKind.INFO))
                 } else {
                     val url = p.url ?: return fail("DOWNLOAD", "download",
                         "URL wheel tidak tersedia untuk ${p.canonicalName}", null)
                     Breadcrumb.log("PKG_DOWNLOAD", "${p.canonicalName} ${p.filename}")
-                    onStep(Step.Log("  ${p.canonicalName}: mengunduh ${p.filename}…"))
-                    val dl = download(url, wheelFile, sha) { msg -> onStep(Step.Log("  ${p.canonicalName}: $msg")) }
+                    onStep(Step.Message("${p.canonicalName}: mengunduh ${p.filename}…", SemanticLogKind.WAIT))
+                    val dl = download(url, wheelFile, sha) { msg -> onStep(Step.Message("${p.canonicalName}: $msg", SemanticLogKind.WAIT)) }
                     if (!dl.first) {
                         return if (dl.second == "CANCELLED") {
                             fail("CANCELLED", "download",
@@ -315,7 +333,7 @@ class PackageEngineV2(private val context: Context) {
                     )
                 )
             }
-            onStep(Step.Finish("Download", true, "${planPackages.size} wheel terdownload & diverifikasi"))
+            onStep(Step.Finish("Download", FinishResult.OK, "${planPackages.size} wheel terdownload & diverifikasi"))
 
             // 6. Extract (path-safe) + validasi metadata
             onStep(Step.Begin("Extract"))
@@ -326,13 +344,13 @@ class PackageEngineV2(private val context: Context) {
                 }
                 val wheelFile = File(Paths.pythonWheels(context), p.filename ?: wheelFilename(p))
                 val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
-                val res = Verifier.extractWheel(wheelFile, staging) { n -> onStep(Step.Log("  ${p.canonicalName}: $n files...")) }
+                val res = Verifier.extractWheel(wheelFile, staging) { n -> onStep(Step.Message("${p.canonicalName}: $n files...", SemanticLogKind.WAIT)) }
                 if (!res.ok) return fail("EXTRACT", "extract", res.error ?: "Ekstraksi gagal.", null)
                 val (metaRes, meta) = Verifier.validateWheelMeta(staging)
                 if (!metaRes.ok) return fail("VERIFY", "extract", metaRes.error ?: "Metadata invalid.", null)
-                onStep(Step.Log("  ${p.canonicalName}: metadata OK (${meta?.name} ${meta?.version})"))
+                onStep(Step.Message("${p.canonicalName}: metadata OK (${meta?.name} ${meta?.version})", SemanticLogKind.OK))
             }
-            onStep(Step.Finish("Extract", true))
+            onStep(Step.Finish("Extract", FinishResult.OK))
 
             // 6b. PUSTAKA PENDUKUNG YANG BELUM TERPENUHI
             //
@@ -362,40 +380,40 @@ class PackageEngineV2(private val context: Context) {
                     // Pemindaian gagal bukan alasan membatalkan instalasi:
                     // sebelum fitur ini ada pun instalasi tetap dicoba. Catat
                     // apa adanya lalu lanjutkan ke smoke test.
-                    onStep(Step.Log("  ⚠️ pindai pustaka gagal: ${kurang.error}"))
+                    onStep(Step.Message("pindai pustaka gagal: ${kurang.error}", SemanticLogKind.WARN))
                     break
                 }
                 // Pustaka di luar peta: sebutkan namanya. Diam di sini berarti
                 // mengulang kegagalan v1.0.8 — gagal tanpa satu pun petunjuk.
                 if (kurang.unknown.isNotEmpty()) {
-                    onStep(Step.Log("  ⚠️ pustaka tidak dikenal: ${kurang.unknown.joinToString(", ")}"))
-                    onStep(Step.Log("     (pemasangan dilanjutkan; laporkan nama di atas bila impor gagal)"))
+                    onStep(Step.Message("pustaka tidak dikenal: ${kurang.unknown.joinToString(", ")}", SemanticLogKind.WARN))
+                    onStep(Step.Message("pemasangan dilanjutkan; laporkan nama di atas bila impor gagal", SemanticLogKind.INFO))
                     Breadcrumb.log("PKG_LIB_UNKNOWN", kurang.unknown.joinToString(","))
                 }
                 // Pustaka yang dikenal tetapi tidak punya wheel untuk diunduh
                 // (libssl/libcrypto). Mencoba mengunduhnya hanya menghasilkan
                 // 404, jadi yang diberikan adalah penjelasannya.
-                kurang.notes.take(5).forEach { onStep(Step.Log("  ℹ️ $it")) }
+                kurang.notes.take(5).forEach { onStep(Step.Message(it, SemanticLogKind.INFO)) }
                 val perlu = kurang.packages.filter { it !in sudahDiambil }
                 if (perlu.isEmpty()) {
                     if (putaran == 1) {
-                        onStep(Step.Log("  pustaka native: lengkap (${kurang.scanned} .so dipindai)"))
+                        onStep(Step.Message("pustaka native: lengkap (${kurang.scanned} .so dipindai)", SemanticLogKind.OK))
                     }
                     break
                 }
                 onStep(Step.Begin("Pustaka pendukung (putaran $putaran)"))
                 for (namaPaket in perlu) {
                     val dasar = kurang.sources[namaPaket] ?: "?"
-                    onStep(Step.Log("  butuh $namaPaket [$dasar]"))
+                    onStep(Step.Message("butuh $namaPaket [$dasar]", SemanticLogKind.INFO))
                     val sub = try {
                         resolveWithProgress(namaPaket, onStep)
                     } catch (e: Exception) {
-                        onStep(Step.Log("  ⚠️ $namaPaket: resolve gagal (${e.message})"))
+                        onStep(Step.Message("$namaPaket: resolve gagal (${e.message})", SemanticLogKind.WARN))
                         sudahDiambil.add(namaPaket)
                         continue
                     }
                     if (!sub.ok || sub.packages.isEmpty()) {
-                        onStep(Step.Log("  ⚠️ $namaPaket: tidak ada wheel yang cocok untuk perangkat ini"))
+                        onStep(Step.Message("$namaPaket: tidak ada wheel yang cocok untuk perangkat ini", SemanticLogKind.WARN))
                         sudahDiambil.add(namaPaket)
                         continue
                     }
@@ -410,11 +428,11 @@ class PackageEngineV2(private val context: Context) {
                         } else {
                             val url = sp.url
                             if (url == null) {
-                                onStep(Step.Log("  ⚠️ ${sp.canonicalName}: URL wheel kosong"))
+                                onStep(Step.Message("${sp.canonicalName}: URL wheel kosong", SemanticLogKind.WARN))
                                 continue
                             }
                             val dl = download(url, wheelFile, sha) { m ->
-                                onStep(Step.Log("  ${sp.canonicalName}: $m"))
+                                onStep(Step.Message("${sp.canonicalName}: $m", SemanticLogKind.WAIT))
                             }
                             if (!dl.first) {
                                 return fail("DOWNLOAD", "download",
@@ -441,16 +459,16 @@ class PackageEngineV2(private val context: Context) {
                             )
                         )
                         sudahDiambil.add(sp.canonicalName)
-                        onStep(Step.Log("  + ${sp.canonicalName}==${sp.version} terpasang ke staging"))
+                        onStep(Step.Message("${sp.canonicalName}==${sp.version} terpasang ke staging", SemanticLogKind.OK))
                     }
                     sudahDiambil.add(namaPaket)
                 }
-                onStep(Step.Finish("Pustaka pendukung (putaran $putaran)", true))
+                onStep(Step.Finish("Pustaka pendukung (putaran $putaran)", FinishResult.OK))
             }
             if (putaran >= MAX_SUPPORT_ROUNDS) {
                 // Batas ini melindungi dari peta yang saling menunjuk. Bukan
                 // kegagalan: smoke test di bawah tetap menjadi hakim terakhir.
-                onStep(Step.Log("  ⚠️ batas $MAX_SUPPORT_ROUNDS putaran pustaka tercapai"))
+                onStep(Step.Message("batas $MAX_SUPPORT_ROUNDS putaran pustaka tercapai", SemanticLogKind.WARN))
             }
 
             // 7. Smoke test terhadap staging
@@ -474,10 +492,24 @@ class PackageEngineV2(private val context: Context) {
             // Entri di installed.json hanya bisa ada karena pernah LOLOS smoke,
             // jadi melewatinya aman. Versi berbeda tetap diuji penuh.
             val activeVersions = activeInstalledVersions()
+
+            // Smoke receives every staging directory and may load a sibling
+            // extension before the loop reaches that native package. Record the
+            // whole transaction before the first smoke so an early root-package
+            // failure cannot leave an unmarked C/C++ registry in this process.
+            val transactionNativePackages = planPackages.filter { p ->
+                val dir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
+                dir.walkTopDown().any { it.isFile && it.name.contains(".so") }
+            }.map { it.canonicalName }
+            if (transactionNativePackages.isNotEmpty()) {
+                nativeTouched.addAll(transactionNativePackages)
+                NativeRuntimeState.markRequired(context, nativeTouched, "native-smoke-start")
+            }
+
             for (p in planPackages) {
                 val aktif = activeVersions[p.canonicalName]
                 if (!p.supportLibrary && aktif != null && aktif == p.version) {
-                    onStep(Step.Log("  ${p.canonicalName}: dilewati (sudah aktif @$aktif & pernah lolos smoke)"))
+                    onStep(Step.Message("${p.canonicalName}: dilewati (sudah aktif @$aktif & pernah lolos smoke)", SemanticLogKind.INFO))
                     continue
                 }
                 // Pustaka pendukung (chaquopy-openblas, chaquopy-libjpeg, ...)
@@ -493,7 +525,7 @@ class PackageEngineV2(private val context: Context) {
                             "Pustaka pendukung ${p.canonicalName} tidak memuat file .so apa pun.",
                             "staging=${dir.absolutePath}")
                     }
-                    onStep(Step.Log("  ${p.canonicalName}: pustaka pendukung (.so) — uji impor dilewati"))
+                    onStep(Step.Message("${p.canonicalName}: pustaka pendukung (.so) — uji impor dilewati", SemanticLogKind.INFO))
                     continue
                 }
                 val details = repository.findByCanonicalName(p.canonicalName)
@@ -514,18 +546,31 @@ class PackageEngineV2(private val context: Context) {
                     ?: details?.importName
                     ?: p.canonicalName
                 if (terbaca.names.isNotEmpty() && terbaca.source.isNotBlank()) {
-                    onStep(Step.Log("  ${p.canonicalName}: modul '$importName' (dari ${terbaca.source})"))
+                    onStep(Step.Message("${p.canonicalName}: modul '$importName' (dari ${terbaca.source})", SemanticLogKind.INFO))
                 } else if (terbaca.error.isNotBlank()) {
                     // Jujur soal turunnya kualitas tebakan, bukan diam.
-                    onStep(Step.Log("  ⚠️ ${p.canonicalName}: metadata modul tak terbaca (${terbaca.error}); pakai '$importName'"))
+                    onStep(Step.Message("${p.canonicalName}: metadata modul tak terbaca (${terbaca.error}); pakai '$importName'", SemanticLogKind.WARN))
                 }
 
                 val manifestTests = repository.loadSmokeTests()[p.canonicalName]
                 val tests = buildSmokeTests(p.canonicalName, importName, details?.type, manifestTests)
                 val outcome = smokeRunner.run(importName, staging, tests, allStagingDirs)
+                // Detection is generic and evidence-based: if smoke saw a .so,
+                // its loader/C++ registry may now survive sys.modules cleanup.
+                // Persist stale state even when smoke later fails and rolls back.
+                val loadedNative = outcome.nativeLibs.isNotEmpty() ||
+                    outcome.loadedNativeModules.isNotEmpty()
+                if (loadedNative) {
+                    nativeTouched.add(p.canonicalName)
+                    NativeRuntimeState.markRequired(
+                        context,
+                        nativeTouched,
+                        if (outcome.ok) "native-smoke-ok" else "native-smoke-fail"
+                    )
+                }
                 if (!outcome.ok) {
                     TelemetryStore.increment("smoke_test_failure")
-                    if (outcome.nativeLibs.isNotEmpty()) TelemetryStore.increment("native_load_failure")
+                    if (loadedNative) TelemetryStore.increment("native_load_failure")
                     val failMsg = outcome.results.firstOrNull { !it.optBoolean("ok") }
                         ?.optString("error") ?: "smoke test gagal"
                     // Sertakan SELURUH hasil + daftar .so yang ditemukan sebagai
@@ -535,7 +580,11 @@ class PackageEngineV2(private val context: Context) {
                     // tidak pernah sampai ke mana pun.
                     val teknis = buildString {
                         append("smoke gagal untuk ${p.canonicalName}==${p.version}\n")
-                        append("native .so terdeteksi: ${outcome.nativeLibs.size}\n")
+                        append("native .so di staging: ${outcome.nativeLibs.size}\n")
+                        append("extension native termuat: ${outcome.loadedNativeModules.size}\n")
+                        outcome.loadedNativeModules.take(20).forEach {
+                            append("  loaded: ").append(it).append('\n')
+                        }
                         // NATIVE-LOADER: tanpa baris ini tidak mungkin dibedakan
                         // antara "pustaka pendukung tidak pernah diunduh" dan
                         // "sudah ada tapi gagal dimuat" — dua sebab yang
@@ -554,18 +603,28 @@ class PackageEngineV2(private val context: Context) {
                     return fail("SMOKE_TEST", "smoke_test",
                         "Import/smoke test ${p.canonicalName} gagal: $failMsg", teknis)
                 }
-                onStep(Step.Log("  ${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so)"))
+                onStep(Step.Message(
+                    "${p.canonicalName}: smoke OK (${outcome.nativeLibs.size} .so staging, " +
+                        "${outcome.loadedNativeModules.size} extension native termuat)",
+                    SemanticLogKind.OK
+                ))
             }
-            onStep(Step.Finish("Smoke Test", true))
+            onStep(Step.Finish("Smoke Test", FinishResult.OK))
 
             // 8. Activate (atomic-ish + rollback)
             onStep(Step.Begin("Activate"))
-            val (actOk, actMsg) = txManager.activate(tx, planPackages) { m -> onStep(Step.Log(m)) }
+            val (actOk, actMsg) = txManager.activate(tx, planPackages) { m -> onStep(Step.Message(m)) }
             if (!actOk) {
                 // activate() sudah melakukan rollback + journal ROLLED_BACK
                 return fail("ACTIVATION", "activation", "Aktivasi gagal: $actMsg", null, alreadyRolledBack = true)
             }
-            onStep(Step.Finish("Activate", true))
+            onStep(Step.Finish("Activate", FinishResult.OK))
+
+            // A native environment change also needs a fresh process even when
+            // a support wheel had no importable Python module of its own.
+            if (nativeTouched.isNotEmpty()) {
+                NativeRuntimeState.markRequired(context, nativeTouched, "native-environment-changed")
+            }
 
             // 9. Sync SQLite + telemetri sukses
             for (p in planPackages) {
@@ -574,7 +633,10 @@ class PackageEngineV2(private val context: Context) {
             TelemetryStore.increment("install_success")
             TelemetryStore.increment("packages_installed", planPackages.size.toLong())
             val installed = planPackages.map { it.canonicalName }
-            return InstallResult(true, null, null, null, null, false, installed)
+            return InstallResult(
+                true, null, null, null, null, false, installed,
+                restartRequired = nativeTouched.isNotEmpty()
+            )
 
         } catch (e: Exception) {
             return fail("RUNTIME", "engine", "Kegagalan internal engine: ${e.message}", e.toString())
@@ -744,18 +806,20 @@ class PackageEngineV2(private val context: Context) {
     private fun analyzeBody(requirementText: String, onLog: (Step) -> Unit): DependencyResolver.ResolvePlan {
         onLog(Step.Begin("Requirement"))
         val req = RequirementParser.parse(context, requirementText)
-        onLog(Step.Finish("Requirement", true, "${req.name}${if (req.specifier.isNotBlank()) req.specifier else ""}"))
+        onLog(Step.Finish("Requirement", FinishResult.OK, "${req.name}${if (req.specifier.isNotBlank()) req.specifier else ""}"))
         onLog(Step.Begin("Resolve"))
         val plan = resolveWithProgress(requirementText, onLog)
         onLog(
             Step.Finish(
                 "Resolve",
-                plan.ok,
+                if (plan.ok) FinishResult.OK
+                else if (plan.errorCode == "CANCELLED") FinishResult.STOP
+                else FinishResult.FAIL,
                 if (plan.ok) "${plan.packages.size} package dalam plan"
                 else plan.humanError ?: "Resolusi gagal"
             )
         )
-        plan.notes.forEach { onLog(Step.Log("  · $it")) }
+        plan.notes.forEach { onLog(Step.Message(it, SemanticLogKind.INFO)) }
         if (plan.notes.isNotEmpty()) {
             Breadcrumb.log("PKG_RESOLVE_NOTES", plan.notes.joinToString(" | "))
         }
@@ -783,12 +847,23 @@ class PackageEngineV2(private val context: Context) {
     // UNINSTALL / SUPPORT / INSTALLED
     // ------------------------------------------------------------------
 
-    fun uninstall(canonicalName: String, onLog: (String) -> Unit): Pair<Boolean, String> {
+    fun uninstall(
+        canonicalName: String,
+        onLog: (SemanticLog) -> Unit
+    ): Pair<Boolean, String> {
+        val canonical = canonicalName.lowercase().replace("_", "-")
+        val installed = repository.installedSnapshot()[canonical]
+        val installedDir = installed?.path?.let { File(Paths.pythonEnvDir(context), it) }
+        val hadNative = installedDir?.takeIf { it.isDirectory }
+            ?.walkTopDown()?.any { it.isFile && it.name.contains(".so") } == true
         val tx = TransactionManager(context)
-        val result = tx.uninstall(canonicalName, onLog)
+        val result = tx.uninstall(canonical, onLog)
         if (result.first) {
-            db.deleteInstalled(canonicalName)
+            db.deleteInstalled(canonical)
             TelemetryStore.increment("uninstall_count")
+            if (hadNative) {
+                NativeRuntimeState.markRequired(context, listOf(canonical), "native-uninstall")
+            }
         }
         return result
     }

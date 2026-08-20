@@ -559,6 +559,19 @@ def run_smoke(
             signalshim.skipped_registrations.clear()
         return True, results, native_info
     finally:
+        # A pure-Python root package may import an already-active native
+        # dependency (seaborn -> numpy/matplotlib, for example). Looking only
+        # for .so files in the root staging directory misses that process
+        # contamination. Capture the actual newly loaded extension modules
+        # before sys.modules cleanup; the loader/C++ registry survives cleanup.
+        loaded_native = []
+        for mod_name in sorted(set(sys.modules) - old_modules):
+            module = sys.modules.get(mod_name)
+            module_file = str(getattr(module, "__file__", "") or "")
+            if ".so" in os.path.basename(module_file):
+                loaded_native.append("%s:%s" % (mod_name, module_file))
+        native_info["loaded_native_modules"] = loaded_native
+
         sys.path[:] = old_path
         for mod in list(sys.modules):
             if mod not in old_modules:

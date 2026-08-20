@@ -115,7 +115,15 @@ fun TerminalScreen(
     // Audit 2026-08: ukuran font setting kini KHUSUS terminal (label UI "Ukuran
     // Font Terminal"); keluarga font terminal SELALU Monospace (console wajib
     // alignment) — jenis font pilihan user berlaku untuk UI & editor saja.
-    terminalFontSize: Int = 14
+    terminalFontSize: Int = 14,
+    /**
+     * A3 Gerbong A v1.0.19: tap baris traceback `File "main.py", line N` →
+     * host navigasi balik ke editor + gotoLine(N). Default no-op demi
+     * kompatibilitas pemanggil lama; null-safe (fitur mati = terminal lama
+     * persis). Toggle user: tracebackJumpEnabled.
+     */
+    onGotoEditorLine: ((fileName: String, line: Int) -> Unit)? = null,
+    tracebackJumpEnabled: Boolean = true
 ) {
     val buffer = remember { TerminalBuffer(maxLines = 10_000) }
     val ansiCache = remember(themeType) { AnsiLineCache(getTerminalPalette(themeType)) }
@@ -125,11 +133,56 @@ fun TerminalScreen(
     // bisa 1-3 dtk; tanpa ini layar terlihat kosong/diam seolah tap Run telat.
     var startingPython by remember { mutableStateOf(true) }
     var sessionState by remember { mutableStateOf(SessionState.START) }
+    // Guard tap-traceback saat script hidup (diskusi user 2026-08-18):
+    // navigateUp men-dispose layar → onDispose sendKill → script yang lagi
+    // nunggu input() mati TANPA peringatan. Back = niat eksplisit; tap link
+    // bisa tak sadar konsekuensi. Dialog ini = kejujuran konsekuensi.
+    var pendingJump by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    // UAT babak-2 (2026-08-18): link inline TIDAK render di device (baris
+    // putih polos = hit null; screenshot user). Jalur kedua yang kebal
+    // masalah pointer/seleksi/render inline: CHIP "Ke sumber error utama" di atas
+    // output saat script FAILED — target tap besar, ramah jempol 720p.
+    // Sumber data sama (TracebackParser), UI beda jalur total.
+    var errorJump by remember {
+        mutableStateOf<com.zaba.zcode.core.editor.TracebackParser.Hit?>(null)
+    }
     var logBytes by remember { mutableStateOf(0L) }
     var memChars by remember { mutableLongStateOf(0L) }
     // Penanda perubahan isi TerminalBuffer. TerminalBuffer bukan Compose state,
     // jadi tanpa ini renderer tidak punya alasan untuk disusun ulang.
     var bufferVersion by remember { mutableIntStateOf(0) }
+    // Scan chip 'Ke sumber error utama' (UAT babak-2). DIPINDAH ke SETELAH deklarasi
+    // bufferVersion: CI 32121414855 merah karena LaunchedEffect merujuk
+    // bufferVersion 30 baris SEBELUM deklarasinya — Kotlin menolak forward
+    // reference variabel lokal (beda dgn property kelas). Kelas bug urutan
+    // deklarasi; kotlin_sanity (lexical) tak bisa menangkapnya.
+    LaunchedEffect(sessionState, bufferVersion) {
+        if (sessionState == SessionState.FAILED &&
+            tracebackJumpEnabled && onGotoEditorLine != null
+        ) {
+            // scan mundur maks 80 baris terakhir; hit TERAKHIR yang menunjuk
+            // file workspace = frame paling dalam = baris salah sebenarnya.
+            var found: com.zaba.zcode.core.editor.TracebackParser.Hit? = null
+            val total = buffer.totalLines
+            val start = maxOf(buffer.startOffset, total - 80)
+            for (absIdx in start until total) {
+                val t = buffer.get(absIdx) ?: continue
+                com.zaba.zcode.core.editor.TracebackParser.parse(t)
+                    ?.takeIf {
+                        com.zaba.zcode.core.editor.TracebackParser
+                            .isWorkspaceFile(it, filesDir)
+                    }?.let { found = it }
+            }
+            errorJump = found
+            found?.let { f ->
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "TRACEBACK_CHIP", "${f.fileName}:${f.line}"
+                )
+            }
+        } else if (sessionState == SessionState.RUNNING) {
+            errorJump = null // run baru = chip lama tidak relevan
+        }
+    }
     var runId by remember { mutableStateOf(RunId.newId("run")) }
     var logger by remember { mutableStateOf<RunLogger?>(null) }
     val listState: LazyListState = rememberLazyListState()
@@ -287,7 +340,7 @@ fun TerminalScreen(
         logger = rl
         Breadcrumb.log("LOGGER_OK", runId)
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
-        if (showPythonIndicator) appendToTerminal("sys", "\u2699 Menyalakan Python\u2026\n")
+        if (showPythonIndicator) appendToTerminal("sys", "\u2026 Menyalakan Python\n")
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
         Breadcrumb.log("SESSION_START_CALL")
         val activeSession = ExecutionEngine.startInteractiveSession(
@@ -355,6 +408,34 @@ fun TerminalScreen(
         label = "cursorAlpha"
     )
 
+    // Dialog guard tap-traceback saat script hidup (2026-08-18).
+    pendingJump?.let { (jumpFile, jumpLine) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingJump = null },
+            title = { Text("Script masih jalan", fontSize = 16.sp) },
+            text = {
+                Text(
+                    "Lompat ke editor akan MENGHENTIKAN script yang sedang " +
+                        "berjalan (termasuk yang menunggu input). Lanjut?"
+                )
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "TRACEBACK_JUMP_CONFIRM", "$jumpFile:$jumpLine"
+                    )
+                    pendingJump = null
+                    onGotoEditorLine?.invoke(jumpFile, jumpLine)
+                }) { Text("Hentikan & Lompat") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { pendingJump = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
     // Terminal selalu Monospace (keputusan audit 2026-08).
     val resolvedFontFamily = FontFamily.Monospace
     val fontSizeSp = terminalFontSize.sp
@@ -374,7 +455,7 @@ fun TerminalScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "◀ Back",
+                        "← Back",
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 14.sp,
                         modifier = Modifier
@@ -413,14 +494,17 @@ fun TerminalScreen(
                     // tinggi minimum bawaan komponen Material3.
                     EditorHandle(
                         keys = terminalKeys(),
-                        tunnelKey = HandleKey(
-                            label = "^C",
-                            danger = true,
-                            onClick = {
-                                TelemetryStore.increment("terminal_interrupts")
-                                session?.sendCtrlC()
-                                appendToTerminal("sys", "^C\nProcess Interrupted\n")
-                            }
+                        tunnelKeys = listOf(
+                            HandleKey(
+                                label = "^C",
+                                danger = true,
+                                contentDescription = "Hentikan proses",
+                                onClick = {
+                                    TelemetryStore.increment("terminal_interrupts")
+                                    session?.sendCtrlC()
+                                    appendToTerminal("sys", "^C\nProcess Interrupted\n")
+                                }
+                            )
                         ),
                         onInsert = { text ->
                             inputVal = TextFieldValue(
@@ -483,6 +567,30 @@ fun TerminalScreen(
                 .clickable { focusRequester.requestFocus() }
                 .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)
         ) {
+            // Chip "Ke sumber error utama" (UAT babak-2 2026-08-18) — jalur tap
+            // alternatif yang tak bergantung render/pointer baris inline.
+            errorJump?.let { ej ->
+                Row(
+                    modifier = Modifier
+                        .padding(vertical = 4.dp)
+                        .background(Color(0xFF15304D), RoundedCornerShape(8.dp))
+                        .clickable {
+                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                "TRACEBACK_JUMP", "${ej.fileName}:${ej.line} via=chip"
+                            )
+                            onGotoEditorLine?.invoke(ej.fileName, ej.line)
+                        }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "\u2192 Ke sumber error utama \u00B7 ${ej.fileName}:${ej.line}",
+                        color = Color(0xFF6FB1FF),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp
+                    )
+                }
+            }
             if (startingPython && showPythonIndicator) {
                 Row(
                     modifier = Modifier.padding(top = 4.dp),
@@ -551,12 +659,103 @@ fun TerminalScreen(
                     val abs = firstAbs + rel
                     val lineText = lines[rel]
                     if (lineText.isNotEmpty()) {
-                        Text(
-                            text = ansiCache.render(abs, lineText),
-                            fontFamily = resolvedFontFamily,
-                            fontSize = fontSizeSp,
-                            lineHeight = lineHeightSp
-                        )
+                        // A3: baris traceback yang menunjuk file workspace jadi
+                        // tappable (underline halus sebagai affordance). Regex
+                        // ketat + verifikasi file exist = kelas jebakan "user
+                        // print string mirip traceback" tertutup dua lapis.
+                        val hit = if (tracebackJumpEnabled && onGotoEditorLine != null)
+                            com.zaba.zcode.core.editor.TracebackParser.parse(lineText)
+                                ?.takeIf {
+                                    com.zaba.zcode.core.editor.TracebackParser
+                                        .isWorkspaceFile(it, filesDir)
+                                }
+                        else null
+                        if (hit != null) {
+                            // UAT 2026-08-18: tap tidak pernah sampai (keyboard
+                            // malah terbuka = tap jatuh ke lantai terminal).
+                            // Dua tersangka, dua penangkal + satu mata-mata:
+                            // (1) DisableSelection — baris link keluar dari
+                            //     arena gesture SelectionContainer (kelas
+                            //     Compose: handler seleksi berebut pointer dgn
+                            //     clickable anak). Harga jujur: baris ini tak
+                            //     bisa diseleksi manual — tombol Salin/Bagikan
+                            //     tetap menyalin semuanya.
+                            // (2) warna link biru + underline — affordance
+                            //     sekaligus alat diagnosa: kalau baris TIDAK
+                            //     biru di device berarti kondisi hit gagal
+                            //     (bukan soal tap), lapisan lain.
+                            // (3) breadcrumb TRACEBACK_LINK saat baris DIRENDER
+                            //     (sekali per baris via remember) — memisahkan
+                            //     "link tak pernah ada" dari "tap tak sampai".
+                            androidx.compose.runtime.remember(abs, lineText) {
+                                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                    "TRACEBACK_LINK", "${hit.fileName}:${hit.line}"
+                                )
+                                true
+                            }
+                            androidx.compose.foundation.text.selection.DisableSelection {
+                                Text(
+                                    text = ansiCache.render(abs, lineText),
+                                    color = Color(0xFF6FB1FF),
+                                    fontFamily = resolvedFontFamily,
+                                    fontSize = fontSizeSp,
+                                    lineHeight = lineHeightSp,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                    modifier = Modifier.clickable {
+                                        if (sessionState.isTerminal()) {
+                                            // kasus umum: script sudah mati →
+                                            // lompat langsung tanpa drama.
+                                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                                "TRACEBACK_JUMP", "${hit.fileName}:${hit.line}"
+                                            )
+                                            // ?.invoke: parameter nullable; smart-cast
+                                            // TIDAK berlaku (CI 32107733402).
+                                            onGotoEditorLine?.invoke(hit.fileName, hit.line)
+                                        } else {
+                                            // script MASIH hidup (mis. except+
+                                            // print_exc lalu input()) → jujur
+                                            // dulu soal konsekuensi sendKill.
+                                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                                "TRACEBACK_JUMP_GUARD", "${hit.fileName}:${hit.line} state=$sessionState"
+                                            )
+                                            pendingJump = hit.fileName to hit.line
+                                        }
+                                    }
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = ansiCache.render(abs, lineText),
+                                fontFamily = resolvedFontFamily,
+                                fontSize = fontSizeSp,
+                                lineHeight = lineHeightSp
+                            )
+                        }
+                        // A6: hint NameError — satu baris "Mungkin maksudmu…",
+                        // tidak pernah klaim pasti (klausul kejujuran user).
+                        com.zaba.zcode.core.editor.TracebackParser
+                            .nameErrorHint(lineText)?.let { hintText ->
+                                val rootMod = com.zaba.zcode.core.editor
+                                    .TracebackParser.rootModuleForAlias(lineText)
+                                val installedNote = rootMod?.let { moduleName ->
+                                    val aktif = com.zaba.zcode.core.packageengine
+                                        .InstalledPackages.activeNames(context)
+                                    val bawaan = setOf("json", "os", "sys", "math",
+                                        "random", "re", "time", "datetime")
+                                    when {
+                                        moduleName in bawaan -> "" // stdlib selalu ada
+                                        moduleName in aktif -> ""
+                                        else -> " (paket $moduleName belum terpasang — lihat INSTALL MODULES)"
+                                    }
+                                } ?: ""
+                                Text(
+                                    text = hintText + installedNote,
+                                    color = Color(0xFF8A9BB0),
+                                    fontFamily = resolvedFontFamily,
+                                    fontSize = fontSizeSp,
+                                    lineHeight = lineHeightSp
+                                )
+                            }
                     }
                 }
                 // current line (output yang belum diakhiri newline) + input + cursor.

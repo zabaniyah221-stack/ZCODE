@@ -27,12 +27,12 @@ class WheelSelector(private val context: Context) {
         else -> "Unknown"
     }
 
-    fun priorityIcon(priority: Int): String = when (priority) {
-        1 -> "✅"
-        2 -> "🤖"
-        3 -> "🐍"
-        4 -> "🧪"
-        else -> "❓"
+    fun priorityCode(priority: Int): String = when (priority) {
+        1 -> "[TESTED]"
+        2 -> "[ANDROID]"
+        3 -> "[PURE]"
+        4 -> "[EXPERIMENTAL]"
+        else -> "[UNKNOWN]"
     }
 
     /** Wheel lokal di cache python-env/wheels (offline reuse + ZCODE wheel source). */

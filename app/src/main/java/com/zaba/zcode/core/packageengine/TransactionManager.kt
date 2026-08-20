@@ -2,6 +2,8 @@ package com.zaba.zcode.core.packageengine
 
 import android.content.Context
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.logging.SemanticLog
+import com.zaba.zcode.core.logging.SemanticLogKind
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -230,7 +232,10 @@ class TransactionManager(private val context: Context) {
         journal(tx.id, "install", "ABORTED", errorCode, reason)
     }
 
-    fun uninstall(canonicalName: String, onLog: (String) -> Unit): Pair<Boolean, String> {
+    fun uninstall(
+        canonicalName: String,
+        onLog: (SemanticLog) -> Unit
+    ): Pair<Boolean, String> {
         val sitePkgs = Paths.pythonSitePackages(context)
         val stateDir = Paths.pythonState(context)
         val installedFile = File(stateDir, "installed.json")
@@ -248,8 +253,10 @@ class TransactionManager(private val context: Context) {
                 installedFile.writeText(root.toString())
                 tmp.delete()
             }
-            onLog("    uninstall: $canonicalName dihapus")
-            TelemetryStore.increment("uninstall_count")
+            onLog(SemanticLog(
+                "uninstall: $canonicalName dihapus",
+                SemanticLogKind.INFO
+            ))
             true to "OK"
         } catch (e: Exception) {
             false to "Uninstall gagal: ${e.message}"

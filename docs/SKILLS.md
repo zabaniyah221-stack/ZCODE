@@ -1,9 +1,11 @@
-# 🧠 SKILLS — panduan wajib untuk siapa pun yang mengerjakan ZCODE
+# 🧠 SKILLS — playbook engineering khusus ZCODE
 
-Ditulis untuk agent/kontributor berikutnya. Isinya bukan teori — semuanya
-pelajaran yang **dibayar dengan bug nyata** di proyek ini.
+Perilaku agent universal hidup di root `AGENTS.md`. Dokumen ini sengaja tetap
+khusus ZCODE: versi runtime, ARMv7/bionic, Chaquopy, Compose, emulator, jalur
+CI, dan pelajaran yang **dibayar dengan bug nyata** tidak boleh diencerkan
+menjadi nasihat generik.
 
-Baca ini sebelum menyentuh kode.
+Baca `AGENTS.md`, lalu dokumen ini sebelum menyentuh kode ZCODE.
 
 ---
 
@@ -51,6 +53,22 @@ Teliti tentang apa pun, sekecil apa pun, untuk meminimalkan edge case.
 - Jangan menebak API. `optString` dikira mengembalikan `null` → bug B.
 - Jalankan datanya. Jangan bilang "seharusnya begini".
 - Baca kode di sekitar yang kamu ubah.
+
+## Prinsip produk yang wajib dijaga — KETERBATASAN BUKAN JALAN BUNTU
+
+Sumber kanonis: `docs/PRD_ZCODE.md` §1.
+
+- Kemampuan yang sudah didukung harus **gratis untuk semua**.
+- Kemampuan yang belum didukung harus dijelaskan dengan bukti teknis yang
+  jujur, disertai alternatif yang dapat dipakai sekarang.
+- Temuan `UNAVAILABLE`/`TERKENDALA` bukan akhir audit: nilai sebagai kandidat
+  riset agar ZCODE suatu hari juga bisa, tetapi **jangan menjanjikan** sebelum
+  jalur teknis, biaya, keamanan, ABI, dan acceptance criteria terbukti.
+- `Samples` hanya berisi contoh runnable; roadmap kemampuan yang belum runnable
+  hidup di Library/docs, bukan sebagai sample mati atau premium lock.
+- Teliti lebih penting daripada cepat, tetapi "sempurna" bukan alasan untuk
+  scope tanpa ujung. Definisi selesai harus dapat diamati, diuji, dan menyebut
+  sisa batasannya.
 
 ---
 
@@ -563,14 +581,22 @@ Inti pelajarannya:
    beberapa build dan katakan alasannya.
 4. **Beri kemenangan yang terlihat.** Perbaikan 2 jam yang kelihatan hasilnya
    lebih berharga daripada arsitektur 3 hari yang belum tentu jalan.
-5. **Jangan bertanya soal kredensial.** Git/gh sudah terkonfigurasi.
+5. **Jangan menganggap kredensial selalu tersedia.** Snapshot/session dapat
+   menghapus konfigurasi Git/gh. Periksa lebih dulu. Jika push membutuhkan
+   autentikasi, minta PAT baru/sementara secara eksplisit untuk push tersebut;
+   jangan memakai ulang token lama yang pernah muncul di chat.
 
 ### Yang sudah terbukti soal alur kerja
 
-- **Push BISA dilakukan asisten sendiri.** Field `permissions` dari `gh api`
-  melaporkan `push:false`, tapi `git push` nyata **berhasil**. Jangan jadikan
-  alasan menolak push.
-- Yang benar-benar terhalang hanya **isi log CI**.
+- **Push BISA dilakukan asisten sendiri bila autentikasi tersedia.** Field
+  `permissions` dari `gh api` pernah melaporkan `push:false`, tetapi push nyata
+  berhasil. Namun konfigurasi credential dapat hilang pada session berikutnya.
+- PAT hanya boleh dipakai melalui askpass sementara di `/var/tmp`, lalu dihapus;
+  remote, config, credential helper, workspace, log, dan dokumentasi wajib
+  diverifikasi bebas token. Token yang pernah ditempel di chat dianggap
+  terekspos dan harus direvoke.
+- Yang sering benar-benar terhalang adalah **isi log CI**; status job/step dan
+  artifact masih dapat diperiksa.
 
 ---
 
@@ -1090,6 +1116,25 @@ Setiap tambahan harus memuat: trigger, aturan, contoh ZCODE, dan bila eksternal
 mencantumkan sumber. Bila bukti baru membantahnya, edit/hapus—SKILLS bukan kitab
 suci.
 
+### 14.1.1 Kontrak berlaku sekarang, bukan selamanya
+
+`PRD`, `SKILLS`, ADR, schema, API, dan kontrak UX adalah pegangan versi yang
+sedang berlaku. Semuanya boleh di-upgrade, disederhanakan, di-downgrade, bahkan
+diganti jika masalah atau kemampuan ZCODE berubah.
+
+Namun selama belum direvisi secara eksplisit, kontrak lama tetap harus dipatuhi
+agar perilaku tidak berubah diam-diam. Mengganti "senjata" wajib mencatat:
+
+- musuh/masalah nyata dan bukti bahwa senjata lama tidak cukup;
+- kemampuan tim/runtime/device menggunakan solusi baru;
+- waktu belajar atau eksperimen yang dibutuhkan;
+- dampak kompatibilitas dan migrasi data/perilaku;
+- acceptance criteria, guard mutasi, dan rollback;
+- hal yang sengaja dikorbankan, bukan hanya manfaat baru.
+
+Upgrade bukan tujuan itu sendiri. Downgrade atau solusi lebih sederhana sah
+bila bukti menunjukkan hasilnya lebih aman, ringan, dan mudah dipelihara.
+
 ## 14.2 Traceability ringan
 
 Untuk perubahan berisiko, jaga rantai:
@@ -1249,3 +1294,230 @@ menit, RAM stabil <1GB. Hasil diarsipkan: docs/mass-test-armv7-2026-08-16.jsonl.
 **Temuan NYATA dari uji ini:** 16 importName salah di katalog; Bug O baru
 (sympy/mpmath, aiohttp/yarl.Query); lameenc+pyproj = UNAVAILABLE jujur;
 7 paket dependency metadata bolong (docopt, traceback2, dst).
+
+---
+
+## SKILL 17 — Layar statis wajib survive tinggi 360dp (2026-08-18)
+
+**Trigger:** 8 screenshot user landscape Infinix (720x1600 → tinggi ±360dp):
+drawer tak bisa mencapai item bawah, tombol Contribute About di luar layar,
+console Manual Install tersisa ±50dp. Lolos berbulan-bulan karena manifest
+`configChanges=orientation` (rotate tak crash → tak ada log) dan UAT selalu
+portrait.
+
+**Aturan (dikoreksi bukti device 2026-08-19):**
+1. Setiap layar/panel dengan konten TINGGI TETAP wajib punya jalur scroll atau
+   strategi ukuran pendek, tetapi **jenis modifier focus/scroll pada ancestor
+   input tidak boleh dipasang/dilepas akibat IME resize**.
+2. `verticalScroll` Foundation 1.6.1 mendelegasikan
+   `FocusTargetModifierNode`. Pola lama ManualTab
+   `.then(if (maxHeight < 480.dp) verticalScroll else Modifier)` memasukkan
+   focus target baru di atas TextField aktif saat `adjustResize` membuka IME;
+   Backspace berikutnya memicu Google b/274655703 dan force close.
+3. Gunakan topology permanen: scroll selalu terpasang; `BoxWithConstraints`
+   hanya boleh mengubah nilai ukuran seperti `consoleHeight`, bukan jenis node.
+4. `Spacer(weight)` / `weight(1f)` HANYA sah di kolom non-scrollable yang
+   tingginya dijamin; di kolom scrollable weight kolaps jadi 0.
+5. Fix rotate wajib mempertahankan portrait dan landscape tanpa mutasi focus
+   tree. UAT wajib dua orientasi **dan** keyboard terbuka.
+6. Guard per titik + audit layar lain saat satu titik ketahuan (kelas, bukan
+   kejadian). Drawer/About aman; conditional focus-scroll hanya ditemukan di
+   ManualTab.
+
+**Sumber akar:**
+- https://issuetracker.google.com/issues/274655703
+- https://android.googlesource.com/platform/frameworks/support/+/e3680a88311050c74e2411d30f2e1d054ea9cb56
+
+
+---
+
+## SKILL 18 — Editor multi-file wajib punya identity + history per-file (2026-08-19)
+
+**Trigger:** CodeMirror sudah mengaktifkan `history()` dan hardware shortcut,
+tetapi ZCODE mengganti isi semua tab melalui `setCode` pada satu EditorState.
+Tombol Undo touch belum ada, sehingga bahaya ini lama tersembunyi. Pergantian
+file adalah transaction perubahan dokumen biasa dan berpotensi masuk stack;
+Undo dapat membawa isi file lama ke tab aktif.
+
+**Aturan:**
+
+1. Satu file = satu identity dan satu EditorState/history.
+2. Switch file menukar state; jangan `setCode` seluruh file pada stack bersama.
+3. Callback async WebView wajib membawa document ID; active context dapat berubah
+   sebelum callback main-thread diproses.
+4. Close/delete membuang state; rename memindahkan identity; clear-all membuang
+   semua state.
+5. Transform programatik (beautify/rename/format) = satu undo group terisolasi.
+6. Perubahan setting editor harus diterapkan pada state tab yang sedang tidak
+   aktif juga.
+7. Initial load/switch bukan edit user dan tidak boleh dapat di-Undo menjadi
+   dokumen kosong/file lain.
+8. History tidak dipersist lintas process restart sampai ada kebutuhan dan schema
+   yang terbukti.
+
+**Sumber:**
+- https://codemirror.net/docs/ref/#commands.history
+- https://codemirror.net/docs/migration/
+- https://discuss.codemirror.net/t/cm6-multiple-docs-with-their-own-histories/3220
+
+
+---
+
+## SKILL 19 — Makna log harus bertipe, bukan ditebak dari teks (2026-08-19)
+
+**Trigger:** Install Modules memberi warna dengan mencari `✅/❌/>` di string.
+Warning/info/cancel tetap masuk LOG biasa, perubahan glyph memutus klasifikasi,
+dan teks user yang mengandung simbol dapat salah dianggap status.
+
+**Aturan:**
+
+1. Producer mengirim `SemanticLogKind`; renderer menentukan prefix/warna.
+2. `STOP` berbeda dari `FAIL`; pembatalan user bukan kerusakan engine.
+3. `RAW` untuk output tool yang tidak benar-benar dipahami ZCODE; jangan sok
+   mengklasifikasikan setiap baris pip.
+4. Label semantic harus ikut teks copy, tidak hanya warna.
+5. Parser emoji/status lama hanya reader kompatibilitas dan hanya memeriksa
+   prefix; producer baru dilarang memakai dekorasi status.
+6. Guard harus menguji setiap arah mapping dan membuktikannya lewat mutasi.
+7. Migrasi representasi log tidak boleh mengubah resolver, transaksi, download,
+   smoke test, atau keputusan compatibility.
+
+
+---
+
+## SKILL 20 — Uninstall tanpa reverse graph wajib konservatif (2026-08-19)
+
+**Trigger:** uninstall langsung menghapus directory package tanpa konfirmasi atau
+reverse-dependency check; telemetry juga dicatat oleh dua layer.
+
+**Aturan:**
+
+1. Satu operasi sukses memiliki satu owner telemetry.
+2. Jangan auto-delete dependency/orphan sebelum ownership graph tersedia.
+3. Jelaskan risiko reverse dependency sebelum uninstall dan sediakan Batal.
+4. Uninstall tidak boleh balapan dengan install/analyze/activate.
+5. Log dan breadcrumb request/OK/fail wajib terpisah.
+6. Lower transaction layer mengubah state; outer engine memiliki policy,
+   telemetry, dan verdict user-facing.
+
+
+---
+
+## SKILL 21 — Transport gagal bukan bukti package tidak tersedia (2026-08-19)
+
+**Trigger:** device mendapatkan `IncompleteRead` dari PyPI dan `URLError` dari
+Chaquopy. Resolver mengubah kedua kegagalan sumber menjadi list kandidat kosong,
+lalu memvonis `PACKAGE_NOT_AVAILABLE`. Percobaan kedua pada jaringan lain
+memasang `rich` dengan sukses—bukti dua arah bahwa verdict pertama palsu.
+
+**Aturan:**
+
+1. Pisahkan `SOURCE_NOT_FOUND` (HTTP 404), `NETWORK` (transport gagal), dan
+   `COMPATIBILITY` (kandidat nyata ada tetapi tag tidak cocok).
+2. `http.client.IncompleteRead` adalah body response terpotong dan harus masuk
+   retry budget transient; jangan memakai partial JSON/wheel.
+3. Coba sumber berikutnya setelah satu source gagal. Jika kandidat local/remote
+   nyata ditemukan, ia boleh dipakai.
+4. Jika semua kandidat kosong **karena source gagal dibaca**, propagasikan
+   `NETWORK`; jangan mengarang `PACKAGE_NOT_AVAILABLE`.
+5. HTTP 404 tetap `target_not_found`, tidak diretry, dan boleh menjadi fallback
+   normal ke source lain.
+6. Cancel tetap control-flow tertinggi dan tidak boleh ditelan fallback.
+7. Mutation proof wajib mencakup: IncompleteRead tak diretry, 404 menjadi
+   NETWORK, dan dua transport error ditelan menjadi unavailable.
+
+
+---
+
+## SKILL 22 — Specifier berlaku setelah semua source, sebelum ranking (2026-08-20)
+
+**Trigger:** Bokeh 3.9.2 menyatakan `contourpy>=1.2`, tetapi resolver memilih
+ContourPy 1.0.5 dari Chaquopy karena hanya kandidat PyPI yang difilter
+specifier. Tested priority kemudian memenangkan versi lama; install dan import
+dasar lolos walau environment melanggar metadata.
+
+**Aturan:**
+
+1. Kumpulkan kandidat local, PyPI, dan Chaquopy; filter tag runtime dan PEP 440
+   specifier pada **semuanya**; baru jalankan ranking/tested priority.
+2. `testedVersion` tidak pernah boleh mengalahkan constraint dependency.
+3. Ada wheel runtime-compatible tetapi semua versinya melanggar constraint →
+   `DEPENDENCY_VERSION_UNAVAILABLE`, sertakan requirement dan versi tersedia.
+4. Bila satu source gagal dibaca dan belum ada kandidat valid, propagasikan
+   `NETWORK`; jangan menyimpulkan version unavailable dari data parsial.
+5. Ada wheel tetapi semua tag Python/API/ABI tidak cocok → pertahankan verdict
+   `COMPATIBILITY`, bukan version mismatch.
+6. Basic import bukan bukti dependency-correct atau full-feature support.
+7. Status katalog harus diturunkan ketika evidence lama dibatalkan; kandidat
+   versi baru belum boleh masuk tested-manifest sebelum exact device UAT.
+8. Mutation proof wajib menghapus filter tiap source, membiarkan tested priority
+   menang, menelan network, dan menghilangkan available-version detail.
+
+
+---
+
+## SKILL 23 — Native extension yang sudah dimuat membutuhkan process baru (2026-08-20)
+
+**Trigger:** smoke Bokeh 3.3.4 mengimpor `contourpy._contourpy`, lalu cleanup
+menghapus module baru dari `sys.modules`. Direct import user pada process yang
+sama gagal `generic_type: type "FillType" is already registered!`; setelah
+process ZCODE benar-benar baru, import dan contour plot berhasil.
+
+**Akar:** `sys.modules` hanya registry object Python. Ia tidak membongkar `.so`,
+tidak mereset pybind11 global type registry, dan tidak menghapus static C/C++
+state. Arbitrary native extension tidak memiliki kontrak hot-unload/reload yang
+aman. Cleanup module yang lebih agresif dapat merusak extension lain dan bukan
+solusi kelas masalah.
+
+**Aturan:**
+
+1. Native smoke yang memuat `.so`, berhasil ataupun gagal, menandai runtime
+   process sebagai **stale**. Bukti tidak boleh hanya mencari `.so` di staging
+   package root: package pure dapat mengimpor extension native dari dependency
+   yang sudah aktif. Catat module extension baru yang benar-benar masuk
+   `sys.modules` sebelum cleanup.
+2. Install/update/uninstall yang mengubah environment native juga menandai
+   stale; deteksi berdasarkan artifact/evidence `.so`, bukan hardcode nama
+   package tertentu.
+3. Pure-Python package tidak boleh meminta restart.
+4. Selama stale: Run dan seluruh package mutation/queue diblokir. Editing,
+   copy, save, dan Diagnostics tetap tersedia.
+5. Semua draft terbuka dan topology workspace wajib disimpan serta diperiksa
+   hasilnya sebelum PID lama boleh dibunuh. Save gagal = fail closed, process
+   tetap hidup.
+6. Receipt stale/restart wajib dipersist sinkron sebelum helper dimulai agar
+   process death tidak kehilangan recovery path.
+7. Relaunch Android memakai private helper process, explicit intent, dan PID
+   validation. Helper tidak boleh menginisialisasi runtime normal.
+8. Helper yang hidup di task aplikasi hanya memanggil `finish()`. Jangan
+   `finishAndRemoveTask()`, karena itu dapat menghapus MainActivity baru.
+9. Process baru hanya membersihkan stale receipt jika old PID valid dan berbeda
+   dari PID baru. Relaunch gagal harus meninggalkan state stale agar user dapat
+   mencoba lagi.
+10. Intentional rebirth bukan `FATAL_JAVA`; breadcrumb lama/baru harus dapat
+    membuktikan `REQUEST → WORKSPACE_FLUSH_OK → HELPER → APP_START → OK`.
+11. Jangan memakai AlarmManager/exact alarm untuk foreground handoff ini; ia
+    menambah permission/restriction tanpa menyelesaikan ownership.
+12. Animasi transisi tidak boleh menambah delay palsu atau menjalankan Python.
+    Pada target low-end gunakan Canvas deterministik, frame rate terbatas, dan
+    hentikan callback segera setelah view lepas.
+13. Guard wajib mencakup manifest process/export, explicit intent, save-before-
+    kill, helper-init skip, stale producer/consumer, Run/package gates, no alarm,
+    task preservation, dan pure-Python negative control; semua dibuktikan dengan
+    mutation red→green.
+
+**Sumber:**
+
+- CPython embedded lifecycle/isolation:
+  https://bugs.python.org/issue34309
+- pybind11 embedding warning:
+  https://pybind11.readthedocs.io/en/stable/advanced/embedding.html
+- ProcessPhoenix helper-process pattern:
+  https://github.com/JakeWharton/ProcessPhoenix
+- Android background activity launch security:
+  https://developer.android.com/guide/components/activities/secure-bal
+
+**Batas saat ini:** implementasi `:rebirth` ZCODE berstatus IMPLEMENTED +
+LOCALLY VERIFIED. CI compile, Android task handoff, visual transition, workspace
+restore, dan post-install native import masih wajib dibuktikan oleh canonical
+CI + UAT INFINIX X6532C/API34/ARMv7 sebelum disebut DEVICE VERIFIED.

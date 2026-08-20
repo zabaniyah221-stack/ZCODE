@@ -47,10 +47,21 @@ import com.zaba.zcode.core.samples.SampleLibrary
 @Composable
 fun SamplesScreen(
     onBack: () -> Unit,
-    onPick: (SampleEntry) -> Unit
+    onPick: (SampleEntry) -> Unit,
+    /**
+     * v1.0.19 Gerbong B (requiresPackage): navigasi ke INSTALL MODULES dari
+     * dialog "butuh paket X". Default no-op demi kompatibilitas pemanggil
+     * lama/test — host (MainActivity) yang menyuntik navigasi nyata.
+     */
+    onGoToInstallModules: () -> Unit = {}
 ) {
     // null = level 1 (kategori); non-null = level 2 (isi kategori)
     var activeCategory by remember { mutableStateOf<SampleCategory?>(null) }
+    // Dialog requiresPackage: entry yang di-tap tapi paketnya belum aktif,
+    // beserta daftar nama paket yang kurang (untuk pesan yang presisi).
+    var pendingEntry by remember { mutableStateOf<SampleEntry?>(null) }
+    var missingPkgs by remember { mutableStateOf<List<String>>(emptyList()) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     BackHandler {
         val cat = activeCategory
@@ -114,13 +125,47 @@ fun SamplesScreen(
                         title = entry.title,
                         description = entry.description,
                         onClick = {
-                            Breadcrumb.log("SAMPLES_PILIH", entry.id)
-                            onPick(entry)
+                            // Gerbong B: cek requiresPackage SEBELUM file dibuat.
+                            // Paket kurang → dialog jujur, bukan sample yang
+                            // crash saat pertama di-Run (UX terburuk).
+                            val missing = com.zaba.zcode.core.packageengine
+                                .InstalledPackages.missingFrom(context, entry.requiresPackage)
+                            if (missing.isEmpty()) {
+                                Breadcrumb.log("SAMPLES_PILIH", entry.id)
+                                onPick(entry)
+                            } else {
+                                Breadcrumb.log(
+                                    "SAMPLES_BUTUH_PAKET",
+                                    "${entry.id} -> ${missing.joinToString(",")}"
+                                )
+                                pendingEntry = entry
+                                missingPkgs = missing
+                            }
                         }
                     )
                 }
             }
         }
+    }
+
+    // Dependency gate dipakai bersama Detail Library: pesan dan tiga keputusan
+    // user tidak boleh berbeda hanya karena pintu masuknya berbeda.
+    pendingEntry?.let { entry ->
+        SampleRequirementDialog(
+            entry = entry,
+            missingPackages = missingPkgs,
+            onDismiss = { pendingEntry = null },
+            onInstallFirst = {
+                Breadcrumb.log("SAMPLES_KE_INSTALL", missingPkgs.joinToString(","))
+                pendingEntry = null
+                onGoToInstallModules()
+            },
+            onOpenAnyway = {
+                Breadcrumb.log("SAMPLES_BUKA_SAJA", entry.id)
+                pendingEntry = null
+                onPick(entry)
+            }
+        )
     }
 }
 

@@ -14,6 +14,7 @@ sha256, size, requires_dist, extras, priority, compat_reason, reason?}],
 conflicts: [...], unavailable: [...]}
 """
 import contextvars
+import http.client
 import json
 import os
 import random
@@ -33,7 +34,7 @@ from packaging.version import InvalidVersion, Version
 
 from .probe import CHAQUOPY_INDEX_URL, PYPI_JSON_URL, USER_AGENT
 from .requirement import RequirementError, parse_requirement
-from .wheelinfo import best_wheel, parse_wheel, wheel_compatible
+from .wheelinfo import WheelInfoError, best_wheel, parse_wheel, wheel_compatible
 
 _NETWORK_TIMEOUT_S = 20
 # v1.0.15 memakai 3 × 20 detik per URL sementara PyCall memotong SELURUH
@@ -149,7 +150,8 @@ def _retryable_error(error: Exception) -> bool:
     # Sertifikat/hostname salah tidak akan sembuh dengan retry identik.
     if _is_certificate_error(error):
         return False
-    if isinstance(error, (socket.timeout, TimeoutError, ConnectionError)):
+    if isinstance(error, (socket.timeout, TimeoutError, ConnectionError,
+                          http.client.IncompleteRead)):
         return True
     if isinstance(error, urllib.error.URLError):
         return True
@@ -170,6 +172,7 @@ def _http_get(url: str) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     source = _source_for_url(url)
     last_summary = "unknown"
+    last_status = None
     attempts_made = 0
     for attempt in range(1, _MAX_HTTP_ATTEMPTS + 1):
         attempts_made = attempt
@@ -194,6 +197,7 @@ def _http_get(url: str) -> bytes:
         except Exception as e:
             retry = _retryable_error(e) and attempt < _MAX_HTTP_ATTEMPTS
             status = getattr(e, "code", None)
+            last_status = status
             detail = "%s%s" % (
                 type(e).__name__, " HTTP %s" % status if status is not None else ""
             )
@@ -219,9 +223,12 @@ def _http_get(url: str) -> bytes:
             if not retry:
                 break
             _retry_wait(attempt)
+    not_found = last_status == 404
     raise ResolveError(
-        "NETWORK", "metadata",
-        "Tidak bisa menghubungi repository package (network error).",
+        "SOURCE_NOT_FOUND" if not_found else "NETWORK",
+        "metadata",
+        ("Package tidak ditemukan di repository ini." if not_found else
+         "Tidak bisa menghubungi repository package (network error)."),
         "GET source=%s package=%s attempts=%d → %s" % (
             source, _CURRENT_PACKAGE.get(), attempts_made, last_summary
         ),
@@ -458,7 +465,9 @@ def fetch_chaquopy_wheels(name: str, index_url: str = CHAQUOPY_INDEX_URL) -> lis
         html = _http_get(url).decode("utf-8", "replace")
     except ResolveError as e:
         _propagate_cancel(e)
-        return []  # package tidak ada di index Chaquopy → bukan error fatal
+        if e.code == "SOURCE_NOT_FOUND":
+            return []  # 404: package memang tidak dijual sumber ini
+        raise  # transport gagal: jangan disamarkan menjadi package unavailable
     out = []
     for href in _SIMPLE_HREF.findall(html):
         fn = href.split("/")[-1]
@@ -485,6 +494,29 @@ def _contains(spec_str: str, version: str) -> bool:
         return SpecifierSet(spec_str).contains(Version(version), prereleases=True)
     except (InvalidSpecifier, InvalidVersion):
         return False
+
+
+# PROVIDED-PACKAGES (v1.0.19, riset shadowing stdlib 2026-08-17).
+# Paket yang SUDAH dibawa APK secara permanen (app/build.gradle.kts pip{}).
+# Bukti kelasnya: zope-interface deps 'setuptools' → resolver belanja
+# setuptools 84.0.0 dari PyPI → smoke mati AssertionError distutils
+# (stdlib-common.imy menshadow; log device 2026-08-17 01:37). Padahal
+# setuptools 68.2.2 SUDAH terpasang sehat di runtime. Peta ini membuat
+# resolver menganggap requirement terhadap paket-paket ini TERPENUHI oleh
+# runtime — skip download+smoke — kecuali specifier menolak versi beku
+# (→ vonis jujur, bukan pura-pura terpenuhi).
+# SINKRON MANUAL dgn build.gradle.kts; dijaga guard test dua sisi.
+RUNTIME_PROVIDED: dict[str, str] = {
+    "pip": "23.3.1",
+    "setuptools": "68.2.2",
+    "wheel": "0.41.2",
+    "packaging": "24.1",
+}
+
+
+def runtime_provided_version(canonical: str) -> str | None:
+    """Versi beku runtime untuk paket provided; None bila bukan provided."""
+    return RUNTIME_PROVIDED.get((canonical or "").strip().lower())
 
 
 def is_stdlib_module(name: str) -> bool:
@@ -590,6 +622,60 @@ def _marker_ok(req: Requirement, requested_extras: set[str], marker_env: dict) -
     return False
 
 
+def _candidate_version(candidate: dict) -> str | None:
+    """Versi wheel dari kandidat semua source; None untuk filename rusak."""
+    try:
+        return parse_wheel(candidate.get("filename", ""))["version"]
+    except (WheelInfoError, KeyError, TypeError):
+        return None
+
+
+def _filter_candidates_by_specifier(
+    candidates: list[dict], specifier: str
+) -> list[dict]:
+    """Terapkan satu kontrak versi ke local, PyPI, dan Chaquopy.
+
+    Sebelum v1.0.19 hanya `_pypi_candidates` yang memfilter specifier. Wheel
+    local/Chaquopy langsung masuk ranking, sehingga tested priority dapat
+    memilih contourpy 1.0.5 untuk dependency `contourpy>=1.2` milik Bokeh
+    3.9.2. Import dasar lolos, tetapi environment secara matematis salah.
+    """
+    if not specifier:
+        return list(candidates)
+    return [
+        candidate for candidate in candidates
+        if (version := _candidate_version(candidate)) is not None
+        and _contains(specifier, version)
+    ]
+
+
+def _runtime_compatible_candidates(candidates: list[dict], supported_tags) -> list[dict]:
+    """Kandidat yang tag Python/API/ABI-nya cocok dengan runtime target."""
+    compatible = []
+    for candidate in candidates:
+        try:
+            if wheel_compatible(
+                candidate.get("filename", ""), supported_tags=supported_tags
+            ):
+                compatible.append(candidate)
+        except WheelInfoError:
+            continue
+    return compatible
+
+
+def _compatible_available_versions(candidates: list[dict], supported_tags) -> list[str]:
+    """Versi unik yang benar-benar cocok runtime, untuk verdict user-facing."""
+    versions = {
+        version
+        for candidate in _runtime_compatible_candidates(candidates, supported_tags)
+        if (version := _candidate_version(candidate)) is not None
+    }
+    try:
+        return [str(v) for v in sorted((Version(v) for v in versions), reverse=True)]
+    except InvalidVersion:
+        return sorted(versions, reverse=True)
+
+
 def _local_wheel_candidates(wheels_dir: str, name: str) -> list[dict]:
     """Sumber 1: cache wheel lokal (offline reuse)."""
     import os
@@ -663,6 +749,42 @@ def _resolve_unlocked(
             }],
         }
 
+    # PROVIDED-PACKAGES sebagai ROOT (user mengetik `setuptools` langsung).
+    # Tanpa cabang ini plan pulang kosong tanpa penjelasan — UX buntu.
+    # Kontrak `stdlib` DIPAKAI ULANG dengan sengaja: Kotlin (DependencyResolver
+    # → PipScreen cabang BUG C) sudah menampilkan `reason` sebagai info ℹ️,
+    # bukan error — persis perilaku yang diinginkan, nol perubahan Kotlin.
+    _root_provided = runtime_provided_version(root_name)
+    if _root_provided is not None:
+        if not spec["specifier"] or _contains(spec["specifier"], _root_provided):
+            return {
+                "packages": [],
+                "conflicts": [],
+                "unavailable": [],
+                "stdlib": [{
+                    "name": spec["name"],
+                    "canonical_name": root_name,
+                    "reason": (
+                        "'%s' sudah disediakan runtime ZCODE v%s (bawaan APK) "
+                        "— tidak perlu dipasang. Langsung 'import %s'."
+                    ) % (spec["name"], _root_provided, spec["name"]),
+                }],
+            }
+        return {
+            "packages": [],
+            "conflicts": [],
+            "unavailable": [{
+                "name": spec["name"], "canonical_name": root_name,
+                "parent": None,
+                "reason": (
+                    "Runtime ZCODE menyediakan %s v%s (bawaan APK, tidak bisa "
+                    "diganti); requirement '%s' tidak terpenuhi. Memasang versi "
+                    "lain memicu bentrok dengan runtime beku (kelas shadowing "
+                    "stdlib — bukti: setuptools 84 AssertionError distutils)."
+                ) % (root_name, _root_provided, requirement_text),
+            }],
+        }
+
     plan: dict[str, dict] = {}
     conflicts: list[dict] = []
     unavailable: list[dict] = []
@@ -693,6 +815,39 @@ def _resolve_unlocked(
         seen.add(key)
 
         _check_cancelled()
+
+        # PROVIDED-PACKAGES (v1.0.19): setuptools/wheel/pip/packaging sudah
+        # dibawa APK. Membelanjakannya dari PyPI = kelas bug shadowing stdlib
+        # (setuptools 84 mati AssertionError distutils; zope-interface ikut
+        # tumbang — device 2026-08-17). Requirement terhadapnya dianggap
+        # terpenuhi runtime, KECUALI specifier menolak versi beku → jujur.
+        provided_v = runtime_provided_version(cname)
+        if provided_v is not None:
+            if not specifier or _contains(specifier, provided_v):
+                notes.append(
+                    "%s: disediakan runtime ZCODE v%s (bawaan APK) — "
+                    "tidak diunduh ulang%s" % (
+                        cname, provided_v,
+                        " (diminta %s)" % parent if parent else "",
+                    )
+                )
+                return
+            # Specifier eksplisit menolak versi beku. Memasang versi lain
+            # berisiko shadowing (bukti: setuptools 84). Vonis jujur.
+            unavailable.append({
+                "name": name, "canonical_name": cname, "parent": parent,
+                "reason": (
+                    "Runtime ZCODE menyediakan %s v%s (bawaan APK, tidak bisa "
+                    "diganti); requirement '%s%s' tidak terpenuhi. Memasang "
+                    "versi lain memicu bentrok dengan runtime beku "
+                    "(kelas shadowing stdlib, lihat kartu setuptools)."
+                ) % (cname, provided_v, cname, specifier),
+            })
+            _emit_progress(
+                "package_unavailable",
+                detail="provided v%s tak memenuhi %s" % (provided_v, specifier),
+            )
+            return
 
         # sudah direncanakan dengan versi lain → konflik. Package context hanya
         # mengurung collect/choose; recursion anak memasang context-nya sendiri.
@@ -764,18 +919,59 @@ def _resolve_unlocked(
     def _collect(cname: str, specifier: str) -> list[dict]:
         # 1. local cache (offline)
         local = _local_wheel_candidates(wheels_dir or "", cname)
+        source_errors: list[ResolveError] = []
         # 2. PyPI
         pypi = []
         try:
             data = fetch_pypi_metadata(cname)
-            pypi = _pypi_candidates(data, {"specifier": specifier})
+            # Constraint difilter SATU KALI setelah semua source digabung.
+            # Requires-Python tetap difilter di helper ini.
+            pypi = _pypi_candidates(data, {"specifier": ""})
         except ResolveError as e:
             _propagate_cancel(e)
-            pypi = []
+            if e.code != "SOURCE_NOT_FOUND":
+                source_errors.append(e)
         # 3. Chaquopy index (native wheel)
-        chaq = fetch_chaquopy_wheels(cname)
+        chaq = []
+        try:
+            chaq = fetch_chaquopy_wheels(cname)
+        except ResolveError as e:
+            _propagate_cancel(e)
+            source_errors.append(e)
         all_cands = local + pypi + chaq
-        return all_cands
+        runtime_cands = _runtime_compatible_candidates(all_cands, supported_tags)
+        valid_cands = _filter_candidates_by_specifier(runtime_cands, specifier)
+        if valid_cands:
+            # Ranking hanya melihat wheel yang lolos ABI DAN constraint.
+            # Source lain boleh gagal selama kandidat valid nyata sudah ada.
+            return valid_cands
+
+        # Tanpa kandidat valid, source yang gagal membuat verdict versi tidak
+        # pasti: versi yang memenuhi bisa berada di repository yang tak terbaca.
+        if source_errors:
+            raise source_errors[-1]
+
+        compatible_versions = _compatible_available_versions(
+            all_cands, supported_tags
+        )
+        if specifier and compatible_versions:
+            available = ", ".join(compatible_versions[:8])
+            raise ResolveError(
+                "DEPENDENCY_VERSION_UNAVAILABLE", "resolve",
+                "%s membutuhkan versi %s, tetapi versi yang tersedia untuk "
+                "runtime ZCODE ini: %s." % (cname, specifier, available),
+                "package=%s required=%s available=%s" % (
+                    cname, specifier, ",".join(compatible_versions)
+                ),
+            )
+
+        # Ada wheel, tetapi tidak satu pun cocok tag Python/API/ABI: biarkan
+        # `_choose` mempertahankan verdict COMPATIBILITY beserta ABI target.
+        if all_cands and not runtime_cands:
+            return all_cands
+
+        # Tidak ada kandidat wheel sama sekali: queue menghasilkan unavailable.
+        return valid_cands
 
     def _choose(cands: list[dict], cname: str) -> dict:
         tested = (tested_versions or {}).get(cname)

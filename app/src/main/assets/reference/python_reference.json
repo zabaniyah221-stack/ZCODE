@@ -1,0 +1,53 @@
+{
+  "_comment": "A5 Quick Reference Card (Gerbong A v1.0.19). Offline, zero network. Tap = insert di kursor. Konten: pola yang PALING sering dilupakan pemula — bukan tutorial. Placeholder pakai nama deskriptif supaya user langsung paham apa yang diganti.",
+  "sections": [
+    {
+      "title": "Dasar",
+      "items": [
+        {"label": "if / elif / else", "insert": "if kondisi:\n    pass\nelif kondisi_lain:\n    pass\nelse:\n    pass\n"},
+        {"label": "for range", "insert": "for i in range(10):\n    print(i)\n"},
+        {"label": "for pada list", "insert": "for item in daftar:\n    print(item)\n"},
+        {"label": "while", "insert": "while kondisi:\n    pass\n"},
+        {"label": "def fungsi", "insert": "def nama_fungsi(parameter):\n    return parameter\n"},
+        {"label": "class", "insert": "class NamaKelas:\n    def __init__(self, nilai):\n        self.nilai = nilai\n"}
+      ]
+    },
+    {
+      "title": "String & F-string",
+      "items": [
+        {"label": "f-string", "insert": "print(f\"nilai = {variabel}\")\n"},
+        {"label": "f-string 2 desimal", "insert": "print(f\"{angka:.2f}\")\n"},
+        {"label": "split & join", "insert": "kata = teks.split(\",\")\ngabung = \"-\".join(kata)\n"},
+        {"label": "strip / lower / upper", "insert": "bersih = teks.strip().lower()\n"}
+      ]
+    },
+    {
+      "title": "List / Dict",
+      "items": [
+        {"label": "list comprehension", "insert": "hasil = [x * 2 for x in daftar if x > 0]\n"},
+        {"label": "dict comprehension", "insert": "peta = {k: v for k, v in pasangan}\n"},
+        {"label": "enumerate", "insert": "for i, item in enumerate(daftar):\n    print(i, item)\n"},
+        {"label": "dict get + default", "insert": "nilai = kamus.get(\"kunci\", \"default\")\n"},
+        {"label": "sort dgn key", "insert": "daftar.sort(key=lambda x: x[1], reverse=True)\n"}
+      ]
+    },
+    {
+      "title": "Error & File",
+      "items": [
+        {"label": "try / except", "insert": "try:\n    pass\nexcept ValueError as e:\n    print(f\"error: {e}\")\n"},
+        {"label": "baca file", "insert": "with open(\"data.txt\", encoding=\"utf-8\") as f:\n    isi = f.read()\n"},
+        {"label": "tulis file", "insert": "with open(\"hasil.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(teks)\n"},
+        {"label": "baca JSON", "insert": "import json\nwith open(\"data.json\", encoding=\"utf-8\") as f:\n    data = json.load(f)\n"}
+      ]
+    },
+    {
+      "title": "Import umum",
+      "items": [
+        {"label": "import as", "insert": "import numpy as np\n"},
+        {"label": "from import", "insert": "from datetime import datetime\n"},
+        {"label": "input angka", "insert": "angka = int(input(\"Masukkan angka: \"))\n"},
+        {"label": "main guard", "insert": "if __name__ == \"__main__\":\n    main()\n"}
+      ]
+    }
+  ]
+}

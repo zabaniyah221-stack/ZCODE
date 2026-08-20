@@ -24,6 +24,7 @@ Riwayat error yang di-guard:
 
 Run: pytest test_zcode_kotlin_guards.py -v
 """
+import json
 import re
 from pathlib import Path
 
@@ -155,6 +156,17 @@ class TestTabBoxRowScope:
         txt = read(UI / "settings/PipScreen.kt")
         assert re.search(r"RowScope\.TabBox\(", txt), (
             "TabBox harus extension RowScope (Modifier.weight unresolved di luar scope)."
+        )
+
+    def test_weight_scope_extension_tidak_diimport_sebagai_top_level(self):
+        offenders = []
+        for f in APP.rglob("*.kt"):
+            active = strip_kt_comments(read(f))
+            if "import androidx.compose.foundation.layout.weight" in active:
+                offenders.append(str(f.relative_to(ROOT)))
+        assert not offenders, (
+            "Modifier.weight adalah member extension RowScope/ColumnScope pada "
+            f"Compose project ini, bukan top-level import. Offender: {offenders}"
         )
 
 
@@ -1006,14 +1018,14 @@ class TestEditorHandle:
         src = re.sub(r"^import .*\n", "", src, flags=re.M)
         i_scroll = src.find("horizontalScroll(")
         assert i_scroll > 0, "kereta tidak dapat digulir"
-        assert "tunnelKey" in src, "terowongan hilang"
-        # Terowongan wajib dirender SEBELUM Row yang menggulir, dan namanya
-        # tidak boleh muncul lagi setelah titik itu.
-        i_render = src.find("tunnelKey?.let")
+        assert "tunnelKeys" in src, "terowongan hilang"
+        # Semua tombol tetap dirender SEBELUM Row yang menggulir, dan daftar
+        # tunnel tidak boleh dipakai lagi setelah titik itu.
+        i_render = src.find("tunnelKeys.forEach")
         assert i_render > 0, "terowongan tidak pernah dirender"
         assert i_render < i_scroll, \
             "terowongan dirender setelah/di dalam area scroll"
-        assert "tunnelKey" not in src[i_scroll:], \
+        assert "tunnelKeys" not in src[i_scroll:], \
             "terowongan berada DI DALAM area scroll"
 
     def test_terpasang_di_terminal_dengan_ctrl_c_merah(self):
@@ -1021,17 +1033,28 @@ class TestEditorHandle:
         assert "EditorHandle(" in src, "EditorHandle belum dipakai di terminal"
         i = src.find("EditorHandle(")
         jendela = src[i:i + 900]
-        assert "tunnelKey" in jendela, "terminal tanpa terowongan ^C"
+        assert "tunnelKeys" in jendela, "terminal tanpa terowongan ^C"
         assert "^C" in jendela
         assert "danger = true" in jendela, "^C tidak ditandai bahaya (merah)"
 
-    def test_terpasang_di_editor_tanpa_terowongan(self):
+    def test_terpasang_di_editor_dengan_undo_redo_referensi(self):
+        # Evolusi terowongan: awalnya kosong, lalu `?`, kini tiga kontrol tetap
+        # yang disetujui user: Undo, Redo, dan Reference. Hanya terminal ^C
+        # yang danger; kontrol editor tetap monokrom dan dapat disabled.
         src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
         assert "EditorHandle(" in src, "EditorHandle belum dipakai di editor"
         assert "QuickToolsBar" not in src, "bar lama masih tersisa (kode mati)"
         i = src.find("EditorHandle(")
-        assert "tunnelKey" not in src[i:i + 600], \
-            "editor tidak boleh punya terowongan — tak ada yang perlu dihentikan"
+        jendela = src[i:i + 1900]
+        assert "tunnelKeys = listOf(" in jendela
+        for label in ('label = "↶"', 'label = "↷"', 'label = "?"'):
+            assert label in jendela, f"kontrol terowongan hilang: {label}"
+        assert 'enabled = canUndo' in jendela and 'enabled = canRedo' in jendela
+        assert 'contentDescription = "Undo"' in jendela
+        assert 'contentDescription = "Redo"' in jendela
+        assert "danger" not in jendela, (
+            "terowongan editor tidak boleh berisi tombol danger/stop"
+        )
 
     def test_setiap_tombol_punya_aksi(self):
         """Tombol yang tidak melakukan apa-apa lebih buruk daripada tidak ada."""
@@ -2896,7 +2919,8 @@ class TestResolveLifecycleV1015:
         assert "onCancel" in ui and "Batalkan" in ui
         assert "cancelCurrentOperation" in ui
         assert "PKG_RESOLVE_PROGRESS" in engine
-        assert "Step.Log" in engine and "ResolveOperationBridge" in engine
+        assert "Step.Message" in engine and "ResolveOperationBridge" in engine
+        assert "SemanticLogKind" in engine, "progress resolver kehilangan severity semantic"
 
     def test_resolver_progress_terikat_context_bukan_global_bridge(self):
         src = read(ROOT / "app/src/main/python/package_runtime/resolve.py")
@@ -3323,3 +3347,1294 @@ class TestBengkelMiniV1018Kotlin:
         assert '"http_fail"' in m.group(1), (
             "http_fail (kegagalan nyata) harus tetap diagnostic"
         )
+
+
+class TestRequiresPackageV1019:
+    """Gerbong B v1.0.19: jembatan requiresPackage — sample paket pip tidak
+    boleh crash-saat-coba; dialog jujur SEBELUM file dibuat."""
+
+    def test_sample_entry_punya_field(self):
+        src = read(APP / "core/samples/SampleLibrary.kt")
+        assert "requiresPackage" in src and "emptyList()" in src, (
+            "SampleEntry harus punya field requiresPackage default kosong"
+        )
+
+    def test_semua_sample_pip_ditandai(self):
+        # Kelasnya, bukan satu kasus: SEMUA assetPath yang paketnya pip
+        # (numpy/requests/rich/tqdm/openpyxl/pillow/matplotlib) wajib punya
+        # requiresPackage. Sample stdlib tidak boleh ditandai sembarangan.
+        src = read(APP / "core/samples/SampleLibrary.kt")
+        wajib = {
+            "numpy_basics.py": "numpy", "numpy_stats.py": "numpy",
+            "requests_api.py": "requests", "rich_table.py": "rich",
+            "tqdm_progress.py": "tqdm", "openpyxl_excel.py": "openpyxl",
+            "pillow_image.py": "pillow", "matplotlib_chart.py": "matplotlib",
+        }
+        for fname, pkg in wajib.items():
+            i = src.find(fname)
+            assert i > 0, f"{fname} hilang dari SampleLibrary"
+            jendela = src[i:i + 200]
+            assert f'requiresPackage = listOf("{pkg}")' in jendela, (
+                f"{fname} harus requiresPackage listOf(\"{pkg}\")"
+            )
+        # kontrol negatif: hello_world murni stdlib. Pakai kemunculan
+        # TERAKHIR (rfind) — dua jebakan false-positive tertangkap berturut
+        # saat guard ini lahir: (1) "hello_world.py" polos ada di docstring
+        # kelas; (2) path berkutip lengkap pun ada di komentar contoh field
+        # assetPath. Entri data asli selalu yang paling akhir di file.
+        i = src.rfind('"samples/hello_world.py"')
+        assert i > 0, "entri hello_world hilang"
+        assert "requiresPackage" not in src[i:i + 150], (
+            "hello_world stdlib tidak boleh ditandai requiresPackage"
+        )
+
+    def test_installed_packages_reader_ada(self):
+        src = read(PKGENG / "InstalledPackages.kt")
+        assert "installed.json" in src and "fun missingFrom" in src
+        assert "emptySet" in src, "kegagalan baca harus best-effort, bukan crash"
+
+    def test_samples_screen_cek_sebelum_pick(self):
+        src = read(UI / "samples/SamplesScreen.kt")
+        assert "InstalledPackages.missingFrom" in src, (
+            "SamplesScreen harus cek paket SEBELUM onPick"
+        )
+        assert "SAMPLES_BUTUH_PAKET" in src, "breadcrumb dialog wajib ada"
+        assert "SampleRequirementDialog(" in src, (
+            "SamplesScreen wajib memakai dependency gate bersama"
+        )
+        dialog = read(UI / "samples/SampleRequirementDialog.kt")
+        for pilihan in ("Install dulu", "Buka kode", "Batal"):
+            assert pilihan in dialog, f"dialog kehilangan pilihan jujur: {pilihan}"
+
+    def test_mainactivity_menyuntik_navigasi(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt")
+        assert "onGoToInstallModules" in src and 'nav.navigate("pip")' in src, (
+            "MainActivity harus menyuntik navigasi nyata ke pip"
+        )
+
+
+class TestRotateResilienceA0:
+    """A0 v1.0.19 (laporan user 2026-08-18, 8 screenshot landscape): layar
+    dgn asumsi tinggi portrait rusak di landscape ±360dp. Kelas fix: layar/
+    panel statis wajib survive 360dp. Tiga titik korban + guard per titik."""
+
+    def test_drawer_scrollable(self):
+        src = read(UI / "workbench/WorkbenchScreen.kt")
+        sheet = src.find("ModalDrawerSheet(")
+        assert sheet > 0
+        jendela = src[sheet:sheet + 1500]
+        assert "verticalScroll(rememberScrollState())" in jendela, (
+            "isi ModalDrawerSheet wajib scrollable — landscape: item bawah "
+            "drawer tak terjangkau tanpa ini (laporan user 2026-08-18)"
+        )
+
+    def test_about_root_scrollable(self):
+        src = read(UI / "settings/AboutScreen.kt")
+        # root Column (setelah padding Scaffold) wajib scroll; kotak license
+        # scrollable saja TIDAK cukup (bukti: tombol Contribute terdampar).
+        i = src.find("{ padding ->")
+        assert i > 0
+        jendela = src[i:i + 700]
+        assert "verticalScroll(rememberScrollState())" in jendela, (
+            "root AboutScreen wajib scrollable (landscape: tombol "
+            "Issues/Contribute di luar layar)"
+        )
+        # Spacer weight di kolom scrollable = kolaps 0; wajib sudah diganti.
+        assert "Spacer(modifier = Modifier.weight(1f))" not in src, (
+            "Spacer weight tak bermakna di kolom scrollable — ganti jarak tetap"
+        )
+
+    def test_manual_tab_console_tidak_kelaparan_tanpa_mutasi_focus_tree(self):
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        manual = src[src.index("private fun ManualTab("):src.index("private fun initialConsole")]
+        assert "BoxWithConstraints" in manual, (
+            "ManualTab tetap mengukur ruang untuk console portrait/landscape"
+        )
+        assert "val consoleHeight = (maxHeight - 250.dp).coerceAtLeast(220.dp)" in manual
+        assert ".height(consoleHeight)" in manual, (
+            "console minimum 220dp wajib dipertahankan di landscape"
+        )
+        assert ".verticalScroll(pageScroll)" in manual
+        assert "layarPendek" not in manual
+        assert "if (" not in manual[manual.index(".fillMaxSize()"):
+                                  manual.index(".verticalScroll(pageScroll)")], (
+            "page scroll harus permanen, bukan dipasang setelah IME resize"
+        )
+        assert "Modifier.weight(1f)" not in manual[manual.index('"CONSOLE:"'):], (
+            "weight console di Column scrollable dapat kolaps; pakai tinggi Dp stabil"
+        )
+
+
+class TestLintBundleV1019:
+    """Gerbong A: kontrak bridge lint di bundle CM6 (di-commit, CI tanpa
+    Node). Guard string dua sisi — sisi Kotlin menyusul di commit bridge."""
+
+    BUNDLE = ROOT / "app/src/main/assets/editor/codemirror.bundle.js"
+    SRC = ROOT / "editor-src/src/editor.js"
+
+    def test_bundle_mengekspor_kontrak_lint(self):
+        b = read(self.BUNDLE)
+        for fn in ("setDiagnostics", "setLintEnabled", "setWhitespaceEnabled"):
+            assert f"window.{fn}" in b, (
+                f"bundle harus mengekspor window.{fn} — regenerasi: "
+                "cd editor-src && npm ci && npm run build"
+            )
+
+    def test_source_editor_pakai_compartment(self):
+        s = read(self.SRC)
+        assert "lintCompartment" in s and "whitespaceCompartment" in s, (
+            "toggle lint/whitespace wajib via Compartment (live, tanpa reload)"
+        )
+        assert "currentWhitespaceEnabled = false" in s and (
+            "currentWhitespaceEnabled ? highlightTrailingWhitespace() : []" in s
+        ), "whitespace guard default OFF (keputusan user 2026-08-17)"
+        assert "currentLintEnabled = true" in s and (
+            "currentLintEnabled ? lintGutter() : []" in s
+        ), "lint gutter default ON"
+
+    def test_pin_eksak_lint(self):
+        pkg = read(ROOT / "editor-src/package.json")
+        assert '"@codemirror/lint": "6.9.7"' in pkg, (
+            "versi lint wajib dipin eksak (prinsip F-09 anti-drift)"
+        )
+
+
+class TestMixedIndentA2:
+    """A2 Gerbong A: Checker mendeteksi indentasi campuran tab+spasi —
+    IndentationError tak kasat mata, pembunuh pemula #1. Guard string +
+    simulasi semantik (port aturan ke Python; keduanya harus sepakat)."""
+
+    def _port(self, code):
+        # Port 1:1 dari Checker.checkMixedIndent (Kotlin) — kalau semantik
+        # Kotlin diubah tanpa mengubah port ini, guard string di bawah
+        # menjaga strukturnya; port ini menjaga PERILAKUNYA.
+        hits = []
+        for n, raw in enumerate(code.split("\n"), 1):
+            stripped = raw.lstrip(" \t")
+            indent_end = len(raw) - len(stripped)
+            if indent_end <= 0 or not stripped:
+                continue
+            indent = raw[:indent_end]
+            if " " in indent and "\t" in indent:
+                hits.append(n)
+        return hits
+
+    def test_kotlin_punya_aturan(self):
+        src = read(APP / "core/editor/Checker.kt")
+        assert "fun checkMixedIndent" in src, "aturan A2 hilang dari Checker"
+        assert "checkMixedIndent(code)" in src, (
+            "checkSyntaxList harus memanggil checkMixedIndent — aturan yang "
+            "tak dipanggil = aturan mati"
+        )
+        assert "Severity.WARNING" in src.split("fun checkMixedIndent")[1], (
+            "campuran = WARNING bukan ERROR (Python kadang menerimanya; "
+            "kita memberi tahu, bukan memvonis — klausul kejujuran user)"
+        )
+
+    def test_semantik_deteksi(self):
+        # positif: campuran di satu baris
+        assert self._port("def f():\n\t    return 1") == [2]
+        # negatif: full-tab sah
+        assert self._port("def f():\n\treturn 1") == []
+        # negatif: full-spasi sah
+        assert self._port("def f():\n    return 1") == []
+        # negatif: file campuran ANTAR baris (tab di baris 2, spasi baris 3)
+        # TIDAK ditandai — aturan sengaja sempit, hanya campuran SE-baris
+        assert self._port("def f():\n\tx = 1\n    return x") == []
+        # negatif: baris whitespace-only dilewati
+        assert self._port("def f():\n \t \n    return 1") == []
+
+
+class TestGerbongAEditorWiring:
+    """Gerbong A: bridge lint (EditorScreen), traceback jump (A3), TOOLS
+    satu-scroll (A4). Kontrak string dua sisi + semantik parser via port."""
+
+    def test_editor_screen_mengirim_diagnostik(self):
+        src = read(UI / "editor/EditorScreen.kt")
+        assert "setLintEnabled(" in src and "setWhitespaceEnabled(" in src, (
+            "EditorScreen harus apply toggle lint/whitespace ke bridge"
+        )
+        # Anti-jebakan-komentar (SKILLS): pakai strip komentar dulu, lalu
+        # cek pola pemakaian NYATA (bukan sekadar kata muncul di file).
+        kode = strip_kt_comments(src)
+        assert "setDiagnostics(" in kode, "panggilan setDiagnostics hilang"
+        assert "(vm?.problems ?: emptyList())" in kode, (
+            "vm.problems harus jadi SUMBER data setDiagnostics — satu sumber "
+            "kebenaran utk VPP & lint gutter (uji mutasi putaran 1: guard "
+            "lama palsu, kata itu tinggal di komentar)"
+        )
+        assert "typeof setLintEnabled==='function'" in src, (
+            "guard typeof wajib (kelas BUG H: WebView about:blank)"
+        )
+
+    def test_traceback_parser_semantik(self):
+        # port semantik regex ke Python — Kotlin & port harus sepakat
+        import re as _re
+        pat = _re.compile(r'File "([^"]+)", line (\d+)')
+        ok = pat.search('  File "/data/user/0/x/files/main.py", line 12, in <module>')
+        assert ok and ok.group(2) == "12"
+        assert pat.search('File "helper.py", line 3')
+        # jebakan: string user yang mirip tapi tak lengkap TIDAK cocok
+        assert not pat.search('print("File main.py line 5")')
+        assert not pat.search('File main.py, line 5')
+
+    def test_terminal_wire_traceback(self):
+        src = read(UI / "terminal/TerminalScreen.kt")
+        assert "TracebackParser.parse" in src and "isWorkspaceFile" in src, (
+            "terminal wajib verifikasi dua lapis: regex + file exist di workspace"
+        )
+        assert "TRACEBACK_JUMP" in src, "breadcrumb jejak tap wajib ada"
+        kode_t = strip_kt_comments(src)
+        assert "if (tracebackJumpEnabled && onGotoEditorLine != null)" in kode_t, (
+            "kill-switch A3 wajib DIPAKAI di kondisi parse (bukan sekadar "
+            "dideklarasikan sebagai parameter — uji mutasi putaran 1: guard "
+            "lama palsu, nama param lolos walau kondisi dicabut)"
+        )
+        assert "nameErrorHint" in src, "hint NameError (A6) harus terpasang"
+
+    def test_hint_tidak_sok_tahu(self):
+        src = read(APP / "core/editor/TracebackParser.kt")
+        assert "Mungkin maksudmu" in src, (
+            "bahasa hint wajib 'Mungkin maksudmu' — tidak pernah klaim pasti "
+            "(klausul kejujuran user 2026-08-18)"
+        )
+
+    def test_mainactivity_wire_goto(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt")
+        assert "onGotoEditorLine" in src and "requestGotoLine" in src, (
+            "MainActivity harus menyambungkan terminal → VM → editor"
+        )
+
+    def test_overlay_aktif_wire_traceback_ke_editor(self):
+        """FAB produksi memakai overlay, bukan route output lama.
+
+        Guard lama hanya memeriksa MainActivity sehingga hijau walau callback
+        overlay null. Ambil blok overlay aktif secara spesifik agar wiring di
+        rumah kosong tidak dapat menyamarkan regresi lagi.
+        """
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        start = src.find("if (showTerminalOverlay)")
+        end = src.find("if (showReferenceCard)", start)
+        assert start > 0 and end > start, "blok terminal overlay aktif tidak ditemukan"
+        blok = src[start:end]
+        assert "onGotoEditorLine =" in blok, (
+            "TerminalScreen overlay aktif wajib menerima callback traceback; "
+            "default null mematikan link DAN fallback chip"
+        )
+        assert "vm.requestGotoLine(tracebackFile, line)" in blok, (
+            "callback overlay wajib mengirim file+line ke VM"
+        )
+        assert "showTerminalOverlay = false" in blok, (
+            "setelah jump, overlay wajib ditutup agar editor terlihat"
+        )
+        assert "tracebackJumpEnabled = vm.tracebackJumpEnabled" in blok, (
+            "kill-switch user wajib diteruskan ke overlay aktif"
+        )
+        assert "TRACEBACK_OVERLAY_CALLBACK" in blok, (
+            "callback wajib meninggalkan breadcrumb yang dapat dibaca tanpa logcat"
+        )
+
+    def test_pending_goto_sinkronkan_file_sebelum_lompat(self):
+        """Traceback dapat menunjuk helper.py, bukan hanya file aktif lama."""
+        src = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        start = src.find("LaunchedEffect(vm.pendingGotoLine)")
+        end = src.find("fun pluginAction", start)
+        assert start > 0 and end > start
+        blok = src[start:end]
+        assert "pushCode()" in blok, (
+            "setelah requestGotoLine memilih file lain, isi WebView wajib "
+            "disinkronkan sebelum gotoLine"
+        )
+        assert blok.find("pushCode()") < blok.find("gotoLine(line)"), (
+            "sinkronisasi file harus terjadi SEBELUM lompat baris"
+        )
+        assert "TRACEBACK_GOTO_DISPATCHED" in blok, (
+            "dispatch ke bridge wajib punya breadcrumb observability"
+        )
+
+    def test_tools_satu_scroll_theme_pinned(self):
+        src = read(UI / "workbench/WorkbenchScreen.kt")
+        i = src.find("AnimatedVisibility(visible = toolsExpanded)")
+        assert i > 0
+        blok = src[i:i + 4000]
+        # satu LazyColumn berisi PLUGINS + EDITOR
+        assert blok.count("LazyColumn(") == 1, "TOOLS wajib SATU kotak scroll"
+        assert 'ToolsSectionLabel("PLUGINS")' in blok and 'ToolsSectionLabel("EDITOR")' in blok
+        blok_kode = strip_kt_comments(blok)
+        for t in ("Lint gutter", "Whitespace guard", "Traceback jump", "Symbol bar"):
+            assert f'ToolsToggleRow(\n                                    "{t}"' in blok or \
+                   f'"{t}",' in blok_kode, (
+                f"toggle '{t}' hilang dari seksi EDITOR (cek KODE, bukan "
+                "komentar — uji mutasi putaran 1 membongkar guard lama "
+                "palsu: 'Symbol bar' juga ada di komentar A4)"
+            )
+        # THEME tetap DI LUAR LazyColumn (pinned di dasar kotak — ketokan user)
+        lazy_end = blok.find("Divider", blok.find("LazyColumn("))
+        theme_pos = blok.find('"THEME"')
+        assert theme_pos > lazy_end > 0, (
+            "THEME wajib dipaku di dasar kotak, di luar area scroll"
+        )
+
+    def test_vm_persist_toggle_baru(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt")
+        for key, default in (('"lint_gutter", true', None),
+                             ('"whitespace_guard", false', None),
+                             ('"traceback_jump", true', None)):
+            assert key in src, (
+                f"persist prefs {key} hilang — default whitespace OFF & lain ON "
+                "adalah ketokan user"
+            )
+
+
+class TestReferenceCardA5:
+    """A5: Quick Reference Card — data JSON assets valid + wiring tombol ?."""
+
+    def test_json_valid_dan_berisi(self):
+        import json as _json
+        p = ROOT / "app/src/main/assets/reference/python_reference.json"
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        secs = data["sections"]
+        assert len(secs) >= 4, "minimal 4 seksi referensi"
+        total = sum(len(s["items"]) for s in secs)
+        assert total >= 18, f"minimal 18 pola; dapat {total}"
+        for s in secs:
+            for it in s["items"]:
+                assert it["label"].strip() and it["insert"].strip(), (
+                    f"item kosong di seksi {s['title']}"
+                )
+
+    def test_semua_insert_adalah_python_valid_atau_fragmen(self):
+        # Snippet berisi placeholder (kondisi, daftar, ...) — uji KELAS
+        # minimal: compile sebagai statement dgn placeholder diganti nama
+        # valid; yang gagal dua-duanya = typo struktural nyata.
+        import json as _json, ast
+        p = ROOT / "app/src/main/assets/reference/python_reference.json"
+        data = _json.loads(p.read_text(encoding="utf-8"))
+        for s in data["sections"]:
+            for it in s["items"]:
+                code = it["insert"]
+                try:
+                    ast.parse(code)
+                except SyntaxError:
+                    raise AssertionError(
+                        f"snippet '{it['label']}' bukan Python valid:\n{code}"
+                    )
+
+    def test_wiring_tombol_tanya(self):
+        src = read(UI / "workbench/WorkbenchScreen.kt")
+        kode = strip_kt_comments(src)
+        assert 'label = "?"' in kode and "showReferenceCard = true" in kode, (
+            "tombol ? di terowongan symbol bar harus membuka Reference Card"
+        )
+        assert "ReferenceCardDialog(" in kode, "dialog harus terpasang"
+        rc = read(UI / "common/ReferenceCard.kt")
+        assert "REFCARD_INSERT" in rc and "REFCARD_LOAD_FAIL" in rc, (
+            "breadcrumb insert + load-fail wajib (observability)"
+        )
+
+
+class TestProjectMiniA7:
+    """A7: multi-file DISAHKAN — sample 2 file + mekanisme companionAssets."""
+
+    def test_sample_files_ada_dan_kompilasi(self):
+        import py_compile, tempfile
+        for f in ("project_mini.py", "helper_util.py"):
+            p = ROOT / "app/src/main/assets/samples" / f
+            assert p.is_file(), f"{f} hilang"
+            py_compile.compile(str(p), doraise=True)
+
+    def test_import_antar_file_jalan(self, tmp_path):
+        # Eksekusi NYATA: dua file di dir yang sama (persis workspace ZCODE:
+        # cwd = workspace + sys.path berisi workspace).
+        import shutil, subprocess, sys
+        for f in ("project_mini.py", "helper_util.py"):
+            shutil.copy(ROOT / "app/src/main/assets/samples" / f, tmp_path / f)
+        out = subprocess.run(
+            [sys.executable, "project_mini.py"], cwd=tmp_path,
+            capture_output=True, text=True, timeout=30
+        )
+        assert out.returncode == 0, f"multi-file gagal: {out.stderr[:300]}"
+        assert "Salam dari modul sebelah" in out.stdout
+
+    def test_companion_tidak_menimpa(self):
+        src = read(ROOT / "app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt")
+        kode = strip_kt_comments(src)
+        i = kode.find("companionAssets: List<String>")
+        assert i > 0, "parameter companionAssets hilang dari createSampleFromAsset"
+        jendela = kode[i:i + 800]
+        assert ".exists()" in jendela, (
+            "file pendamping yang sudah ada TIDAK boleh ditimpa (user "
+            "mungkin sudah mengeditnya)"
+        )
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        assert 'companionAssets = listOf("samples/helper_util.py")' in lib, (
+            "Project Mini harus mendeklarasikan helper sebagai companion"
+        )
+
+
+class TestTracebackTapFixUAT0818:
+    """UAT 2026-08-18: tap baris traceback tidak pernah sampai — tap ditelan
+    SelectionContainer (handler seleksi berebut pointer dgn clickable anak;
+    gejala di device: keyboard terbuka = tap tembus ke lantai fokus).
+    Penangkal: DisableSelection utk baris link + warna link (affordance +
+    alat diagnosa) + breadcrumb TRACEBACK_LINK saat render."""
+
+    def test_baris_link_keluar_dari_arena_seleksi(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        # jangkar = blok render inline (parse(lineText)) — BUKAN kemunculan
+        # pertama parse() yang kini milik scan chip babak-2 (LaunchedEffect).
+        i = src.find("TracebackParser.parse(lineText)")
+        assert i > 0
+        jendela = src[i:i + 2500]
+        assert "DisableSelection" in jendela, (
+            "baris traceback tappable WAJIB dibungkus DisableSelection — "
+            "di dalam SelectionContainer, clickable anak kalah rebutan "
+            "pointer (bukti UAT: tap membuka keyboard, bukan jump)"
+        )
+
+    def test_link_terlihat_dan_terlacak(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "TRACEBACK_LINK" in src, (
+            "breadcrumb saat RENDER wajib — memisahkan 'link tak pernah "
+            "dibuat' dari 'tap tak sampai' pada UAT berikutnya"
+        )
+        i = src.find("DisableSelection")
+        assert "Color(0xFF6FB1FF)" in src[i - 1500:i + 1500], (
+            "warna link biru = affordance + diagnosa (tak biru = kondisi "
+            "hit gagal, lapisan lain)"
+        )
+
+
+class TestTracebackSessionGuard:
+    """Diskusi user 2026-08-18: tap link traceback saat script MASIH hidup
+    (except+print_exc lalu input()) = navigateUp = sendKill tanpa peringatan.
+    Guard: terminal state → lompat langsung; non-terminal → dialog jujur."""
+
+    def test_tap_dibedakan_berdasar_session_state(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "sessionState.isTerminal()" in src, (
+            "tap traceback wajib cek isTerminal() — script hidup tidak boleh "
+            "dibunuh tanpa peringatan"
+        )
+        assert "TRACEBACK_JUMP_GUARD" in src and "TRACEBACK_JUMP_CONFIRM" in src, (
+            "breadcrumb dua cabang wajib (guard muncul / user konfirmasi)"
+        )
+        assert "Hentikan & Lompat" in src and "MENGHENTIKAN" in src, (
+            "dialog wajib jujur soal konsekuensi sendKill"
+        )
+
+
+class TestGerbongDKonten:
+    """Gerbong D v1.0.19: example 30 TESTED + deskripsi 11 kategori +
+    6 sample baru. Semua konten harus valid — konten rusak di 720p HP user
+    lebih buruk dari tidak ada."""
+
+    def test_example_python_valid(self):
+        import json as _json, ast
+        cat = _json.loads((ROOT / "app/src/main/assets/package_catalog/packages.json").read_text(encoding="utf-8"))
+        pkgs = cat["packages"] if isinstance(cat, dict) else cat
+        n = 0
+        for p in pkgs:
+            ex = p.get("example") or ""
+            if not ex:
+                continue
+            n += 1
+            try:
+                ast.parse(ex)
+            except SyntaxError as e:
+                raise AssertionError(f"example {p['name']} bukan Python valid: {e}")
+        assert n >= 35, f"minimal 35 example terisi; dapat {n}"
+
+    def test_example_hanya_untuk_yang_bisa_jalan(self):
+        # klausul kejujuran: paket UNAVAILABLE/INCOMPATIBLE tidak boleh
+        # punya example menggoda — kartunya kartu batu-sandungan.
+        import json as _json
+        cat = _json.loads((ROOT / "app/src/main/assets/package_catalog/packages.json").read_text(encoding="utf-8"))
+        pkgs = cat["packages"] if isinstance(cat, dict) else cat
+        for p in pkgs:
+            if p.get("example") and p["status"] in ("UNAVAILABLE", "INCOMPATIBLE"):
+                raise AssertionError(
+                    f"{p['name']} ({p['status']}) punya example — menggoda user "
+                    "menjalankan yang mustahil"
+                )
+
+    def test_deskripsi_kategori_lengkap(self):
+        import json as _json
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "fun categoryDescription" in src
+        cat = _json.loads((ROOT / "app/src/main/assets/package_catalog/packages.json").read_text(encoding="utf-8"))
+        pkgs = cat["packages"] if isinstance(cat, dict) else cat
+        kategori = {p["category"] for p in pkgs}
+        kategori.discard("Dev Tools / Testing")  # 1 paket (virtualenv), belum layak seksi
+        for c in sorted(kategori):
+            assert f'"{c}" ->' in src, f"deskripsi kategori '{c}' hilang"
+
+    def test_sample_baru_semua_terdaftar_dgn_requires(self):
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        wajib = {"docx_laporan": "python-docx", "qr_generator": "qrcode",
+                 "crypto_pesan": "cryptography", "pandas_nilai": "pandas",
+                 "sympy_aljabar": "sympy"}
+        for sid, pkg in wajib.items():
+            i = lib.find(f'"{sid}"')
+            assert i > 0, f"sample {sid} hilang"
+            assert f'requiresPackage = listOf("{pkg}")' in lib[i:i + 400], (
+                f"{sid} wajib requiresPackage {pkg} (jembatan Gerbong B)"
+            )
+        # sqlite_catatan stdlib — TIDAK boleh ditandai
+        i = lib.find('"sqlite_catatan"')
+        assert i > 0 and "requiresPackage" not in lib[i:i + 250], (
+            "sqlite_catatan pakai sqlite3 bawaan — tanpa requiresPackage"
+        )
+
+
+class TestTracebackChipBabak2:
+    """UAT babak-2 2026-08-18: link inline TIDAK render di device (baris
+    putih polos = alat diagnosa warna bekerja: kondisi hit gagal di lapisan
+    render inline). Jalur kedua: chip 'Ke baris error' saat FAILED — scan
+    buffer via LaunchedEffect, UI terpisah total dari baris & seleksi."""
+
+    def test_chip_terpasang(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "TRACEBACK_CHIP" in src, "breadcrumb saat chip dibuat wajib"
+        assert "Ke sumber error utama" in src, "chip harus menjelaskan fungsi frame terdalam"
+        assert 'via=chip' in src, (
+            "breadcrumb jump wajib menyebut jalur (chip vs inline) — "
+            "UAT berikutnya harus bisa membedakan jalur mana yang hidup"
+        )
+
+    def test_chip_scan_hit_terakhir(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        i = src.find("SessionState.FAILED &&")
+        assert i > 0, "chip hanya untuk state FAILED"
+        jendela = src[i:i + 1200]
+        assert "found = it" in jendela, (
+            "scan wajib ambil hit TERAKHIR (frame terdalam = baris salah "
+            "sebenarnya, bukan frame runner)"
+        )
+        assert "total - 80" in jendela, "scan dibatasi 80 baris terakhir (hemat)"
+
+    def test_chip_reset_saat_run_baru(self):
+        src = strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+        assert "errorJump = null" in src, (
+            "chip run lama wajib hilang saat RUNNING baru — chip basi = bohong"
+        )
+
+
+class TestPipTapTabsV1019:
+    """Final release: tab tap-only, tanpa Pager atau manipulasi focus paksa."""
+
+    def _src(self) -> str:
+        return strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+
+    def test_pager_dan_forced_focus_clear_dilarang(self):
+        src = self._src()
+        for token in (
+            "HorizontalPager", "rememberPagerState", "LocalFocusManager",
+            "clearFocus(", "animateScrollToPage",
+        ):
+            assert token not in src, f"PipScreen final tap-only memuat kembali {token}"
+
+    def test_enum_adalah_satu_sumber_state(self):
+        src = self._src()
+        assert "private enum class PipTab { LIBRARY, MANUAL }" in src
+        assert "var activeTab by remember { mutableStateOf(PipTab.LIBRARY) }" in src
+        assert 'mutableStateOf("LIBRARY")' not in src, (
+            "string activeTab membuat mapping tab rapuh"
+        )
+        assert "when (activeTab)" in src
+
+    def test_tap_mapping_dan_breadcrumb_tidak_tertukar(self):
+        src = self._src()
+        library = src.index('TabBox("LIBRARY", activeTab == PipTab.LIBRARY)')
+        manual = src.index('TabBox("MANUAL INSTALL", activeTab == PipTab.MANUAL)')
+        assert "selectPipTab(PipTab.LIBRARY)" in src[library:manual]
+        assert "selectPipTab(PipTab.MANUAL)" in src[manual:manual + 250]
+
+        selector = src[src.index("fun selectPipTab"):src.index("var searchQuery")]
+        assert "activeTab = tab" in selector
+        assert 'Breadcrumb.log("PIP_TAB", tab.name)' in selector
+        assert "focus" not in selector.lower()
+
+    def test_mapping_content_tidak_tertukar(self):
+        src = self._src()
+        content = src[src.index("when (activeTab)"):]
+        library = content.index("PipTab.LIBRARY -> LibraryTab(")
+        manual = content.index("PipTab.MANUAL -> ManualTab(")
+        assert library < manual
+        assert "repository = repository" in content[library:manual]
+        assert "packageName = packageName" in content[manual:manual + 1000]
+
+    def test_state_input_dan_scroll_dipertahankan_di_parent(self):
+        src = self._src()
+        owner = src[:src.index("Scaffold(")]
+        for declaration in (
+            "val libraryListState = rememberLazyListState()",
+            "val manualPageScroll = rememberScrollState()",
+            'var packageName by remember { mutableStateOf("") }',
+            "val consoleScroll = rememberScrollState()",
+        ):
+            assert declaration in owner, f"state owner hilang: {declaration}"
+        assert "listState = libraryListState" in src
+        assert "state = listState" in src
+        assert "pageScroll = manualPageScroll" in src
+        assert "verticalScroll(pageScroll)" in src
+        assert "consoleScroll = consoleScroll" in src
+
+    def test_semua_jalur_library_ke_install_memilih_manual(self):
+        src = self._src()
+        install = src[src.index("fun installFromLibrary"):src.index("fun doUninstall")]
+        assert "selectPipTab(PipTab.MANUAL)" in install
+        sample = src[src.index('"LIBRARY_SAMPLE_TO_INSTALL"'):src.index("onOpenAnyway")]
+        assert "selectPipTab(PipTab.MANUAL)" in sample
+
+    def test_operasi_memiliki_snapshot_dan_input_logically_locked(self):
+        src = self._src()
+        assert "var activeRequirement by remember" in src
+        assert src.count("activeRequirement = trimmed") >= 2, (
+            "analyze dan install wajib memiliki snapshot requirement sendiri"
+        )
+        assert src.count("activeRequirement = null") >= 7, (
+            "snapshot wajib dilepas pada OK/FAIL/STOP/stdlib/conflict/dialog agar field tidak terkunci selamanya"
+        )
+        cancel = src[src.index("fun cancelCurrentAnalyze"):src.index("fun analyzeThenInstall")]
+        assert "activeRequirement ?: packageName.trim()" in cancel, (
+            "breadcrumb Cancel tidak boleh membaca draft yang mungkin berubah"
+        )
+        call = src[src.index("PipTab.MANUAL -> ManualTab("):]
+        assert "if (!isInstalling && !isAnalyzing) packageName = value" in call[:1500]
+        manual = src[src.index("private fun ManualTab("):src.index("private fun initialConsole")]
+        assert "Requirement dikunci selama operasi:" in manual
+        assert "enabled = true" in manual
+        assert "enabled = if (cancellable)" not in manual
+        assert "readOnly =" not in manual, (
+            "Compose 1.6.1 tidak boleh toggle enabled/readOnly pada focused field"
+        )
+
+    def test_pager_tidak_bocor_ke_layar_lain(self):
+        assert "HorizontalPager" not in read(UI / "workbench/WorkbenchScreen.kt")
+        assert "HorizontalPager" not in read(UI / "settings/DiagnosticsScreen.kt")
+
+
+class TestLibrarySampleBridgeV1019:
+    """Detail Library → sample lengkap: satu relasi, satu dependency gate.
+
+    Kelas regresi yang dijaga: sampleId yatim, link ke paket mustahil,
+    requiresPackage tidak cocok, JSON membuang relasi, dua layar kembali punya
+    dialog berbeda, atau callback tidak kembali ke editor.
+    """
+
+    def _catalog(self):
+        import json as _json
+        return _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+
+    def _sample_blocks(self):
+        lib = strip_kt_comments(read(APP / "core/samples/SampleLibrary.kt"))
+        found = list(re.finditer(r'\bSampleEntry\(\s*"([^"]+)"', lib))
+        blocks = {}
+        for i, match in enumerate(found):
+            end = found[i + 1].start() if i + 1 < len(found) else len(lib)
+            blocks[match.group(1)] = lib[match.start():end]
+        assert len(blocks) == len(found), "ID SampleEntry duplikat"
+        return blocks
+
+    def test_schema_sample_id_roundtrip(self):
+        src = strip_kt_comments(read(APP / "core/packageengine/PackageDetails.kt"))
+        assert "val sampleId: String? = null" in src
+        assert 'o.put("sampleId", sampleId)' in src, "toJson membuang sampleId"
+        assert 'o.isNull("sampleId")' in src
+        assert 'o.optString("sampleId", "").takeIf { it.isNotBlank() }' in src, (
+            "fromJson harus mengubah field hilang/kosong menjadi null"
+        )
+
+    def test_semua_link_valid_dan_requires_cocok(self):
+        blocks = self._sample_blocks()
+        linked = [p for p in self._catalog() if p.get("sampleId")]
+        assert len(linked) >= 11, f"minimal 11 sample lama terhubung; dapat {len(linked)}"
+        for pkg in linked:
+            sid = pkg["sampleId"]
+            assert sid in blocks, f"{pkg['name']}: sampleId yatim {sid}"
+            req_match = re.search(
+                r'requiresPackage\s*=\s*listOf\((.*?)\)', blocks[sid], re.S)
+            requires = set(re.findall(r'"([^"]+)"', req_match.group(1))) if req_match else set()
+            canonical = pkg["name"].lower().replace("_", "-").replace(".", "-")
+            assert canonical in requires, (
+                f"{pkg['name']} → {sid}, tetapi requiresPackage={sorted(requires)}"
+            )
+            assert pkg["status"] not in ("UNAVAILABLE", "INCOMPATIBLE"), (
+                f"{pkg['name']} {pkg['status']} tidak boleh menawarkan sample runnable"
+            )
+
+    def test_cryptography_belum_diklaim_dari_kartu(self):
+        by_name = {p["name"]: p for p in self._catalog()}
+        assert by_name["cryptography"]["status"] == "COMPATIBLE"
+        assert not by_name["cryptography"].get("sampleId"), (
+            "bukti device cryptography belum ditemukan — jangan klaim dari kartu"
+        )
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        start = lib.index('"crypto_pesan"')
+        assert "belum device-verified" in lib[start:start + 300], (
+            "sample lama cryptography wajib menyebut batas bukti secara jujur"
+        )
+
+    def test_dependency_gate_dipakai_dua_pintu(self):
+        dialog = read(UI / "samples/SampleRequirementDialog.kt")
+        samples = strip_kt_comments(read(UI / "samples/SamplesScreen.kt"))
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        for text in ("Install dulu", "Buka kode", "Batal"):
+            assert text in dialog, f"keputusan '{text}' hilang dari dependency gate"
+        assert "SampleRequirementDialog(" in samples
+        assert "SampleRequirementDialog(" in pip
+        assert "AlertDialog(" not in samples, "SamplesScreen membuat dialog kedua lagi"
+        assert "LIBRARY_SAMPLE_NEEDS_PACKAGE" in pip
+        assert "InstalledPackages" in pip and ".missingFrom(context" in pip
+
+    def test_detail_dan_navigation_wired(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        main = strip_kt_comments(read(
+            ROOT / "app/src/main/java/com/zaba/zcode/MainActivity.kt"))
+        assert 'Text("Coba contoh lengkap →"' in pip
+        assert "pkg.sampleId" in pip and "onOpenSample(sampleId)" in pip
+        assert "fun openSampleInEditor(entry: SampleEntry)" in main
+        assert "onOpenSample = ::openSampleInEditor" in main
+        assert 'popBackStack("editor", inclusive = false)' in main
+
+    def test_generator_menjaga_link(self):
+        src = read(ROOT / "tools/generate_catalog.py")
+        assert '"sampleId": SAMPLE_LINKS.get(c)' in src
+        start = src.index("SAMPLE_LINKS = {")
+        end = src.index("\n\n\ndef canonical", start)
+        block = src[start:end]
+        expected = {
+            "numpy": "numpy_basics", "requests": "requests_api",
+            "rich": "rich_table", "tqdm": "tqdm_progress",
+            "openpyxl": "openpyxl_excel", "pillow": "pillow_image",
+            "python-docx": "docx_laporan", "qrcode": "qr_generator",
+            "pandas": "pandas_nilai", "sympy": "sympy_aljabar",
+            "matplotlib": "matplotlib_chart", "httpx": "httpx_api",
+            "beautifulsoup4": "beautifulsoup_links",
+            "python-pptx": "pptx_presentasi", "tinydb": "tinydb_catatan",
+            "pyotp": "pyotp_2fa", "pyyaml": "pyyaml_config",
+        }
+        for name, sid in expected.items():
+            assert f'"{name}": "{sid}"' in block, (
+                f"generator kehilangan link {name} → {sid}"
+            )
+
+
+class TestBokehArmv7CandidateV1019:
+    """Hanya Bokeh 3.3.4 yang DEVICE VERIFIED; 3.9.2 tetap ditolak."""
+
+    def test_bokeh_334_dipromosikan_dengan_batas_39_tetap_jujur(self):
+        catalog = json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        manifest = json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/tested-manifest.json"))
+        bokeh = next(p for p in catalog if p["name"] == "bokeh")
+        assert bokeh["status"] == "TESTED"
+        assert bokeh.get("testedVersion") == "3.3.4"
+        assert manifest.get("bokeh") == ["3.3.4"]
+        joined = " ".join(
+            bokeh.get("works", []) + bokeh.get("doesNotWork", []) +
+            bokeh.get("risks", []) + bokeh.get("dependencies", [])
+        )
+        for fact in (
+            "DEVICE VERIFIED 2026-08-20", "646935", "contourpy>=1",
+            "contourpy>=1.2", "1.0.5", "auto-relaunch",
+        ):
+            assert fact in joined, f"bukti/batas Bokeh ARMv7 hilang: {fact}"
+        assert "3.9.2" not in manifest.get("bokeh", [])
+
+    def test_generator_menjaga_promosi_dan_batas_bokeh(self):
+        generator = read(ROOT / "tools/generate_catalog.py")
+        assert '("bokeh", "bokeh", "Data / Math / Science", "pure", "TESTED"' in generator
+        rich_start = generator.index('"bokeh": {')
+        rich_end = generator.index('\n    },', rich_start)
+        rich = generator[rich_start:rich_end]
+        assert '"testedVersion": "3.3.4"' in rich
+        assert "646935" in rich and "contourpy>=1.2" in rich
+        manifest_start = generator.index("TESTED_MANIFEST = {")
+        manifest_end = generator.index("\n}", manifest_start)
+        manifest_block = generator[manifest_start:manifest_end]
+        assert '"bokeh": ["3.3.4"]' in manifest_block
+        assert '"bokeh": ["3.9.2"]' not in manifest_block
+
+
+class TestLibraryP0CurationV1019:
+    """Tiga kartu yang sample-nya sudah ada wajib kurasi tangan dan jujur.
+
+    Menjaga kelas regresi: auto-fill kembali menyamar sebagai kurasi, dependency
+    tidak tampil, atau sample QR kembali menganggap Pillow dependency otomatis.
+    """
+
+    NAMES = ("python-docx", "qrcode", "sympy")
+
+    def _by_name(self):
+        import json as _json
+        data = _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))
+        return {p["name"]: p for p in data}
+
+    def test_tiga_kartu_lengkap_dan_bersumber(self):
+        by = self._by_name()
+        for name in self.NAMES:
+            pkg = by[name]
+            for field in ("description", "useCases", "works", "dependencies",
+                          "risks", "license", "publisher", "longDescription",
+                          "whyUse", "example", "whoMadeIt", "sources",
+                          "curatedAt", "sampleId"):
+                assert pkg.get(field), f"{name}: field {field} kosong"
+            assert "auto:" not in pkg["curatedAt"], (
+                f"{name}: metadata auto-fill menyaru sebagai kurasi tangan"
+            )
+            kinds = {source.get("untuk") for source in pkg["sources"]}
+            assert {"what", "why", "how", "who"} <= kinds, (
+                f"{name}: sumber 5W1H belum lengkap: {sorted(kinds)}"
+            )
+            assert all(source.get("url", "").startswith("https://")
+                       for source in pkg["sources"]), f"{name}: URL sumber tidak aman"
+
+    def test_dependency_spesifik_dan_dirender(self):
+        by = self._by_name()
+        assert "lxml>=3.1.0" in by["python-docx"]["dependencies"]
+        assert "typing-extensions>=4.9.0" in by["python-docx"]["dependencies"]
+        assert any("Pillow>=9.1.0" in x for x in by["qrcode"]["dependencies"])
+        assert "mpmath>=1.1.0,<1.4" in by["sympy"]["dependencies"]
+        ui = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert '"Dependensi: ${pkg.dependencies.joinToString(", ")}"' in ui, (
+            "field dependencies terisi tetapi tidak pernah tampil di Detail Library"
+        )
+
+    def test_qrcode_tanpa_pillow_tetap_punya_output(self):
+        sample = read(ROOT / "app/src/main/assets/samples/qr_generator.py")
+        assert "otomatis menarik pillow" not in sample.lower(), (
+            "qrcode tidak menarik Pillow pada install standar — komentar lama bohong"
+        )
+        assert "except ModuleNotFoundError" in sample
+        assert "from qrcode.image.svg import SvgPathImage" in sample
+        assert 'image_factory=SvgPathImage' in sample and 'nama_file = "qr.svg"' in sample
+        assert 'nama_file = "qr.png"' in sample, (
+            "Pillow yang sudah aktif tetap boleh menghasilkan PNG ramah galeri"
+        )
+        lib = read(APP / "core/samples/SampleLibrary.kt")
+        i = lib.find('"qr_generator"')
+        assert "fallback SVG" in lib[i:i + 300]
+
+    def test_qrcode_snippet_memakai_jalur_tanpa_dependency_opsional(self):
+        pkg = self._by_name()["qrcode"]
+        assert "SvgPathImage" in pkg["example"]
+        assert 'image_factory=SvgPathImage' in pkg["example"]
+
+
+class TestCuratedSampleWaveV1019:
+    """Gelombang 8 sample: berguna lintas kategori, runnable, dan aman-default."""
+
+    NEW = {
+        "numpy_slicing": "numpy",
+        "matplotlib_subplots": "matplotlib",
+        "httpx_api": "httpx",
+        "beautifulsoup_links": "beautifulsoup4",
+        "pptx_presentasi": "python-pptx",
+        "tinydb_catatan": "tinydb",
+        "pyotp_2fa": "pyotp",
+        "pyyaml_config": "pyyaml",
+    }
+
+    def _catalog(self):
+        import json as _json
+        return {p["name"]: p for p in _json.loads(read(
+            ROOT / "app/src/main/assets/package_catalog/packages.json"))}
+
+    def test_delapan_sample_terdaftar_dan_tested(self):
+        lib = strip_kt_comments(read(APP / "core/samples/SampleLibrary.kt"))
+        catalog = self._catalog()
+        for sid, package in self.NEW.items():
+            assert f'"{sid}"' in lib, f"sample {sid} belum terdaftar"
+            assert (ROOT / f"app/src/main/assets/samples/{sid}.py").exists()
+            assert catalog[package]["status"] == "TESTED", (
+                f"{sid} memakai {package} yang belum TESTED"
+            )
+            start = lib.index(f'"{sid}"')
+            assert f'requiresPackage = listOf("{package}")' in lib[start:start + 500], (
+                f"{sid} kehilangan requiresPackage {package}"
+            )
+
+    def test_kategori_berdasarkan_tujuan_bukan_keranjang(self):
+        lib = strip_kt_comments(read(APP / "core/samples/SampleLibrary.kt"))
+        categories = re.findall(r'\bSampleCategory\(\s*"([^"]+)"', lib)
+        expected = {"basics", "numpy", "matplotlib", "web_api", "office",
+                    "database", "data_math", "image_qr", "security",
+                    "utilities", "projects"}
+        assert set(categories) == expected, f"kategori melenceng: {categories}"
+        assert len(categories) == len(set(categories)), "ID kategori duplikat"
+        assert '"paket", "Paket Populer"' not in lib
+
+    def test_network_timeout_dan_parser_offline(self):
+        httpx = read(ROOT / "app/src/main/assets/samples/httpx_api.py")
+        assert "timeout=10.0" in httpx and "raise_for_status()" in httpx
+        assert "except httpx.HTTPError" in httpx
+        soup = read(ROOT / "app/src/main/assets/samples/beautifulsoup_links.py")
+        assert 'BeautifulSoup(html, "html.parser")' in soup
+        for network in ("requests", "httpx", "urllib"):
+            assert f"import {network}" not in soup, (
+                "sample Beautiful Soup harus deterministik/offline; HTTP dipelajari terpisah"
+            )
+
+    def test_matplotlib_headless_dan_output_ditutup(self):
+        src = read(ROOT / "app/src/main/assets/samples/matplotlib_subplots.py")
+        assert 'matplotlib.use("Agg")' in src
+        assert src.index('matplotlib.use("Agg")') < src.index("import matplotlib.pyplot")
+        assert 'fig.savefig("subplots.png"' in src and "plt.close(fig)" in src
+
+    def test_security_defaults(self):
+        yaml = read(ROOT / "app/src/main/assets/samples/pyyaml_config.py")
+        assert "yaml.safe_load(" in yaml and "yaml.safe_dump(" in yaml
+        assert "yaml.load(" not in yaml, "data luar tidak boleh masuk yaml.load yang unsafe"
+        otp = read(ROOT / "app/src/main/assets/samples/pyotp_2fa.py")
+        assert "pyotp.random_base32()" in otp and ".verify(kode)" in otp
+        assert "Jangan cetak atau simpan secret asli" in otp
+
+    def test_empat_kartu_baru_lengkap_dan_enam_link(self):
+        catalog = self._catalog()
+        for name in ("python-pptx", "tinydb", "pyotp", "pyyaml"):
+            pkg = catalog[name]
+            for field in ("useCases", "doesNotWork", "risks", "license",
+                          "publisher", "longDescription", "whyUse", "example",
+                          "whoMadeIt", "sources", "curatedAt", "sampleId"):
+                assert pkg.get(field), f"{name}: {field} kosong"
+            assert "auto:" not in pkg["curatedAt"]
+            kinds = {s.get("untuk") for s in pkg["sources"]}
+            assert {"what", "why", "how", "who"} <= kinds
+        expected_links = {
+            "httpx": "httpx_api", "beautifulsoup4": "beautifulsoup_links",
+            "python-pptx": "pptx_presentasi", "tinydb": "tinydb_catatan",
+            "pyotp": "pyotp_2fa", "pyyaml": "pyyaml_config",
+        }
+        for package, sid in expected_links.items():
+            assert catalog[package].get("sampleId") == sid
+
+
+class TestPerFileUndoRedoV1019:
+    """Undo/Redo mobile wajib per-file; switch tab bukan edit lintas dokumen."""
+
+    JS = ROOT / "editor-src/src/editor.js"
+    BUNDLE = ROOT / "app/src/main/assets/editor/codemirror.bundle.js"
+
+    def test_editor_state_dipisah_per_file(self):
+        src = read(self.JS)
+        for marker in (
+            "const documentStates = new Map()",
+            "let activeDocumentId = null",
+            "function openDocument(documentId, code)",
+            "documentStates.set(activeDocumentId, view.state)",
+            "let nextState = documentStates.get(id)",
+            "view.setState(nextState)",
+        ):
+            assert marker in src, f"kontrak per-file history hilang: {marker}"
+        assert "openDocument(${escapeJavaScriptString(id)}" in read(
+            UI / "workbench/WorkbenchScreen.kt"
+        )
+        kotlin = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
+        assert "openDocument(" in kotlin
+        assert "setCode(" not in kotlin, (
+            "initial/file switch kembali memakai replacement di satu undo stack"
+        )
+
+    def test_callback_membawa_document_id_anti_stale_tab(self):
+        js = read(self.JS)
+        assert "window.ZCODE.onCodeChange(" in js
+        assert 'activeDocumentId || ""' in js
+        screen = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
+        bridge_block = screen[screen.index("fun onCodeChange("):]
+        bridge_block = bridge_block[:bridge_block.index("\n    }")]
+        for param in ("documentId: String", "code: String",
+                      "canUndo: Boolean", "canRedo: Boolean"):
+            assert param in bridge_block, f"callback editor kehilangan {param}"
+        workbench = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert "vm.updateCodeForFile(id, changedCode)" in workbench
+        vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
+        assert "fun updateCodeForFile(filename: String, newCode: String)" in vm
+        assert "if (filename !in openedFiles) return" in vm
+
+    def test_close_rename_delete_clear_mengelola_state(self):
+        js = read(self.JS)
+        for fn in ("dropDocument", "renameDocument", "clearDocumentStates"):
+            assert f"function {fn}(" in js and f"window.{fn} = {fn}" in js
+        wb = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert "dropDocumentState(filename)" in wb
+        assert "dropDocumentState(name)" in wb
+        assert "renameDocument(" in wb
+        assert 'evaluateJavascript("clearDocumentStates();"' in wb
+
+    def test_undo_redo_status_dan_tombol_terhubung(self):
+        js = read(self.JS)
+        assert "undoDepth(view.state) > 0" in js
+        assert "redoDepth(view.state) > 0" in js
+        # Device bug UAT: callback bridge history terpisah tidak mengaktifkan
+        # tombol. Status kini ikut callback onCodeChange yang sudah terbukti.
+        notify = js[js.index("function notifyHistoryState"):js.index("// Gerbong A", js.index("function notifyHistoryState"))]
+        assert "window.ZCODE.onCodeChange(" in notify
+        assert "canUndo," in notify and "canRedo" in notify
+        assert "window.ZCODE.onHistoryStateChange" not in notify
+        assert "const changed = cmUndo(view)" in js and "return changed" in js
+        assert "const changed = cmRedo(view)" in js
+        screen = strip_kt_comments(read(UI / "editor/EditorScreen.kt"))
+        bridge = screen[screen.index("class EditorBridge("):]
+        assert "canUndo: Boolean" in bridge and "canRedo: Boolean" in bridge
+        assert "onChange(documentId, code, canUndo, canRedo)" in bridge
+        handle = strip_kt_comments(read(UI / "common/EditorHandle.kt"))
+        assert ".clickable(enabled = key.enabled)" in handle
+        assert "contentDescription = key.contentDescription" in handle
+        wb = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        undo_at = wb.index('label = "↶"')
+        redo_at = wb.index('label = "↷"')
+        assert 'runHistoryAction("undo")' in wb[undo_at:undo_at + 350]
+        assert 'runHistoryAction("redo")' in wb[redo_at:redo_at + 350]
+
+    def test_transform_programatik_satu_undo_group(self):
+        js = read(self.JS)
+        block = js[js.index("function replaceCurrentDocument"):js.index("function openDocument")]
+        assert 'isolateHistory.of("full")' in block
+        wb = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        for action in ("sortLines", "changeCase", "trimNow"):
+            i = wb.index(f'evaluateJavascript("{action}')
+            assert "pushCode()" not in wb[i:i + 180], (
+                f"{action} sudah mengubah CM6; pushCode lama dapat mengembalikan kode stale"
+            )
+
+    def test_setting_editor_diterapkan_ke_semua_state(self):
+        js = read(self.JS)
+        assert "function reconfigureEveryDocument(" in js
+        assert "for (const [id, state] of documentStates)" in js
+        for setter, state_var in (
+            ("setCloseBrackets", "currentCloseBracketsEnabled"),
+            ("setHighlightSelectionMatches", "currentSelectionMatchesEnabled"),
+            ("setLintEnabled", "currentLintEnabled"),
+            ("setWhitespaceEnabled", "currentWhitespaceEnabled"),
+            ("setFontFamily", "currentFontFamily"),
+        ):
+            block = js[js.index(f"function {setter}"):]
+            block = block[:block.find("\n}") + 2]
+            assert state_var in block and "reconfigureEveryDocument(" in block
+
+    def test_bundle_memuat_kontrak_baru(self):
+        bundle = read(self.BUNDLE)
+        for marker in ("window.openDocument", "window.dropDocument",
+                       "window.renameDocument", "window.clearDocumentStates",
+                       "onCodeChange"):
+            assert marker in bundle, f"bundle belum direbuild: {marker}"
+
+    def test_pelajaran_per_file_masuk_playbook(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "SKILL 18 — Editor multi-file" in skills
+        assert "Satu file = satu identity dan satu EditorState/history" in skills
+
+
+class TestUniversalAgentsGuide:
+    """Root AGENTS.md = perilaku universal; SKILLS tetap playbook ZCODE."""
+
+    def test_agents_md_ada_dan_lengkap(self):
+        text = read(ROOT / "AGENTS.md")
+        assert text, "AGENTS.md universal hilang"
+        for principle in (
+            "Be honest about anything",
+            "Be meticulous in everything",
+            "Partnership with the user",
+            "Regression guards and mutation testing",
+            "Concurrency, lifecycle, and ownership",
+            "Security and secrets",
+            "Contracts and documentation are revisable",
+            "Handoff standard",
+        ):
+            assert principle in text, f"AGENTS.md kehilangan: {principle}"
+        for project_term in ("Chaquopy", "ZCODE", "Package Engine V2"):
+            assert project_term not in text, (
+                f"AGENTS.md harus universal, masih memuat detail proyek: {project_term}"
+            )
+
+    def test_skills_tetap_overlay_proyek(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "playbook engineering khusus ZCODE" in skills
+        assert "root `AGENTS.md`" in skills
+        assert "Chaquopy" in skills and "ARMv7" in skills, (
+            "fakta proyek tidak boleh hilang saat prinsip universal diekstrak"
+        )
+
+
+class TestSemanticPackageLogsV1019:
+    """Package log meaning comes from types, never decorative status text."""
+
+    MODEL = APP / "core/logging/SemanticLog.kt"
+    PIP = UI / "settings/PipScreen.kt"
+    ENGINE = APP / "core/packageengine/PackageEngineV2.kt"
+    RESOLVE = APP / "core/packageengine/ResolveOperationBridge.kt"
+    EXECUTION = APP / "core/execution/ExecutionEngine.kt"
+
+    def test_model_memuat_semua_makna(self):
+        src = strip_kt_comments(read(self.MODEL))
+        for kind in ("STEP", "INFO", "WARN", "WAIT", "OK", "FAIL", "STOP", "RAW"):
+            assert re.search(rf"\b{kind}\b", src), f"SemanticLogKind.{kind} hilang"
+        assert "data class SemanticLog" in src
+
+    def test_renderer_prefix_dan_warna_lengkap(self):
+        src = strip_kt_comments(read(self.PIP))
+        expected_prefix = {
+            "STEP": "[>] ", "INFO": "[INFO] ", "WARN": "[WARN] ",
+            "WAIT": "[WAIT] ", "OK": "[OK] ", "FAIL": "[ERR] ",
+            "STOP": "[STOP] ", "RAW": "",
+        }
+        for kind, prefix in expected_prefix.items():
+            assert f'SemanticLogKind.{kind} -> "{prefix}"' in src, (
+                f"prefix {kind} salah/hilang"
+            )
+            assert f"SemanticLogKind.{kind} -> Color(" in src, (
+                f"warna {kind} salah/hilang"
+            )
+        assert "line.displayText" in src, "label semantic tidak ikut hasil copy"
+
+    def test_engine_event_bertipe_dan_cancel_bukan_fail(self):
+        src = strip_kt_comments(read(self.ENGINE))
+        assert "data class Message(" in src and "val kind: SemanticLogKind" in src
+        assert "enum class FinishResult { OK, FAIL, STOP }" in src
+        assert "data class Log(" not in src, "Step.Log generik kembali"
+        assert 'if (code == "CANCELLED") FinishResult.STOP' in src
+        pip = strip_kt_comments(read(self.PIP))
+        assert "FinishResult.STOP -> SemanticLogKind.STOP" in pip
+        assert 'result.code == "CANCELLED"' in pip
+        assert '"PKG_INSTALL_CANCELLED"' in pip
+
+    def test_resolve_progress_memiliki_kind(self):
+        src = strip_kt_comments(read(self.RESOLVE))
+        expected = (
+            '"package_begin", "http_begin" -> SemanticLogKind.WAIT',
+            '"http_retry", "http_fail", "package_unavailable" -> SemanticLogKind.WARN',
+            '"cancelled" -> SemanticLogKind.STOP',
+            '"package_chosen", "target_not_found" -> SemanticLogKind.INFO',
+        )
+        for mapping in expected:
+            assert mapping in src, f"resolve semantic mapping salah: {mapping}"
+        engine = strip_kt_comments(read(self.ENGINE))
+        assert "display, raw, keepDiagnostic, kind" in engine
+        assert "Step.Message(display, kind)" in engine
+
+    def test_legacy_reader_lengkap_dan_hanya_prefix(self):
+        src = strip_kt_comments(read(self.PIP))
+        start = src.index("fun parseLegacyConsoleLine")
+        block = src[start:src.index("@Composable", start)]
+        expected_lines = (
+            'listOf("✅", "[OK]") to SemanticLogKind.OK',
+            'listOf("❌", "[ERR]") to SemanticLogKind.FAIL',
+            'listOf("⚠️", "⚠", "[WARN]") to SemanticLogKind.WARN',
+            'listOf("ℹ️", "ℹ", "[INFO]") to SemanticLogKind.INFO',
+            'listOf("⏳", "[WAIT]") to SemanticLogKind.WAIT',
+            'listOf("🛑", "[STOP]") to SemanticLogKind.STOP',
+            'listOf("▶️", "▶", ">", "[>]") to SemanticLogKind.STEP',
+        )
+        for mapping in expected_lines:
+            assert mapping in block, f"legacy mapping salah/hilang: {mapping}"
+        assert "line.startsWith(it)" in block, (
+            "legacy reader tidak boleh menebak status dari emoji di tengah teks user"
+        )
+        assert "line.contains" not in block
+        assert "SemanticLogKind.RAW" in block
+
+    def test_producer_baru_bebas_emoji_status(self):
+        tokens = ("✅", "❌", "⚠️", "ℹ️", "⏳", "🛑")
+        for path in (self.ENGINE, self.EXECUTION,
+                     APP / "core/packageengine/WheelSelector.kt"):
+            src = strip_kt_comments(read(path))
+            for token in tokens:
+                assert token not in src, f"producer {path.name} masih emit {token}"
+        pip = strip_kt_comments(read(self.PIP))
+        # Emoji hanya boleh hidup dalam reader backward-compatibility.
+        start = pip.index("fun parseLegacyConsoleLine")
+        end = pip.index("@Composable", start)
+        active = pip[:start] + pip[end:]
+        for token in tokens:
+            assert token not in active, f"PipScreen producer masih emit {token}"
+
+    def test_execution_legacy_mengirim_semantic_log(self):
+        src = strip_kt_comments(read(self.EXECUTION))
+        assert "onLog: (SemanticLog) -> Unit" in src
+        assert "SemanticLogKind.FAIL" in src
+        assert "SemanticLogKind.RAW" in src
+
+    def test_text_tidak_menentukan_kind_jalur_baru(self):
+        pip = strip_kt_comments(read(self.PIP))
+        assert "fun appendMessage(text: String, kind: SemanticLogKind)" in pip
+        block = pip[pip.index("fun appendMessage"):pip.index("fun appendLegacyLog")]
+        assert "ConsoleLine(line.trim(), kind)" in block
+        for forbidden in ("contains", "startsWith", "✅", "❌"):
+            assert forbidden not in block, (
+                f"appendMessage semantic masih menebak dari teks: {forbidden}"
+            )
+
+    def test_pelajaran_semantic_log_masuk_playbook(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "SKILL 19 — Makna log harus bertipe" in skills
+        assert "STOP` berbeda dari `FAIL" in skills
+
+
+class TestUninstallHardeningV1019:
+    """Uninstall tetap sederhana, tetapi jujur, serial, dan terobservasi."""
+
+    def test_telemetry_tepat_satu_owner(self):
+        engine = strip_kt_comments(read(APP / "core/packageengine/PackageEngineV2.kt"))
+        tx = strip_kt_comments(read(APP / "core/packageengine/TransactionManager.kt"))
+        assert engine.count('TelemetryStore.increment("uninstall_count")') == 1, (
+            "owner luar PackageEngine harus mencatat tepat satu uninstall sukses"
+        )
+        assert 'TelemetryStore.increment("uninstall_count")' not in tx, (
+            "TransactionManager dulu menggandakan telemetry uninstall"
+        )
+
+    def test_uninstall_log_typed_bukan_string(self):
+        engine = strip_kt_comments(read(APP / "core/packageengine/PackageEngineV2.kt"))
+        tx = strip_kt_comments(read(APP / "core/packageengine/TransactionManager.kt"))
+        assert "onLog: (SemanticLog) -> Unit" in engine
+        assert "onLog: (SemanticLog) -> Unit" in tx
+        assert 'SemanticLogKind.INFO' in tx
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "appendMessage(event.text, event.kind)" in pip
+        assert "appendLegacyLog(line)" not in pip
+
+    def test_dialog_jujur_reverse_dependency_belum_ada(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "pendingUninstall" in pip
+        assert 'Text("Uninstall ${target.displayName}?"' in pip
+        assert "belum memeriksa reverse dependency" in pip
+        assert "mungkin berhenti bekerja" in pip
+        assert 'Text("Batal")' in pip
+        assert 'Text("Uninstall", color = Color(' in pip
+        # Tap tombol detail hanya membuka konfirmasi; tidak boleh langsung hapus.
+        start = pip.index("onUninstall = {")
+        block = pip[start:pip.index("onSupport =", start)]
+        assert "pendingUninstall = pkg" in block
+        assert "doUninstall" not in block
+
+    def test_breadcrumb_request_ok_fail(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        for event in ("PKG_UNINSTALL_REQUEST", "PKG_UNINSTALL_OK", "PKG_UNINSTALL_FAIL"):
+            assert f'"{event}"' in pip, f"breadcrumb uninstall hilang: {event}"
+
+    def test_uninstall_tidak_balapan_dengan_operasi_package(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        start = pip.index("fun doUninstall(")
+        block = pip[start:pip.index("fun doSupportRequest", start)]
+        assert "isInstalling || isAnalyzing || PackageEngineV2.isBusy()" in block
+        assert "Tunggu operasi package" in block
+        assert "return" in block
+
+    def test_tidak_ada_auto_clean_dependency(self):
+        tx = strip_kt_comments(read(APP / "core/packageengine/TransactionManager.kt"))
+        start = tx.index("fun uninstall(")
+        block = tx[start:]
+        for dangerous in ("orphan", "reverseDependencies", "removeUnused"):
+            assert dangerous not in block, (
+                "v1.0.19 belum punya ownership graph; jangan auto-clean dependency"
+            )
+
+    def test_pelajaran_uninstall_masuk_playbook(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        assert "SKILL 20 — Uninstall tanpa reverse graph" in skills
+        assert "Satu operasi sukses memiliki satu owner telemetry" in skills

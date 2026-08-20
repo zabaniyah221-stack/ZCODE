@@ -73,6 +73,35 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var symbolBarEnabled by mutableStateOf(true)
         private set
 
+    /** Gerbong A v1.0.19: lint gutter (merah di baris salah) — default ON. */
+    var lintGutterEnabled by mutableStateOf(true)
+        private set
+
+    /** A3: tap traceback di terminal → lompat ke baris editor — default ON. */
+    var tracebackJumpEnabled by mutableStateOf(true)
+        private set
+
+    /**
+     * A3: baris tujuan yang menunggu editor siap. Terminal → navigasi balik →
+     * WorkbenchScreen mengonsumsi ini SEKALI setelah editor ready (WebView
+     * butuh waktu; gotoLine langsung saat navigasi = ditelan about:blank,
+     * kelas BUG H). Nol = tidak ada yang pending.
+     */
+    var pendingGotoLine by mutableStateOf(0)
+
+    fun requestGotoLine(fileName: String, line: Int) {
+        // buka file yang benar dulu (traceback bisa menunjuk file lain di
+        // workspace — multi-file import sudah jalan sejak dulu, A7).
+        val ada = FileManager.listFiles(filesDir).any { it["name"] == fileName }
+        if (fileName != activeFile && ada) selectFile(fileName)
+        pendingGotoLine = line
+    }
+
+    /** A2: whitespace guard (trailing WS + campuran tab/spasi di gutter) —
+     *  default OFF (keputusan user 2026-08-17: highlight bisa berisik). */
+    var whitespaceGuardEnabled by mutableStateOf(false)
+        private set
+
     /** F1.7: Auto-close brackets (CM6) — toggle user, persist di SharedPreferences. */
     var closeBracketsEnabled by mutableStateOf(true)
         private set
@@ -291,6 +320,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
         activeCode = activeFile?.let { FileManager.readFile(filesDir, it).getOrDefault("") } ?: ""
         symbolBarEnabled = prefs.getBoolean("symbol_bar", true)
+        lintGutterEnabled = prefs.getBoolean("lint_gutter", true)
+        whitespaceGuardEnabled = prefs.getBoolean("whitespace_guard", false)
+        tracebackJumpEnabled = prefs.getBoolean("traceback_jump", true)
         closeBracketsEnabled = prefs.getBoolean("close_brackets", true)
         highlightSelectionMatchesEnabled = prefs.getBoolean("highlight_selection_matches", true)
         // F2.4: Load preferensi indikator Python (default ON)
@@ -313,6 +345,25 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     fun setSymbolBar(enabled: Boolean) {
         symbolBarEnabled = enabled
         prefs.edit().putBoolean("symbol_bar", enabled).apply()
+    }
+
+    /** Gerbong A: toggle lint gutter — persist antar sesi (pola setSymbolBar,
+     *  nama tidak berakhiran Enabled: anti platform declaration clash). */
+    fun setLintGutter(enabled: Boolean) {
+        lintGutterEnabled = enabled
+        prefs.edit().putBoolean("lint_gutter", enabled).apply()
+    }
+
+    /** A3: toggle traceback tap-to-jump — persist antar sesi. */
+    fun setTracebackJump(enabled: Boolean) {
+        tracebackJumpEnabled = enabled
+        prefs.edit().putBoolean("traceback_jump", enabled).apply()
+    }
+
+    /** A2: toggle whitespace guard — persist antar sesi. */
+    fun setWhitespaceGuard(enabled: Boolean) {
+        whitespaceGuardEnabled = enabled
+        prefs.edit().putBoolean("whitespace_guard", enabled).apply()
     }
 
     /** F1.7: Toggle auto-close brackets (CM6) — persist antar sesi. */
@@ -393,18 +444,50 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         persistWorkspaceState()
     }
 
-    fun flushSaveSync() {
-        val current = activeFile ?: return
-        val codeToSave = activeCode
-        if (pendingSave) {
-            saveJob?.cancel()
-            try {
-                FileManager.saveFile(filesDir, current, codeToSave)
-            } catch (e: Exception) {
-                // ignore
+    /**
+     * Flush used by ordinary lifecycle callbacks and by process rebirth.
+     * Unlike the old Unit API, success means both current source and workspace
+     * topology are durably committed. A failed save must never be followed by
+     * killing the process.
+     */
+    fun flushSaveSync(verifyAllDrafts: Boolean = false): Boolean {
+        saveJob?.cancel()
+        val current = activeFile
+        val draftsToSave = linkedMapOf<String, String>()
+        if (verifyAllDrafts) {
+            fileDrafts.forEach { (name, code) ->
+                if (name in openedFiles) draftsToSave[name] = code
             }
+            if (current != null) draftsToSave[current] = activeCode
+        } else if (current != null && pendingSave) {
+            draftsToSave[current] = activeCode
+        }
+        for ((name, code) in draftsToSave) {
+            val result = FileManager.saveFile(filesDir, name, code)
+            if (result.isFailure) {
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "WORKSPACE_FLUSH_FAIL",
+                    "$name: ${result.exceptionOrNull()?.message ?: "save gagal"}"
+                )
+                return false
+            }
+        }
+        if (draftsToSave.isNotEmpty()) {
             pendingSave = false
         }
+        val json = try {
+            JSONObject().apply {
+                put("opened", JSONArray(openedFiles))
+                put("active", activeFile ?: "")
+            }.toString()
+        } catch (e: Exception) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", e.message ?: "state gagal")
+            return false
+        }
+        val committed = prefs.edit().putString("workspace", json).commit()
+        if (committed) com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_OK", activeFile ?: "-")
+        else com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", "commit workspace gagal")
+        return committed
     }
 
     fun updateCode(newCode: String) {
@@ -422,6 +505,23 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
         validateSyntaxDebounced(newCode)
+    }
+
+    /**
+     * Callback editor membawa ID dokumen agar event WebView yang sempat antre
+     * tidak menimpa file baru setelah user cepat berpindah tab.
+     */
+    fun updateCodeForFile(filename: String, newCode: String) {
+        if (filename == activeFile) {
+            updateCode(newCode)
+            return
+        }
+        if (filename !in openedFiles) return
+        if (fileDrafts[filename] == newCode) return
+        fileDrafts[filename] = newCode
+        scope.launch(Dispatchers.IO) {
+            runCatching { FileManager.saveFile(filesDir, filename, newCode) }
+        }
     }
 
     fun createNewFile() {
@@ -454,19 +554,19 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         val resolver = getApplication<Application>().contentResolver
         return try {
             val input = resolver.openInputStream(uri)
-                ?: return false to "File tidak bisa dibaca 😢"
+                ?: return false to "File tidak bisa dibaca."
             val bytes = input.use { readCapped(it, FileManager.MAX_FILE_BYTES) }
                 ?: return false to "File terlalu besar (maks 512 KB)"
             if (bytes.isEmpty()) return false to "File kosong — tidak ada yang diimport"
             if (bytes.contains(0.toByte())) {
-                return false to "Itu file biner, bukan file teks 🙈"
+                return false to "File biner tidak dapat dibuka sebagai teks."
             }
             val text = String(bytes, Charsets.UTF_8)
             // UTF-8 decode Kotlin tidak melempar error tapi menyisipkan U+FFFD
             // untuk byte rusak — tolak agar source code tidak corrupt diam-diam.
             // Char(0xFFFD) eksplisit (bukan literal U+FFFD mentah di source) agar
             // tahan editor/tooling yang bisa merusak karakter replacement di file.
-            if (text.contains('\uFFFD')) return false to "Encoding file bukan UTF-8 🙈"
+            if (text.contains('\uFFFD')) return false to "Encoding file bukan UTF-8."
 
             val displayName = resolver.query(uri, null, null, null, null)?.use { cursor ->
                 val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -541,13 +641,13 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     fun saveActiveToSource(): Pair<Boolean, String> {
         val name = activeFile ?: return false to "Tidak ada file aktif"
         val uriStr = externalOrigins[name]
-            ?: return false to "File internal tersimpan otomatis di workspace 🙂"
+            ?: return false to "File internal tersimpan otomatis di workspace."
         return try {
             val resolver = getApplication<Application>().contentResolver
             resolver.openOutputStream(Uri.parse(uriStr), "wt")?.use { out ->
                 out.write(activeCode.toByteArray(Charsets.UTF_8))
             } ?: return false to "Gagal membuka stream tulis"
-            true to "Disimpan ke file asli ✔"
+            true to "Disimpan ke file asli."
         } catch (e: SecurityException) {
             false to "Izin tulis dicabut Android — pakai Save as"
         } catch (e: Exception) {
@@ -577,7 +677,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             }
             externalOrigins[name] = uri.toString()
             persistExternalOrigins()
-            true to "Disimpan sebagai file device ✔"
+            true to "Disimpan sebagai file device."
         } catch (e: Exception) {
             false to "Gagal save as: ${e.message ?: "error tidak dikenal"}"
         }
@@ -602,14 +702,37 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
      * SAMPLES (FASE E): bikin file dari sample di assets/samples/ lalu buka.
      * Return: (sukses, pesan) — pesan berisi nama file final bila sukses.
      */
-    fun createSampleFromAsset(assetPath: String, sampleId: String): Pair<Boolean, String> {
+    fun createSampleFromAsset(
+        assetPath: String,
+        sampleId: String,
+        /**
+         * A7 v1.0.19 (sample multi-file): asset pendamping yang ditulis
+         * dengan NAMA TETAP (bukan uniqueFileName) — `import helper_x` di
+         * file utama wajib menemukan `helper_x.py` persis. File pendamping
+         * yang sudah ada TIDAK ditimpa (user mungkin sudah mengeditnya);
+         * ditulis hanya bila belum ada. Multi-file import sendiri sudah
+         * jalan sejak dulu (workspace di sys.path — zcode_runner line 137).
+         */
+        companionAssets: List<String> = emptyList()
+    ): Pair<Boolean, String> {
         return try {
-            val code = getApplication<Application>().assets.open(assetPath)
+            val app = getApplication<Application>()
+            for (companion in companionAssets) {
+                val cName = companion.substringAfterLast('/')
+                if (!java.io.File(filesDir, cName).exists()) {
+                    val cCode = app.assets.open(companion)
+                        .bufferedReader(Charsets.UTF_8).use { it.readText() }
+                    FileManager.saveFile(filesDir, cName, cCode)
+                }
+            }
+            val code = app.assets.open(assetPath)
                 .bufferedReader(Charsets.UTF_8).use { it.readText() }
             val finalName = uniqueFileName(sampleId)
             FileManager.saveFile(filesDir, finalName, code)
             selectFile(finalName)
-            true to "Sample kebuka: $finalName"
+            val note = if (companionAssets.isEmpty()) ""
+            else " (+${companionAssets.size} file pendamping)"
+            true to "Sample kebuka: $finalName$note"
         } catch (e: Exception) {
             false to "Gagal buka sample: ${e.message ?: "asset hilang"}"
         }

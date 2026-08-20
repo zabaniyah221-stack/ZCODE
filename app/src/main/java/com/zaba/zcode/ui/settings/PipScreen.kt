@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -64,9 +65,16 @@ import com.zaba.zcode.core.packageengine.PackageStatus
 import com.zaba.zcode.core.packageengine.RuntimeProbe
 import com.zaba.zcode.core.packageengine.SourceRef
 import com.zaba.zcode.core.packageengine.TelemetryStore
+import com.zaba.zcode.core.logging.SemanticLogKind
+import com.zaba.zcode.core.runtime.NativeRuntimeState
+import com.zaba.zcode.core.samples.SampleEntry
+import com.zaba.zcode.core.samples.SampleLibrary
+import com.zaba.zcode.ui.samples.SampleRequirementDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private enum class PipTab { LIBRARY, MANUAL }
 
 /**
  * PipScreen — INSTALL MODULES (SPEC-001).
@@ -80,14 +88,35 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PipScreen(
     context: android.content.Context,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onOpenSample: (SampleEntry) -> Unit = {},
+    onRestartRuntime: () -> Boolean = { false },
 ) {
     val scope = rememberCoroutineScope()
     val repository = remember { PackageRepository(context) }
     val engine = remember { PackageEngineV2(context) }
     val compat = remember { CompatibilityEngine(context) }
+    var runtimeStale by remember { mutableStateOf(NativeRuntimeState.isRequired(context)) }
+    var showRestartDialog by remember { mutableStateOf(false) }
+    var showRestartFailure by remember { mutableStateOf(false) }
 
-    var activeTab by remember { mutableStateOf("LIBRARY") }
+    // v1.0.19 final: tab tap-only adalah topology stabil yang sudah melewati
+    // UAT sebelum Pager diperkenalkan. State screen tetap di owner agar
+    // Library/Manual tidak kehilangan input atau posisi scroll saat berganti.
+    var activeTab by remember { mutableStateOf(PipTab.LIBRARY) }
+    val libraryListState = rememberLazyListState()
+    val manualPageScroll = rememberScrollState()
+
+    fun selectPipTab(tab: PipTab) {
+        if (activeTab == tab) return
+        activeTab = tab
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PIP_TAB", tab.name)
+    }
+
+    LaunchedEffect(Unit) {
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("PIP_TAB", activeTab.name)
+    }
+
     var searchQuery by remember { mutableStateOf("") }
     var expandedCategories by remember { mutableStateOf(setOf<String>()) }
 
@@ -97,9 +126,15 @@ fun PipScreen(
     // Library details
     var selectedPackage by remember { mutableStateOf<PackageDetails?>(null) }
     var detailsAnalysis by remember { mutableStateOf<CompatibilityEngine.Analysis?>(null) }
+    var pendingSample by remember { mutableStateOf<SampleEntry?>(null) }
+    var missingSamplePackages by remember { mutableStateOf<List<String>>(emptyList()) }
+    var pendingUninstall by remember { mutableStateOf<PackageDetails?>(null) }
 
-    // Manual install
+    // Manual install. Draft tetap milik field; activeRequirement adalah
+    // snapshot immutable milik operasi agar Cancel/diagnostics tidak membaca
+    // ulang teks yang mungkin berubah di UI.
     var packageName by remember { mutableStateOf("") }
+    var activeRequirement by remember { mutableStateOf<String?>(null) }
     var isInstalling by remember { mutableStateOf(false) }
     // Analyze punya cooperative Cancel. Download/install belum boleh mengklaim
     // bisa dibatalkan karena transaction stage-nya berbeda.
@@ -135,53 +170,64 @@ fun PipScreen(
         scope.launch { consoleScroll.scrollTo(consoleScroll.maxValue) }
     }
 
-    // Kompat penggabungan Console+Log: pemanggil appendLog lama menulis ke
-    // Console. Jenis baris ditebak dari isi pesan supaya warna bermakna
-    // (\u2705 -> OK hijau, \u274c/\ud83d\uded1 -> FAIL merah, "> " -> STEP).
-    fun appendLog(text: String) {
-        text.lines().filter { it.isNotBlank() }.forEach { baris ->
-            val kind = when {
-                baris.contains("\u2705") -> ConsoleKind.OK
-                baris.contains("\u274c") || baris.contains("\ud83d\uded1") -> ConsoleKind.FAIL
-                baris.startsWith("> ") -> ConsoleKind.STEP
-                else -> ConsoleKind.LOG
-            }
-            addConsole(ConsoleLine(baris, kind))
+    fun appendMessage(text: String, kind: SemanticLogKind) {
+        text.lines().filter { it.isNotBlank() }.forEach { line ->
+            addConsole(ConsoleLine(line.trim(), kind))
+        }
+    }
+
+    // Reader kompatibilitas untuk output lama/eksternal. Producer baru dilarang
+    // menyisipkan emoji status; makna harus datang melalui SemanticLogKind.
+    fun appendLegacyLog(text: String) {
+        text.lines().filter { it.isNotBlank() }.forEach { line ->
+            addConsole(parseLegacyConsoleLine(line))
         }
     }
 
     fun handleEngineStep(step: PackageEngineV2.Step) {
         when (step) {
-            is PackageEngineV2.Step.Begin -> addConsole(ConsoleLine("▶ ${step.label}", ConsoleKind.STEP))
-            is PackageEngineV2.Step.Log -> addConsole(ConsoleLine(step.text, ConsoleKind.LOG))
-            is PackageEngineV2.Step.Finish -> addConsole(
-                ConsoleLine(
-                    if (step.ok) "✓ ${step.label}${if (step.detail.isNotBlank()) " — ${step.detail}" else ""}"
-                    else "✗ ${step.label}: ${step.detail}",
-                    if (step.ok) ConsoleKind.OK else ConsoleKind.FAIL
-                )
-            )
+            is PackageEngineV2.Step.Begin ->
+                addConsole(ConsoleLine(step.label, SemanticLogKind.STEP))
+            is PackageEngineV2.Step.Message ->
+                addConsole(ConsoleLine(step.text.trim(), step.kind))
+            is PackageEngineV2.Step.Finish -> {
+                val kind = when (step.result) {
+                    PackageEngineV2.FinishResult.OK -> SemanticLogKind.OK
+                    PackageEngineV2.FinishResult.FAIL -> SemanticLogKind.FAIL
+                    PackageEngineV2.FinishResult.STOP -> SemanticLogKind.STOP
+                }
+                val detail = if (step.detail.isBlank()) "" else " — ${step.detail}"
+                addConsole(ConsoleLine("${step.label}$detail", kind))
+            }
         }
     }
 
     fun startInstall(req: String, plan: DependencyResolver.ResolvePlan? = null) {
         if (isInstalling) return
+        if (runtimeStale || NativeRuntimeState.isRequired(context)) {
+            runtimeStale = true
+            appendMessage("Python perlu dimulai ulang sebelum package diubah lagi.", SemanticLogKind.WARN)
+            return
+        }
         val trimmed = req.trim()
         if (trimmed.isBlank()) {
-            appendLog("\n⚠️ Requirement kosong.\n")
+            activeRequirement = null
+            appendMessage("Requirement kosong.", SemanticLogKind.WARN)
             return
         }
         if (PackageEngineV2.isBusy()) {
-            appendLog("\n⚠️ Instalasi lain masih berjalan. Tunggu selesai.\n")
+            activeRequirement = null
+            appendMessage("Instalasi lain masih berjalan. Tunggu selesai.", SemanticLogKind.WARN)
             return
         }
+        activeRequirement = trimmed
         isInstalling = true
         consoleLines = emptyList()
         // BUG J: jejak Install Modules sebelumnya TIDAK tercatat sama sekali —
         // breadcrumb hanya meliputi jalur Run (7 dari 49 berkas). Padahal justru
         // installer yang sedang bermasalah, dan user tidak punya logcat.
         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_BEGIN", trimmed)
-        appendLog("\n> install $trimmed\n")
+        appendMessage("install $trimmed", SemanticLogKind.STEP)
         scope.launch(Dispatchers.Default) {
             val result = try {
                 engine.install(trimmed, plan) { step ->
@@ -197,15 +243,23 @@ fun PipScreen(
             withContext(Dispatchers.Main) {
                 isInstalling = false
                 isCancelling = false // v1.0.18: install cancellable — reset state tombol
+                activeRequirement = null
+                val becameStale = result.restartRequired || NativeRuntimeState.isRequired(context)
+                if (becameStale) {
+                    runtimeStale = true
+                    showRestartDialog = true
+                }
                 if (result.ok) {
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
                     )
-                    appendLog("\n✅ Install selesai: ${result.installed.joinToString(", ")}\n")
+                    appendMessage("Install selesai: ${result.installed.joinToString(", ")}", SemanticLogKind.OK)
                     refreshInstalled()
                 } else {
+                    val cancelled = result.code == "CANCELLED"
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
-                        "PKG_INSTALL_FAIL", "$trimmed [${result.code}/${result.stage}] ${result.humanMessage}"
+                        if (cancelled) "PKG_INSTALL_CANCELLED" else "PKG_INSTALL_FAIL",
+                        "$trimmed [${result.code}/${result.stage}] ${result.humanMessage}"
                     )
                     // Pesan teknis dicatat TERPISAH. Menggabungkannya ke baris di
                     // atas membuat satu baris breadcrumb raksasa yang sulit dibaca;
@@ -213,16 +267,21 @@ fun PipScreen(
                     result.technicalMessage?.takeIf { it.isNotBlank() }?.let {
                         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_DETAIL", it)
                     }
-                    appendLog(
-                        "\n❌ [${result.code}] ${result.humanMessage}" +
-                            (if (result.rollbackPerformed) "\n   (rollback dilakukan — environment lama utuh)" else "") +
-                            "\n"
+                    appendMessage(
+                        "[${result.code}] ${result.humanMessage}",
+                        if (cancelled) SemanticLogKind.STOP else SemanticLogKind.FAIL
                     )
+                    if (result.rollbackPerformed) {
+                        appendMessage(
+                            "Rollback dilakukan — environment lama utuh",
+                            SemanticLogKind.INFO
+                        )
+                    }
                     // Tampilkan juga di konsol: user melapor dari HP tanpa PC, jadi
                     // penyebab teknis harus terlihat langsung dan bisa disalin —
                     // bukan hanya tersimpan di file yang harus dicari dulu.
                     result.technicalMessage?.takeIf { it.isNotBlank() }?.let {
-                        appendLog("\n--- detail teknis (salin ini saat melapor) ---\n$it\n")
+                        appendMessage("--- detail teknis (salin ini saat melapor) ---\n$it", SemanticLogKind.RAW)
                     }
                 }
             }
@@ -238,34 +297,43 @@ fun PipScreen(
         when {
             isAnalyzing && engine.cancelCurrentOperation() -> {
                 isCancelling = true
-                appendLog("\n⏳ Membatalkan analisis setelah operasi jaringan aktif selesai…\n")
-                com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCEL_REQUEST", packageName.trim())
+                appendMessage("Membatalkan analisis setelah operasi jaringan aktif selesai…", SemanticLogKind.WAIT)
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "PKG_ANALYZE_CANCEL_REQUEST",
+                    activeRequirement ?: packageName.trim()
+                )
             }
             isInstalling && engine.requestInstallCancel() -> {
                 isCancelling = true
-                appendLog("\n⏳ Membatalkan instalasi di checkpoint berikutnya…\n")
+                appendMessage("Membatalkan instalasi di checkpoint berikutnya…", SemanticLogKind.WAIT)
             }
-            else -> appendLog("\nℹ️ Operasi sudah selesai atau di tahap yang tidak bisa dibatalkan.\n")
+            else -> appendMessage("Operasi sudah selesai atau di tahap yang tidak bisa dibatalkan.", SemanticLogKind.INFO)
         }
     }
 
     fun analyzeThenInstall(req: String) {
         if (isInstalling) return
+        if (runtimeStale || NativeRuntimeState.isRequired(context)) {
+            runtimeStale = true
+            appendMessage("Python perlu dimulai ulang sebelum package diubah lagi.", SemanticLogKind.WARN)
+            return
+        }
         val trimmed = req.trim()
         if (trimmed.isBlank()) {
-            appendLog("\n⚠️ Requirement kosong.\n")
+            appendMessage("Requirement kosong.", SemanticLogKind.WARN)
             return
         }
         if (PackageEngineV2.isBusy()) {
-            appendLog("\n⚠️ Instalasi/analisis lain masih berjalan. Tunggu selesai.\n")
+            appendMessage("Instalasi/analisis lain masih berjalan. Tunggu selesai.", SemanticLogKind.WARN)
             return
         }
+        activeRequirement = trimmed
         isInstalling = true
         isAnalyzing = true
         isCancelling = false
         consoleLines = emptyList()
         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_BEGIN", trimmed)
-        appendLog("\n> analyze $trimmed\n")
+        appendMessage("analyze $trimmed", SemanticLogKind.STEP)
         scope.launch(Dispatchers.Default) {
             val plan = try {
                 engine.analyze(trimmed) { step ->
@@ -286,7 +354,8 @@ fun PipScreen(
                     isInstalling = false
                     isAnalyzing = false
                     isCancelling = false
-                    appendLog("\n❌ ${e.message}\n")
+                    activeRequirement = null
+                    appendMessage(e.message ?: "Analisis gagal", SemanticLogKind.FAIL)
                 }
                 return@launch
             }
@@ -298,16 +367,17 @@ fun PipScreen(
                 isCancelling = false
                 if (!plan.ok) {
                     isInstalling = false
+                    activeRequirement = null
                     if (plan.errorCode == "CANCELLED") {
                         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCELLED", trimmed)
-                        appendLog("\n🛑 Analisis dibatalkan. Tidak ada package yang diubah.\n")
+                        appendMessage("Analisis dibatalkan. Tidak ada package yang diubah.", SemanticLogKind.STOP)
                     } else {
                         com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                             "PKG_ANALYZE_FAIL", "$trimmed [${plan.errorCode}] ${plan.humanError}"
                         )
-                        appendLog("\n❌ [${plan.errorCode}] ${plan.humanError}\n")
+                        appendMessage("[${plan.errorCode}] ${plan.humanError}", SemanticLogKind.FAIL)
                         plan.technicalError?.takeIf { it.isNotBlank() }?.let {
-                            appendLog("--- detail teknis ---\n$it\n")
+                            appendMessage("--- detail teknis ---\n$it", SemanticLogKind.RAW)
                         }
                     }
                     return@withContext
@@ -315,8 +385,9 @@ fun PipScreen(
                 // BUG C: modul stdlib bukan kegagalan.
                 if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
                     isInstalling = false
+                    activeRequirement = null
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_STDLIB", trimmed)
-                    appendLog("\nℹ️ ${plan.stdlib.joinToString(" ") { it.reason }}\n")
+                    appendMessage(plan.stdlib.joinToString(" ") { it.reason }, SemanticLogKind.INFO)
                     return@withContext
                 }
                 // BUG X (2026-08-16): dua cabang ini dulu hanya menulis ke
@@ -326,20 +397,22 @@ fun PipScreen(
                 // bolong. Samakan dengan cabang PKG_ANALYZE_FAIL di atas.
                 if (plan.conflicts.isNotEmpty()) {
                     isInstalling = false
+                    activeRequirement = null
                     val detail = plan.conflicts.joinToString("; ") { "${it.name}: ${it.versionA} vs ${it.versionB}" }
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_ANALYZE_FAIL", "$trimmed [DEPENDENCY_CONFLICT] $detail"
                     )
-                    appendLog("\n❌ [DEPENDENCY_CONFLICT] $detail\n")
+                    appendMessage("[DEPENDENCY_CONFLICT] $detail", SemanticLogKind.FAIL)
                     return@withContext
                 }
                 if (plan.unavailable.isNotEmpty()) {
                     isInstalling = false
+                    activeRequirement = null
                     val detail = plan.unavailable.joinToString("; ") { it.name + ": " + it.reason }
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_ANALYZE_FAIL", "$trimmed [PACKAGE_NOT_AVAILABLE] $detail"
                     )
-                    appendLog("\n❌ [PACKAGE_NOT_AVAILABLE] $detail\n")
+                    appendMessage("[PACKAGE_NOT_AVAILABLE] $detail", SemanticLogKind.FAIL)
                     return@withContext
                 }
                 if (risk != null) {
@@ -359,30 +432,61 @@ fun PipScreen(
     // antrian berisi, ambil item berikutnya. Risky-dialog otomatis menahan
     // antrian (isInstalling masih true selama dialog tampil). Item di-pop
     // SEBELUM dieksekusi sehingga item gagal tidak mengulang selamanya.
-    LaunchedEffect(installQueue, isInstalling, isAnalyzing, isCancelling) {
-        if (installQueue.isNotEmpty() && !isInstalling && !isAnalyzing && !isCancelling) {
+    LaunchedEffect(installQueue, isInstalling, isAnalyzing, isCancelling, runtimeStale) {
+        if (installQueue.isNotEmpty() && !runtimeStale &&
+            !isInstalling && !isAnalyzing && !isCancelling
+        ) {
             val next = installQueue.first()
             installQueue = installQueue.drop(1)
             packageName = next
-            appendLog("\n> antrian: $next (${installQueue.size} tersisa)\n")
+            appendMessage("antrian: $next (${installQueue.size} tersisa)", SemanticLogKind.STEP)
             analyzeThenInstall(next)
         }
     }
 
     fun installFromLibrary(req: String) {
         if (isInstalling) return
-        activeTab = "MANUAL"
+        selectPipTab(PipTab.MANUAL)
         packageName = req
         analyzeThenInstall(req)
     }
 
     fun doUninstall(canonical: String) {
+        if (runtimeStale || NativeRuntimeState.isRequired(context)) {
+            runtimeStale = true
+            appendMessage("Python perlu dimulai ulang sebelum package diubah lagi.", SemanticLogKind.WARN)
+            return
+        }
+        if (isInstalling || isAnalyzing || PackageEngineV2.isBusy()) {
+            appendMessage(
+                "Tunggu operasi package yang sedang berjalan sebelum uninstall.",
+                SemanticLogKind.WARN
+            )
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "PKG_UNINSTALL_FAIL", "$canonical: engine busy"
+            )
+            return
+        }
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+            "PKG_UNINSTALL_REQUEST", canonical
+        )
         scope.launch(Dispatchers.Default) {
-            val (ok, msg) = engine.uninstall(canonical) { line ->
-                scope.launch { appendLog(line) }
+            val (ok, msg) = engine.uninstall(canonical) { event ->
+                scope.launch { appendMessage(event.text, event.kind) }
             }
             withContext(Dispatchers.Main) {
-                appendLog(if (ok) "\n✅ Uninstall $canonical berhasil.\n" else "\n❌ $msg\n")
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    if (ok) "PKG_UNINSTALL_OK" else "PKG_UNINSTALL_FAIL",
+                    if (ok) canonical else "$canonical: $msg"
+                )
+                appendMessage(
+                    if (ok) "Uninstall $canonical berhasil." else msg,
+                    if (ok) SemanticLogKind.OK else SemanticLogKind.FAIL
+                )
+                if (NativeRuntimeState.isRequired(context)) {
+                    runtimeStale = true
+                    showRestartDialog = true
+                }
                 refreshInstalled()
             }
         }
@@ -390,7 +494,34 @@ fun PipScreen(
 
     fun doSupportRequest(canonical: String) {
         val (ok, msg) = engine.requestSupport(canonical, "Dari UI katalog (status tidak tersedia/incompatible).")
-        appendLog("\n${if (ok) "✅" else "❌"} $msg\n")
+        appendMessage(msg, if (ok) SemanticLogKind.OK else SemanticLogKind.FAIL)
+    }
+
+    fun requestOpenSample(sampleId: String) {
+        val entry = SampleLibrary.findSample(sampleId)
+        if (entry == null) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "LIBRARY_SAMPLE_MISSING", sampleId
+            )
+            Toast.makeText(context, "Contoh lengkap belum tersedia", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val missing = com.zaba.zcode.core.packageengine.InstalledPackages
+            .missingFrom(context, entry.requiresPackage)
+        if (missing.isEmpty()) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "LIBRARY_SAMPLE_OPEN", entry.id
+            )
+            selectedPackage = null
+            onOpenSample(entry)
+        } else {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "LIBRARY_SAMPLE_NEEDS_PACKAGE",
+                "${entry.id} -> ${missing.joinToString(",")}"
+            )
+            pendingSample = entry
+            missingSamplePackages = missing
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -421,14 +552,71 @@ fun PipScreen(
                 installFromLibrary(pkg.name)
             },
             onUninstall = {
-                selectedPackage = null
-                doUninstall(pkg.name.lowercase().replace("_", "-"))
+                pendingUninstall = pkg
             },
             onSupport = {
                 selectedPackage = null
                 doSupportRequest(pkg.name.lowercase().replace("_", "-"))
-            }
+            },
+            onOpenSample = ::requestOpenSample
         )
+        pendingSample?.let { entry ->
+            SampleRequirementDialog(
+                entry = entry,
+                missingPackages = missingSamplePackages,
+                onDismiss = { pendingSample = null },
+                onInstallFirst = {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "LIBRARY_SAMPLE_TO_INSTALL",
+                        missingSamplePackages.joinToString(",")
+                    )
+                    // Field Manual hanya menerima satu requirement. Untuk
+                    // sample multi-package, mulai dari paket pertama; setelah
+                    // aktif, gate akan menunjukkan sisanya saat sample dibuka lagi.
+                    packageName = missingSamplePackages.firstOrNull().orEmpty()
+                    pendingSample = null
+                    selectedPackage = null
+                    selectPipTab(PipTab.MANUAL)
+                },
+                onOpenAnyway = {
+                    com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                        "LIBRARY_SAMPLE_OPEN_ANYWAY", entry.id
+                    )
+                    pendingSample = null
+                    selectedPackage = null
+                    onOpenSample(entry)
+                }
+            )
+        }
+        pendingUninstall?.let { target ->
+            val canonical = target.name.lowercase().replace("_", "-")
+            AlertDialog(
+                onDismissRequest = { pendingUninstall = null },
+                title = { Text("Uninstall ${target.displayName}?", fontSize = 16.sp) },
+                text = {
+                    Text(
+                        "Package ini akan dihapus dari environment ZCODE.\n\n" +
+                            "ZCODE belum memeriksa reverse dependency. Package lain " +
+                            "yang masih membutuhkannya mungkin berhenti bekerja sampai " +
+                            "dependency ini dipasang kembali."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pendingUninstall = null
+                        selectedPackage = null
+                        doUninstall(canonical)
+                    }) {
+                        Text("Uninstall", color = Color(0xFFFF6B6B))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingUninstall = null }) {
+                        Text("Batal")
+                    }
+                }
+            )
+        }
         return
     }
 
@@ -444,7 +632,7 @@ fun PipScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            "◀ Back",
+                            "← Back",
                             color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 14.sp,
                             modifier = Modifier
@@ -459,21 +647,44 @@ fun PipScreen(
                         )
                     }
                     Row(modifier = Modifier.fillMaxWidth().height(40.dp)) {
-                        TabBox("LIBRARY", activeTab == "LIBRARY") { activeTab = "LIBRARY" }
-                        TabBox("MANUAL INSTALL", activeTab == "MANUAL") { activeTab = "MANUAL" }
+                        TabBox("LIBRARY", activeTab == PipTab.LIBRARY) {
+                            selectPipTab(PipTab.LIBRARY)
+                        }
+                        TabBox("MANUAL INSTALL", activeTab == PipTab.MANUAL) {
+                            selectPipTab(PipTab.MANUAL)
+                        }
+                    }
+                    if (runtimeStale) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF5A4300))
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Python perlu dimulai ulang.",
+                                color = Color(0xFFFFD166),
+                                fontSize = 12.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { showRestartDialog = true }) {
+                                Text("Mulai ulang", color = Color(0xFFFFD166))
+                            }
+                        }
                     }
                 }
             }
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (activeTab == "LIBRARY") {
-                LibraryTab(
+            when (activeTab) {
+                PipTab.LIBRARY -> LibraryTab(
                     repository = repository,
                     searchQuery = searchQuery,
                     onSearchChange = { searchQuery = it },
@@ -485,6 +696,7 @@ fun PipScreen(
                     installedMap = installedMap,
                     runtimeInfo = runtimeInfo,
                     compat = compat,
+                    listState = libraryListState,
                     onSelect = { pkg ->
                         selectedPackage = pkg
                         val installed = installedMap[pkg.name.lowercase().replace("_", "-")]
@@ -496,27 +708,74 @@ fun PipScreen(
                         }
                     }
                 )
-            } else {
-                ManualTab(
+                PipTab.MANUAL -> ManualTab(
                     packageName = packageName,
-                    onPackageNameChange = { packageName = it },
+                    activeRequirement = activeRequirement,
+                    onPackageNameChange = { value ->
+                        if (!isInstalling && !isAnalyzing) packageName = value
+                    },
                     isInstalling = isInstalling,
                     isAnalyzing = isAnalyzing,
                     isCancelling = isCancelling,
                     onInstall = { analyzeThenInstall(packageName) },
                     onCancel = { cancelCurrentAnalyze() },
                     onRequirementsTxt = {
-                        appendLog("\nℹ️ requirements.txt: salin SEMUA isinya lalu tap Paste — semua baris akan diinstall berurutan (komentar # dilewati).\n")
+                        appendMessage("requirements.txt: salin SEMUA isinya lalu tap Paste — semua baris akan diinstall berurutan (komentar # dilewati).", SemanticLogKind.INFO)
                     },
                     onQueueLines = { lines ->
                         installQueue = installQueue + lines
-                        appendLog("\nℹ️ ${lines.size} requirement masuk antrian. Tap Install untuk memulai.\n")
+                        appendMessage("${lines.size} requirement masuk antrian. Tap Install untuk memulai.", SemanticLogKind.INFO)
                     },
                     consoleLines = consoleLines,
-                    consoleScroll = consoleScroll
+                    consoleScroll = consoleScroll,
+                    pageScroll = manualPageScroll
                 )
             }
         }
+    }
+
+    if (showRestartFailure) {
+        AlertDialog(
+            onDismissRequest = { showRestartFailure = false },
+            title = { Text("Belum dapat dimulai ulang", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "File, workspace, atau status mulai ulang gagal disimpan. " +
+                        "ZCODE tidak menutup process agar kode tidak hilang."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestartFailure = false
+                    showRestartDialog = true
+                }) { Text("Coba simpan lagi") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestartFailure = false }) { Text("Kembali") }
+            }
+        )
+    }
+
+    if (showRestartDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestartDialog = false },
+            title = { Text("Mulai ulang ZCODE?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Package native telah memuat atau mengubah state Python. " +
+                        "File dan tab akan disimpan, lalu ZCODE terbuka kembali secara otomatis."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestartDialog = false
+                    if (!onRestartRuntime()) showRestartFailure = true
+                }) { Text("Simpan & mulai ulang") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestartDialog = false }) { Text("Nanti") }
+            }
+        )
     }
 
     // ---- Risky confirmation dialog (Manual Install) ----
@@ -526,6 +785,7 @@ fun PipScreen(
                 pendingRiskyReq = null
                 pendingRiskyPlan = null
                 isInstalling = false
+                activeRequirement = null
             },
             title = { Text("Install eksperimental?", fontWeight = FontWeight.Bold) },
             text = {
@@ -560,6 +820,7 @@ fun PipScreen(
                     pendingRiskyReq = null
                     pendingRiskyPlan = null
                     isInstalling = false
+                    activeRequirement = null
                 }) { Text("Batal") }
             }
         )
@@ -572,9 +833,44 @@ fun PipScreen(
 // Model console
 // =====================================================================
 
-enum class ConsoleKind { STEP, LOG, OK, FAIL }
+data class ConsoleLine(
+    val text: String,
+    val kind: SemanticLogKind,
+) {
+    val displayText: String
+        get() = kind.prefix + text
+}
 
-data class ConsoleLine(val text: String, val kind: ConsoleKind)
+private val SemanticLogKind.prefix: String
+    get() = when (this) {
+        SemanticLogKind.STEP -> "[>] "
+        SemanticLogKind.INFO -> "[INFO] "
+        SemanticLogKind.WARN -> "[WARN] "
+        SemanticLogKind.WAIT -> "[WAIT] "
+        SemanticLogKind.OK -> "[OK] "
+        SemanticLogKind.FAIL -> "[ERR] "
+        SemanticLogKind.STOP -> "[STOP] "
+        SemanticLogKind.RAW -> ""
+    }
+
+/** Reader sementara untuk string status era emoji dan arsip lama. */
+private fun parseLegacyConsoleLine(raw: String): ConsoleLine {
+    val line = raw.trim()
+    val mappings = listOf(
+        listOf("✅", "[OK]") to SemanticLogKind.OK,
+        listOf("❌", "[ERR]") to SemanticLogKind.FAIL,
+        listOf("⚠️", "⚠", "[WARN]") to SemanticLogKind.WARN,
+        listOf("ℹ️", "ℹ", "[INFO]") to SemanticLogKind.INFO,
+        listOf("⏳", "[WAIT]") to SemanticLogKind.WAIT,
+        listOf("🛑", "[STOP]") to SemanticLogKind.STOP,
+        listOf("▶️", "▶", ">", "[>]") to SemanticLogKind.STEP,
+    )
+    for ((prefixes, kind) in mappings) {
+        val prefix = prefixes.firstOrNull { line.startsWith(it) } ?: continue
+        return ConsoleLine(line.removePrefix(prefix).trim(), kind)
+    }
+    return ConsoleLine(line, SemanticLogKind.RAW)
+}
 
 // =====================================================================
 // Tab
@@ -613,6 +909,7 @@ private fun LibraryTab(
     installedMap: Map<String, String>,
     runtimeInfo: RuntimeProbe.RuntimeInfo?,
     compat: CompatibilityEngine,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     onSelect: (PackageDetails) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -645,7 +942,10 @@ private fun LibraryTab(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
         )
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        ) {
             val filtered = if (searchQuery.isNotBlank()) {
                 repository.search(searchQuery)
             } else allItems
@@ -695,6 +995,18 @@ private fun LibraryTab(
                         Divider(color = Color.White.copy(alpha = 0.05f))
                     }
                     if (expandedCategories.contains(cat)) {
+                        // Gerbong D v1.0.19: deskripsi kategori — satu kalimat
+                        // orientasi saat kategori dibuka (data statis, offline).
+                        categoryDescription(cat)?.let { desc ->
+                            item {
+                                Text(
+                                    desc,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                         items(allItems.filter { it.category == cat }) { item ->
                             CatalogRow(
                                 item = item,
@@ -797,7 +1109,8 @@ private fun PackageDetailScreen(
     onInstallTested: () -> Unit,
     onInstall: () -> Unit,
     onUninstall: () -> Unit,
-    onSupport: () -> Unit
+    onSupport: () -> Unit,
+    onOpenSample: (String) -> Unit,
 ) {
     val ctx = LocalContext.current
     fun openUrl(url: String) {
@@ -886,7 +1199,14 @@ private fun PackageDetailScreen(
                     )
                 }
                 SourceChips(pkg.sources.filter { it.untuk == "how" }, ::openUrl)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
+            }
+
+            pkg.sampleId?.takeIf { it.isNotBlank() }?.let { sampleId ->
+                TextButton(onClick = { onOpenSample(sampleId) }) {
+                    Text("Coba contoh lengkap →", fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(8.dp))
             }
 
             // WHERE — milik kita, dirakit dari works/doesNotWork/risks + analysis
@@ -897,6 +1217,9 @@ private fun PackageDetailScreen(
                 WhereLine("∆", analysis.reasons.joinToString(" "))
             }
             pkg.works.forEach { WhereLine("✓", it) }
+            if (pkg.dependencies.isNotEmpty()) {
+                WhereLine("·", "Dependensi: ${pkg.dependencies.joinToString(", ")}")
+            }
             pkg.risks.forEach { WhereLine("∆", it) }
             pkg.doesNotWork.forEach { WhereLine("✗", it) }
             if (pkg.works.isEmpty() && pkg.risks.isEmpty() && pkg.doesNotWork.isEmpty()
@@ -1032,6 +1355,7 @@ private fun DetailField(label: String, value: String) {
 @Composable
 private fun ManualTab(
     packageName: String,
+    activeRequirement: String?,
     onPackageNameChange: (String) -> Unit,
     isInstalling: Boolean,
     isAnalyzing: Boolean,
@@ -1041,13 +1365,23 @@ private fun ManualTab(
     onRequirementsTxt: () -> Unit,
     onQueueLines: (List<String>) -> Unit,
     consoleLines: List<ConsoleLine>,
-    consoleScroll: androidx.compose.foundation.ScrollState
+    consoleScroll: androidx.compose.foundation.ScrollState,
+    pageScroll: androidx.compose.foundation.ScrollState
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
+    // `verticalScroll` mendelegasikan FocusTargetModifierNode pada Foundation
+    // 1.6.1. Memasangnya secara kondisional saat adjustResize membuka IME
+    // menyisipkan focus target di atas TextField yang sudah aktif (Google
+    // b/274655703), lalu Backspace berikutnya menjatuhkan FocusOwnerImpl.
+    // Topology sekarang permanen; resize hanya mengubah angka tinggi console.
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val consoleHeight = (maxHeight - 250.dp).coerceAtLeast(220.dp)
+        val inputLocked = activeRequirement != null || isInstalling || isAnalyzing
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(pageScroll)
+                .padding(16.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1066,21 +1400,28 @@ private fun ManualTab(
                 textStyle = TextStyle(fontSize = 14.sp)
             )
             val cancellable = isAnalyzing || isInstalling
+            val installReady = packageName.isNotBlank()
             Button(
-                onClick = if (cancellable) onCancel else onInstall,
-                enabled = if (cancellable) !isCancelling else packageName.isNotBlank(),
-                // v1.0.18: JANGAN hardcode warna teks ke onPrimary — saat
-                // disabled Compose mengganti container jadi kelabu dan
-                // onPrimary di atasnya nyaris tak terbaca (laporan user,
-                // screenshot 2026-08-15). Serahkan kontras per-state ke
-                // buttonColors dengan disabled* eksplisit; label 14sp
-                // (Material: label tombol >= 14sp).
+                onClick = {
+                    when {
+                        isCancelling -> Unit
+                        cancellable -> onCancel()
+                        else -> onInstall()
+                    }
+                },
+                // Jangan toggle enabled/readOnly pada subtree yang sedang
+                // menerima input di Compose 1.6.1. Tombol kosong tetap memberi
+                // feedback "Requirement kosong" lewat validasi onInstall.
+                enabled = true,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (cancellable) Color(0xFF8B2E2E)
-                    else MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    containerColor = when {
+                        cancellable -> Color(0xFF8B2E2E)
+                        installReady -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    },
+                    contentColor = if (installReady || cancellable)
+                        MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -1094,6 +1435,14 @@ private fun ManualTab(
                     else -> Text("Install", fontSize = 14.sp)
                 }
             }
+        }
+        if (inputLocked) {
+            Text(
+                "Requirement dikunci selama operasi: ${activeRequirement ?: packageName}",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
         Row(modifier = Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -1120,7 +1469,13 @@ private fun ManualTab(
             TextButton(
                 onClick = {
                     val teks = clipboard.getText()?.text.orEmpty().trim()
-                    if (teks.isEmpty()) {
+                    if (inputLocked) {
+                        Toast.makeText(
+                            ctx,
+                            "Requirement sedang diproses — tunggu operasi selesai",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else if (teks.isEmpty()) {
                         Toast.makeText(ctx, "Clipboard kosong", Toast.LENGTH_SHORT).show()
                     } else {
                         // v1.0.18: multi-baris TIDAK dibuang lagi. Baris pertama
@@ -1160,7 +1515,9 @@ private fun ManualTab(
         // yang disengaja, bukan layar navigasi.
         Box(
             modifier = Modifier
-                .weight(1f)
+                // Jenis modifier tidak berubah saat IME/rotate; hanya nilai Dp
+                // yang menyesuaikan. Minimum 220dp menjaga console landscape.
+                .height(consoleHeight)
                 .fillMaxWidth()
                 .background(Color(0xFF050806), shape = RoundedCornerShape(8.dp))
                 .padding(12.dp)
@@ -1171,13 +1528,17 @@ private fun ManualTab(
             Column {
                 consoleLines.forEach { line ->
                     val color = when (line.kind) {
-                        ConsoleKind.STEP -> Color(0xFF8A9BB0)
-                        ConsoleKind.LOG -> Color(0xFF9AE6B4)
-                        ConsoleKind.OK -> Color(0xFF39FF14)
-                        ConsoleKind.FAIL -> Color(0xFFFF6B6B)
+                        SemanticLogKind.STEP -> Color(0xFF8A9BB0)
+                        SemanticLogKind.INFO -> Color(0xFF9AE6B4)
+                        SemanticLogKind.WARN -> Color(0xFFFFC857)
+                        SemanticLogKind.WAIT -> Color(0xFFB8C4D6)
+                        SemanticLogKind.OK -> Color(0xFF39FF14)
+                        SemanticLogKind.FAIL -> Color(0xFFFF6B6B)
+                        SemanticLogKind.STOP -> Color(0xFFFF9F43)
+                        SemanticLogKind.RAW -> Color(0xFFD7DBE0)
                     }
                     Text(
-                        line.text,
+                        line.displayText,
                         color = color,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
@@ -1188,11 +1549,41 @@ private fun ManualTab(
             } // SelectionContainer (BUG I)
         }
     }
+    } // BoxWithConstraints (A0 rotate resilience)
 }
 
 private fun initialConsole(): List<ConsoleLine> = listOf(
-    ConsoleLine("ZCODE Package Engine V2 — Chaquopy 3.11", ConsoleKind.STEP),
-    ConsoleLine("Masukkan requirement (bukan perintah shell), lalu tap Install.", ConsoleKind.LOG),
-    ConsoleLine("Instalasi transaksional: verifikasi + smoke test + rollback otomatis.", ConsoleKind.LOG),
-    ConsoleLine("Flow: Parse → Resolve → Download → Verify → Extract → Smoke → Activate", ConsoleKind.LOG),
+    ConsoleLine("ZCODE Package Engine V2 — Chaquopy 3.11", SemanticLogKind.STEP),
+    ConsoleLine("Masukkan requirement (bukan perintah shell), lalu tap Install.", SemanticLogKind.INFO),
+    ConsoleLine("Instalasi transaksional: verifikasi + smoke test + rollback otomatis.", SemanticLogKind.INFO),
+    ConsoleLine("Flow: Parse → Resolve → Download → Verify → Extract → Smoke → Activate", SemanticLogKind.INFO),
 )
+
+// Gerbong D v1.0.19: deskripsi 11 kategori Library — satu kalimat orientasi
+// "buat apa kategori ini" saat dibuka. Bahasa santai-jelas, jujur soal batas
+// ARMv7 di kategori yang memang berat.
+private fun categoryDescription(cat: String): String? = when (cat) {
+    "Web / API / Networking" ->
+        "Ngobrol sama internet: ambil data API, scraping, bikin server mini. Mulai dari: requests."
+    "Data / Math / Science" ->
+        "Hitung, olah tabel, gambar grafik. Trio andalan: numpy + pandas + matplotlib (grafik jadi PNG)."
+    "Files / Office / Document" ->
+        "Bikin & baca Word, Excel, PDF, PowerPoint langsung dari HP. Mulai dari: python-docx / openpyxl."
+    "Image / Audio / Media" ->
+        "Edit gambar, bikin QR, proses audio. Mulai dari: pillow. (Video render butuh ffmpeg — tidak tersedia.)"
+    "Database / Storage" ->
+        "Simpan data yang awet: SQLite bawaan, ORM (peewee/sqlalchemy), key-value (diskcache)."
+    "AI / ML / NLP" ->
+        "Teks & kecerdasan buatan. Jujur: model besar (torch/tensorflow) mustahil di ARMv7 — yang jalan: nltk, openai API, sympy."
+    "Security / Cryptography" ->
+        "Enkripsi, hash, tanda tangan digital. Mulai dari: cryptography / pycryptodome."
+    "Utilities / CLI / Terminal" ->
+        "Pemanis & pembantu terminal: rich (tabel warna), tqdm (progress bar), tabulate."
+    "Automation / Scripting" ->
+        "Otomasi tugas: jadwal (apscheduler), unduh video (yt_dlp), kirim email (yagmail)."
+    "Testing / Quality / Debugging" ->
+        "Uji kodemu sendiri: pytest + coverage. (tox/virtualenv tidak jalan — butuh subprocess python.)"
+    "GUI / Games / App Framework" ->
+        "Jujur: GUI native (kivy/pygame/tkinter) tidak didukung runtime ZCODE. Alternatif tercatat di kartu masing-masing."
+    else -> null
+}

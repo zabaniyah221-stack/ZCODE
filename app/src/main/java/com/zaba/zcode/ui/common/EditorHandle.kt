@@ -20,6 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -28,14 +30,12 @@ import androidx.compose.ui.unit.sp
  * EDITOR HANDLE — satu baris tombol bantu, dipakai di editor DAN di terminal.
  *
  * Metafora yang disepakati bersama user (2026-08-13):
- *   TEROWONGAN — slot tetap di kiri yang TIDAK ikut bergeser. Isinya tombol
- *                darurat (`^C`). Ukuran & bentuknya sama persis dengan tombol
- *                lain; hanya warnanya merah. Sebuah tombol darurat yang harus
- *                dicari dengan menggeser adalah desain yang jahat.
+ *   TEROWONGAN — area tetap di kiri yang TIDAK ikut bergeser. Terminal memakai
+ *                `^C` untuk keselamatan proses; editor memakai Undo/Redo/? agar
+ *                pemulihan dan referensi selalu dapat dijangkau.
  *   KERETA      — sisa baris, bisa digeser kiri-kanan sesuka hati.
  *
- * Di editor terowongannya kosong (tidak ada yang perlu dihentikan), jadi yang
- * tampak hanya keretanya. Satu komponen, dua wajah — bukan dua implementasi
+ * Satu komponen, dua wajah — bukan dua implementasi
  * yang harus dijaga sinkron.
  *
  * Menggantikan SYMBOL BAR lama (`QuickToolsBar`), yang memakai AssistChip
@@ -66,6 +66,8 @@ data class HandleKey(
     val label: String,
     val insert: String? = null,
     val danger: Boolean = false,
+    val enabled: Boolean = true,
+    val contentDescription: String = label,
     val onClick: (() -> Unit)? = null
 )
 
@@ -119,7 +121,7 @@ fun EditorHandle(
     keys: List<HandleKey>,
     onInsert: (String) -> Unit,
     modifier: Modifier = Modifier,
-    tunnelKey: HandleKey? = null
+    tunnelKeys: List<HandleKey> = emptyList()
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -134,7 +136,7 @@ fun EditorHandle(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // TEROWONGAN — tetap di tempat, tidak pernah ikut digeser.
-            tunnelKey?.let { key ->
+            tunnelKeys.forEach { key ->
                 HandleKeyCap(key = key, onInsert = onInsert)
             }
             // KERETA — bagian yang bergerak.
@@ -159,13 +161,16 @@ private fun HandleKeyCap(key: HandleKey, onInsert: (String) -> Unit) {
     } else {
         MaterialTheme.colorScheme.surfaceVariant
     }
-    val fg = if (key.danger) Color.White else MaterialTheme.colorScheme.onSurface
+    val baseFg = if (key.danger) Color.White else MaterialTheme.colorScheme.onSurface
+    val fg = if (key.enabled) baseFg else baseFg.copy(alpha = 0.35f)
+    val shownBg = if (key.enabled) bg else bg.copy(alpha = 0.45f)
     Box(
         modifier = Modifier
             .height(EditorHandleDefaults.KEY_HEIGHT)
             .defaultMinSize(minWidth = 34.dp)
-            .background(bg, RoundedCornerShape(8.dp))
-            .clickable {
+            .background(shownBg, RoundedCornerShape(8.dp))
+            .semantics { contentDescription = key.contentDescription }
+            .clickable(enabled = key.enabled) {
                 val cb = key.onClick
                 if (cb != null) cb() else key.insert?.let(onInsert)
             }

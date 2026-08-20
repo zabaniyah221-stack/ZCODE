@@ -20,7 +20,9 @@ class SmokeTestRunner(private val context: Context) {
         val nativeLibs: List<String>,
         val nativeNote: String,
         /** Jejak NATIVE-LOADER: pustaka pendukung yang dimuat / gagal dimuat. */
-        val preloadLog: List<String> = emptyList()
+        val preloadLog: List<String> = emptyList(),
+        /** Extension module baru yang benar-benar masuk sys.modules saat smoke. */
+        val loadedNativeModules: List<String> = emptyList()
     )
 
     /**
@@ -191,6 +193,11 @@ class SmokeTestRunner(private val context: Context) {
                 preloadLog = mutableListOf<String>().also { pl ->
                     o.optJSONObject("native_info")?.optJSONArray("preload_log")?.let { arr ->
                         for (i in 0 until arr.length()) pl.add(arr.optString(i))
+                    }
+                },
+                loadedNativeModules = mutableListOf<String>().also { loaded ->
+                    o.optJSONObject("native_info")?.optJSONArray("loaded_native_modules")?.let { arr ->
+                        for (i in 0 until arr.length()) loaded.add(arr.optString(i))
                     }
                 }
             )
