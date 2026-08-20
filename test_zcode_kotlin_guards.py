@@ -3432,20 +3432,24 @@ class TestRotateResilienceA0:
             "Spacer weight tak bermakna di kolom scrollable — ganti jarak tetap"
         )
 
-    def test_manual_tab_console_tidak_kelaparan(self):
-        src = read(UI / "settings/PipScreen.kt")
-        assert "BoxWithConstraints" in src and "layarPendek" in src, (
-            "ManualTab wajib sadar tinggi layar (BoxWithConstraints)"
+    def test_manual_tab_console_tidak_kelaparan_tanpa_mutasi_focus_tree(self):
+        src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        manual = src[src.index("private fun ManualTab("):src.index("private fun initialConsole")]
+        assert "BoxWithConstraints" in manual, (
+            "ManualTab tetap mengukur ruang untuk console portrait/landscape"
         )
-        assert "maxHeight < 480.dp" in src, "ambang layar pendek 480dp"
-        assert 'Modifier.height(220.dp)' in src, (
-            "console wajib tinggi TETAP saat layar pendek — weight di kolom "
-            "scrollable = console lenyap (screenshot user: sisa ±50dp)"
+        assert "val consoleHeight = (maxHeight - 250.dp).coerceAtLeast(220.dp)" in manual
+        assert ".height(consoleHeight)" in manual, (
+            "console minimum 220dp wajib dipertahankan di landscape"
         )
-        # dua cabang harus hidup dua-duanya: layar normal tetap weight(1f)
-        i = src.find("layarPendek) Modifier.height(220.dp)")
-        assert i > 0 and "else Modifier.weight(1f)" in src[i:i + 200], (
-            "layar normal wajib mempertahankan perilaku lama weight(1f)"
+        assert ".verticalScroll(pageScroll)" in manual
+        assert "layarPendek" not in manual
+        assert "if (" not in manual[manual.index(".fillMaxSize()"):
+                                  manual.index(".verticalScroll(pageScroll)")], (
+            "page scroll harus permanen, bukan dipasang setelah IME resize"
+        )
+        assert "Modifier.weight(1f)" not in manual[manual.index('"CONSOLE:"'):], (
+            "weight console di Column scrollable dapat kolaps; pakai tinggi Dp stabil"
         )
 
 
@@ -3970,6 +3974,29 @@ class TestPipTapTabsV1019:
         assert "selectPipTab(PipTab.MANUAL)" in install
         sample = src[src.index('"LIBRARY_SAMPLE_TO_INSTALL"'):src.index("onOpenAnyway")]
         assert "selectPipTab(PipTab.MANUAL)" in sample
+
+    def test_operasi_memiliki_snapshot_dan_input_logically_locked(self):
+        src = self._src()
+        assert "var activeRequirement by remember" in src
+        assert src.count("activeRequirement = trimmed") >= 2, (
+            "analyze dan install wajib memiliki snapshot requirement sendiri"
+        )
+        assert src.count("activeRequirement = null") >= 7, (
+            "snapshot wajib dilepas pada OK/FAIL/STOP/stdlib/conflict/dialog agar field tidak terkunci selamanya"
+        )
+        cancel = src[src.index("fun cancelCurrentAnalyze"):src.index("fun analyzeThenInstall")]
+        assert "activeRequirement ?: packageName.trim()" in cancel, (
+            "breadcrumb Cancel tidak boleh membaca draft yang mungkin berubah"
+        )
+        call = src[src.index("PipTab.MANUAL -> ManualTab("):]
+        assert "if (!isInstalling && !isAnalyzing) packageName = value" in call[:1500]
+        manual = src[src.index("private fun ManualTab("):src.index("private fun initialConsole")]
+        assert "Requirement dikunci selama operasi:" in manual
+        assert "enabled = true" in manual
+        assert "enabled = if (cancellable)" not in manual
+        assert "readOnly =" not in manual, (
+            "Compose 1.6.1 tidak boleh toggle enabled/readOnly pada focused field"
+        )
 
     def test_pager_tidak_bocor_ke_layar_lain(self):
         assert "HorizontalPager" not in read(UI / "workbench/WorkbenchScreen.kt")

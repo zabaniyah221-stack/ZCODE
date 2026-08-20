@@ -125,8 +125,11 @@ fun PipScreen(
     var missingSamplePackages by remember { mutableStateOf<List<String>>(emptyList()) }
     var pendingUninstall by remember { mutableStateOf<PackageDetails?>(null) }
 
-    // Manual install
+    // Manual install. Draft tetap milik field; activeRequirement adalah
+    // snapshot immutable milik operasi agar Cancel/diagnostics tidak membaca
+    // ulang teks yang mungkin berubah di UI.
     var packageName by remember { mutableStateOf("") }
+    var activeRequirement by remember { mutableStateOf<String?>(null) }
     var isInstalling by remember { mutableStateOf(false) }
     // Analyze punya cooperative Cancel. Download/install belum boleh mengklaim
     // bisa dibatalkan karena transaction stage-nya berbeda.
@@ -198,13 +201,16 @@ fun PipScreen(
         if (isInstalling) return
         val trimmed = req.trim()
         if (trimmed.isBlank()) {
+            activeRequirement = null
             appendMessage("Requirement kosong.", SemanticLogKind.WARN)
             return
         }
         if (PackageEngineV2.isBusy()) {
+            activeRequirement = null
             appendMessage("Instalasi lain masih berjalan. Tunggu selesai.", SemanticLogKind.WARN)
             return
         }
+        activeRequirement = trimmed
         isInstalling = true
         consoleLines = emptyList()
         // BUG J: jejak Install Modules sebelumnya TIDAK tercatat sama sekali —
@@ -227,6 +233,7 @@ fun PipScreen(
             withContext(Dispatchers.Main) {
                 isInstalling = false
                 isCancelling = false // v1.0.18: install cancellable — reset state tombol
+                activeRequirement = null
                 if (result.ok) {
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
@@ -276,7 +283,10 @@ fun PipScreen(
             isAnalyzing && engine.cancelCurrentOperation() -> {
                 isCancelling = true
                 appendMessage("Membatalkan analisis setelah operasi jaringan aktif selesai…", SemanticLogKind.WAIT)
-                com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCEL_REQUEST", packageName.trim())
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "PKG_ANALYZE_CANCEL_REQUEST",
+                    activeRequirement ?: packageName.trim()
+                )
             }
             isInstalling && engine.requestInstallCancel() -> {
                 isCancelling = true
@@ -297,6 +307,7 @@ fun PipScreen(
             appendMessage("Instalasi/analisis lain masih berjalan. Tunggu selesai.", SemanticLogKind.WARN)
             return
         }
+        activeRequirement = trimmed
         isInstalling = true
         isAnalyzing = true
         isCancelling = false
@@ -323,6 +334,7 @@ fun PipScreen(
                     isInstalling = false
                     isAnalyzing = false
                     isCancelling = false
+                    activeRequirement = null
                     appendMessage(e.message ?: "Analisis gagal", SemanticLogKind.FAIL)
                 }
                 return@launch
@@ -335,6 +347,7 @@ fun PipScreen(
                 isCancelling = false
                 if (!plan.ok) {
                     isInstalling = false
+                    activeRequirement = null
                     if (plan.errorCode == "CANCELLED") {
                         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_CANCELLED", trimmed)
                         appendMessage("Analisis dibatalkan. Tidak ada package yang diubah.", SemanticLogKind.STOP)
@@ -352,6 +365,7 @@ fun PipScreen(
                 // BUG C: modul stdlib bukan kegagalan.
                 if (plan.stdlib.isNotEmpty() && plan.packages.isEmpty()) {
                     isInstalling = false
+                    activeRequirement = null
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_STDLIB", trimmed)
                     appendMessage(plan.stdlib.joinToString(" ") { it.reason }, SemanticLogKind.INFO)
                     return@withContext
@@ -363,6 +377,7 @@ fun PipScreen(
                 // bolong. Samakan dengan cabang PKG_ANALYZE_FAIL di atas.
                 if (plan.conflicts.isNotEmpty()) {
                     isInstalling = false
+                    activeRequirement = null
                     val detail = plan.conflicts.joinToString("; ") { "${it.name}: ${it.versionA} vs ${it.versionB}" }
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_ANALYZE_FAIL", "$trimmed [DEPENDENCY_CONFLICT] $detail"
@@ -372,6 +387,7 @@ fun PipScreen(
                 }
                 if (plan.unavailable.isNotEmpty()) {
                     isInstalling = false
+                    activeRequirement = null
                     val detail = plan.unavailable.joinToString("; ") { it.name + ": " + it.reason }
                     com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                         "PKG_ANALYZE_FAIL", "$trimmed [PACKAGE_NOT_AVAILABLE] $detail"
@@ -644,7 +660,10 @@ fun PipScreen(
                 )
                 PipTab.MANUAL -> ManualTab(
                     packageName = packageName,
-                    onPackageNameChange = { packageName = it },
+                    activeRequirement = activeRequirement,
+                    onPackageNameChange = { value ->
+                        if (!isInstalling && !isAnalyzing) packageName = value
+                    },
                     isInstalling = isInstalling,
                     isAnalyzing = isAnalyzing,
                     isCancelling = isCancelling,
@@ -672,6 +691,7 @@ fun PipScreen(
                 pendingRiskyReq = null
                 pendingRiskyPlan = null
                 isInstalling = false
+                activeRequirement = null
             },
             title = { Text("Install eksperimental?", fontWeight = FontWeight.Bold) },
             text = {
@@ -706,6 +726,7 @@ fun PipScreen(
                     pendingRiskyReq = null
                     pendingRiskyPlan = null
                     isInstalling = false
+                    activeRequirement = null
                 }) { Text("Batal") }
             }
         )
@@ -1240,6 +1261,7 @@ private fun DetailField(label: String, value: String) {
 @Composable
 private fun ManualTab(
     packageName: String,
+    activeRequirement: String?,
     onPackageNameChange: (String) -> Unit,
     isInstalling: Boolean,
     isAnalyzing: Boolean,
@@ -1252,23 +1274,20 @@ private fun ManualTab(
     consoleScroll: androidx.compose.foundation.ScrollState,
     pageScroll: androidx.compose.foundation.ScrollState
 ) {
-    // A0 v1.0.19 (laporan user 2026-08-18, screenshot landscape): di layar
-    // pendek (±360dp) area input+hints (tinggi tetap ±250dp) makan ruang
-    // duluan sehingga console weight(1f) tersisa ±50dp — tampak "rusak".
-    // Strategi: BoxWithConstraints. Layar pendek (<480dp) → seluruh kolom
-    // scrollable + console TINGGI TETAP 220dp (terbaca, bisa discroll ke
-    // dalam). Layar normal → perilaku lama PERSIS (weight isi sisa).
+    // `verticalScroll` mendelegasikan FocusTargetModifierNode pada Foundation
+    // 1.6.1. Memasangnya secara kondisional saat adjustResize membuka IME
+    // menyisipkan focus target di atas TextField yang sudah aktif (Google
+    // b/274655703), lalu Backspace berikutnya menjatuhkan FocusOwnerImpl.
+    // Topology sekarang permanen; resize hanya mengubah angka tinggi console.
     androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val layarPendek = maxHeight < 480.dp
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(
-                if (layarPendek) Modifier.verticalScroll(pageScroll)
-                else Modifier
-            )
-            .padding(16.dp)
-    ) {
+        val consoleHeight = (maxHeight - 250.dp).coerceAtLeast(220.dp)
+        val inputLocked = activeRequirement != null || isInstalling || isAnalyzing
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(pageScroll)
+                .padding(16.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1287,21 +1306,28 @@ private fun ManualTab(
                 textStyle = TextStyle(fontSize = 14.sp)
             )
             val cancellable = isAnalyzing || isInstalling
+            val installReady = packageName.isNotBlank()
             Button(
-                onClick = if (cancellable) onCancel else onInstall,
-                enabled = if (cancellable) !isCancelling else packageName.isNotBlank(),
-                // v1.0.18: JANGAN hardcode warna teks ke onPrimary — saat
-                // disabled Compose mengganti container jadi kelabu dan
-                // onPrimary di atasnya nyaris tak terbaca (laporan user,
-                // screenshot 2026-08-15). Serahkan kontras per-state ke
-                // buttonColors dengan disabled* eksplisit; label 14sp
-                // (Material: label tombol >= 14sp).
+                onClick = {
+                    when {
+                        isCancelling -> Unit
+                        cancellable -> onCancel()
+                        else -> onInstall()
+                    }
+                },
+                // Jangan toggle enabled/readOnly pada subtree yang sedang
+                // menerima input di Compose 1.6.1. Tombol kosong tetap memberi
+                // feedback "Requirement kosong" lewat validasi onInstall.
+                enabled = true,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (cancellable) Color(0xFF8B2E2E)
-                    else MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                    containerColor = when {
+                        cancellable -> Color(0xFF8B2E2E)
+                        installReady -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    },
+                    contentColor = if (installReady || cancellable)
+                        MaterialTheme.colorScheme.onPrimary
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -1315,6 +1341,14 @@ private fun ManualTab(
                     else -> Text("Install", fontSize = 14.sp)
                 }
             }
+        }
+        if (inputLocked) {
+            Text(
+                "Requirement dikunci selama operasi: ${activeRequirement ?: packageName}",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 6.dp)
+            )
         }
         Row(modifier = Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -1341,7 +1375,13 @@ private fun ManualTab(
             TextButton(
                 onClick = {
                     val teks = clipboard.getText()?.text.orEmpty().trim()
-                    if (teks.isEmpty()) {
+                    if (inputLocked) {
+                        Toast.makeText(
+                            ctx,
+                            "Requirement sedang diproses — tunggu operasi selesai",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else if (teks.isEmpty()) {
                         Toast.makeText(ctx, "Clipboard kosong", Toast.LENGTH_SHORT).show()
                     } else {
                         // v1.0.18: multi-baris TIDAK dibuang lagi. Baris pertama
@@ -1381,13 +1421,9 @@ private fun ManualTab(
         // yang disengaja, bukan layar navigasi.
         Box(
             modifier = Modifier
-                // A0: layar pendek → tinggi TETAP 220dp (weight di kolom
-                // scrollable = tinggi 0, console lenyap); layar normal →
-                // weight(1f) isi sisa layar (perilaku lama persis).
-                .then(
-                    if (layarPendek) Modifier.height(220.dp)
-                    else Modifier.weight(1f)
-                )
+                // Jenis modifier tidak berubah saat IME/rotate; hanya nilai Dp
+                // yang menyesuaikan. Minimum 220dp menjaga console landscape.
+                .height(consoleHeight)
                 .fillMaxWidth()
                 .background(Color(0xFF050806), shape = RoundedCornerShape(8.dp))
                 .padding(12.dp)
