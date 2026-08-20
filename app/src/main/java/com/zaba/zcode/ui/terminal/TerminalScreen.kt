@@ -47,11 +47,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -103,6 +105,7 @@ import com.zaba.zcode.ui.theme.getTerminalPalette
  * Batas MAX_OUTPUT_CHARS (S-18) berlaku untuk log in-memory di layar Pip;
  * disk log interactive tidak di-cap.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun TerminalScreen(
     filename: String,
@@ -187,9 +190,28 @@ fun TerminalScreen(
     var logger by remember { mutableStateOf<RunLogger?>(null) }
     val listState: LazyListState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     var stickToBottom by remember { mutableStateOf(true) }
     var scrollJob by remember { mutableStateOf<Job?>(null) }
+
+    /**
+     * IME dapat ditutup tanpa melepas focus dari TextField transparan. Dalam
+     * kondisi itu requestFocus() saja adalah no-op dan tap terminal tidak
+     * membuka keyboard lagi. Minta focus lalu panggil show() secara eksplisit
+     * pada frame berikutnya. Dipanggil dari event user, bukan composition.
+     */
+    fun requestTerminalKeyboard() {
+        scope.launch {
+            val focused = runCatching { focusRequester.requestFocus() }
+                .onFailure { Breadcrumb.log("TERMINAL_KEYBOARD_FOCUS_FAIL", it.message ?: "") }
+                .isSuccess
+            if (focused) {
+                withFrameNanos { }
+                keyboardController?.show()
+            }
+        }
+    }
 
     fun appendToTerminal(stream: String, text: String) {
         // 1) line-oriented buffer (RAM terbatas) — hanya baris baru di-parse
@@ -511,7 +533,7 @@ fun TerminalScreen(
                                 text = inputVal.text + text,
                                 selection = androidx.compose.ui.text.TextRange(inputVal.text.length + text.length)
                             )
-                            runCatching { focusRequester.requestFocus() }
+                            requestTerminalKeyboard()
                         }
                     )
                     // Metrik (SPEC-001 Phase 0 #8): memori tampilan, log disk, storage
@@ -564,7 +586,7 @@ fun TerminalScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .background(Color(0xFF050806)) // terminal SELALU true-black (keputusan tim)
-                .clickable { focusRequester.requestFocus() }
+                .clickable { requestTerminalKeyboard() }
                 .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 0.dp)
         ) {
             // Chip "Ke sumber error utama" (UAT babak-2 2026-08-18) — jalur tap
@@ -819,7 +841,7 @@ fun TerminalScreen(
                         appendToTerminal("out", line + "\n")
                         session?.sendInput(line + "\n")
                         inputVal = TextFieldValue("")
-                        focusRequester.requestFocus()
+                        requestTerminalKeyboard()
                     }
                 )
             )
