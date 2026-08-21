@@ -366,26 +366,34 @@ class TestProductionSigningPolicy:
         ]
         assert not found, f"private signing material ditemukan: {found}"
 
-    def test_release_claims_separate_v1020_evidence_from_v1021_candidate(self):
+    def test_release_evidence_is_complete_without_overclaiming_updates(self):
         policy = read(SIGNING_POLICY)
         roadmap = read(ROADMAP)
         notes = read(RELEASE_NOTES)
         skills = read(SKILLS)
+        apk_sha = "b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed"
         for token in (
-            "PRODUCTION WORKFLOW v1.0.20 : CI VERIFIED",
+            "CI PRODUCTION SIGNING       : VERIFIED — run 32472551816",
+            "PRODUCTION APK SIGNED       : YES",
+            "PRODUCTION DEVICE UAT       : PASS — user report, crash none",
             "PUBLIC RELEASE              : YES — v1.0.20",
-            "v1.0.21 SIGNED/DEVICE/RELEASE: NOT YET VERIFIED",
-            "INDEPENDENT ASSET RE-DOWNLOAD: NOT VERIFIED",
+            apk_sha,
         ):
             assert token in policy
         assert "ONE PRODUCTION BUILD" in roadmap
-        assert "Production compiler CI           : CI VERIFIED" in roadmap
-        assert "Production device UAT            : NOT EVIDENCED IN REPO" in roadmap
-        assert "Public release                   : RELEASED — v1.0.20" in roadmap
-        assert "ZCODE v1.0.21" in notes
-        assert "NOT DEVICE VERIFIED" in notes
-        assert "NOT RELEASED" in notes
+        assert "Mutation proof                   : 21 RED→GREEN" in roadmap
+        assert "Full local gate                  : 620 PASSED" in roadmap
+        assert "Production compiler CI           : VERIFIED — PR run 32466566588" in roadmap
+        assert "Production signed CI             : VERIFIED — run 32472551816" in roadmap
+        assert "Public release                   : YES — v1.0.20" in roadmap
+        assert "https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.20" in roadmap
+        assert apk_sha in roadmap
+        assert "Update continuity             : NOT YET DEVICE VERIFIED" in roadmap
+        assert "ZCODE v1.0.20" in notes
+        assert "draft release" in notes.lower()
         assert "SKILL 26 — Production signing" in skills
+        assert apk_sha in skills
+        assert "update continuity remains\nunverified" in skills
 
     def test_no_credential_like_material_is_tracked(self):
         patterns = re.compile(("github" + "_pat_") + "|" + ("gh" + "p_") + r"[A-Za-z0-9]{20,}")

@@ -2,10 +2,9 @@
 
 **Tanggal identitas dibuat:** 2026-08-21
 **Production package yang dicadangkan:** `com.zaba.zcode`
-**Status:** signer ini sudah dipakai oleh production CI v1.0.20 dan release publik
-`v1.0.20`. Workflow/run CI berhasil; audit repo tidak memiliki final physical-device
-UAT log atau independent re-download signer/hash proof. Candidate v1.0.21 tetap
-harus membuktikan update-in-place dengan signer yang sama.
+**Status:** production identity aktif. Workflow fail-closed telah menandatangani
+satu APK v1.0.20, fingerprint cocok, exact bytes lulus device UAT, dan release
+publik diterbitkan dari draft yang sama tanpa rebuild.
 
 ## 1. Public certificate metadata
 
@@ -63,13 +62,12 @@ PRIVATE KEY ENTRY           : USER VERIFIED
 PUBLIC FINGERPRINT          : RECORDED
 OFF-DEVICE COPIES           : USER REPORTED (2 accounts)
 BYTE-FOR-BYTE RECOVERY DRILL: NOT EVIDENCED IN REPO
-PRODUCTION WORKFLOW v1.0.20 : CI VERIFIED (run 32472551816)
-GITHUB ENVIRONMENT SECRETS  : CONFIGURED FOR v1.0.20 RUN (values never in repo)
-CI PRODUCTION SIGNING       : VERIFIED FOR v1.0.20
-PRODUCTION APK SIGNED       : YES — v1.0.20 workflow evidence
-PUBLIC RELEASE              : YES — v1.0.20, published 2026-08-21T11:07:48Z
-INDEPENDENT ASSET RE-DOWNLOAD: NOT VERIFIED BY REPO AUDIT
-v1.0.21 SIGNED/DEVICE/RELEASE: NOT YET VERIFIED
+PRODUCTION WORKFLOW SOURCE  : MERGED
+GITHUB ENVIRONMENT SECRETS  : USER VERIFIED (4 names)
+CI PRODUCTION SIGNING       : VERIFIED — run 32472551816
+PRODUCTION APK SIGNED       : YES
+PRODUCTION DEVICE UAT       : PASS — user report, crash none
+PUBLIC RELEASE              : YES — v1.0.20
 ```
 
 Recovery drill tetap wajib meskipun release pertama sudah terbit: satu backup
@@ -143,3 +141,34 @@ fingerprint tetap sama, lalu pertahankan backup asli sampai recovery terbukti.
   https://support.google.com/googleplay/android-developer/answer/9842756
 - GitHub deployment environments:
   https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
+
+## 8. v1.0.20 production evidence
+
+```text
+Workflow run       : 32472551816 — SUCCESS
+Source commit/tag  : 55860ff8059fd1b26e268a53dd3178126e80fbb3
+Release URL        : https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.20
+Published          : 2026-08-21T11:07:48Z
+APK asset ID       : 523592433
+APK bytes          : 34,682,027
+APK SHA-256        :
+b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed
+Certificate SHA-256:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+Signature scheme   : APK Signature Scheme v2 verified
+```
+
+Evidence chain:
+
+1. workflow verified exactly one release APK, package/version/assets, and signer;
+2. user downloaded the draft APK and `sha256sum -c` returned `OK`;
+3. user reported production UAT PASS and no crash;
+4. the existing draft was published without another production workflow run;
+5. unauthenticated public download was hashed independently and matched the
+   user's UAT hash exactly;
+6. GitHub release asset digest also reports the same APK SHA-256;
+7. temporary CI keystore cleanup step succeeded.
+
+Production workflow run count at publication: **1**. This proves the one-build
+contract for v1.0.20. It does not yet prove update continuity; that requires a
+future `com.zaba.zcode` version with a higher versionCode and the same signer.
