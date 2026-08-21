@@ -2,9 +2,10 @@
 
 **Tanggal identitas dibuat:** 2026-08-21
 **Production package yang dicadangkan:** `com.zaba.zcode`
-**Status:** key dibuat dan entry diverifikasi; production workflow source sudah
-dirancang fail-closed, tetapi GitHub Environment secrets dan CI signing belum
-dikonfigurasi/diverifikasi; belum pernah dipakai menandatangani release publik.
+**Status:** signer ini sudah dipakai oleh production CI v1.0.20 dan release publik
+`v1.0.20`. Workflow/run CI berhasil; audit repo tidak memiliki final physical-device
+UAT log atau independent re-download signer/hash proof. Candidate v1.0.21 tetap
+harus membuktikan update-in-place dengan signer yang sama.
 
 ## 1. Public certificate metadata
 
@@ -62,17 +63,19 @@ PRIVATE KEY ENTRY           : USER VERIFIED
 PUBLIC FINGERPRINT          : RECORDED
 OFF-DEVICE COPIES           : USER REPORTED (2 accounts)
 BYTE-FOR-BYTE RECOVERY DRILL: NOT EVIDENCED IN REPO
-PRODUCTION WORKFLOW SOURCE  : IMPLEMENTED LOCALLY
-GITHUB ENVIRONMENT SECRETS  : NOT CONFIGURED
-CI PRODUCTION SIGNING       : NOT CONFIGURED
-PRODUCTION APK SIGNED       : NO
-PUBLIC RELEASE              : NO
+PRODUCTION WORKFLOW v1.0.20 : CI VERIFIED (run 32472551816)
+GITHUB ENVIRONMENT SECRETS  : CONFIGURED FOR v1.0.20 RUN (values never in repo)
+CI PRODUCTION SIGNING       : VERIFIED FOR v1.0.20
+PRODUCTION APK SIGNED       : YES — v1.0.20 workflow evidence
+PUBLIC RELEASE              : YES — v1.0.20, published 2026-08-21T11:07:48Z
+INDEPENDENT ASSET RE-DOWNLOAD: NOT VERIFIED BY REPO AUDIT
+v1.0.21 SIGNED/DEVICE/RELEASE: NOT YET VERIFIED
 ```
 
-Sebelum release publik pertama, recovery drill wajib membuktikan bahwa satu
-backup dapat diekstrak, dibaca sebagai `PrivateKeyEntry`, dan menghasilkan
-fingerprint SHA-256 yang sama. Jangan menyimpan hasil ekstrak lebih lama dari
-keperluan drill.
+Recovery drill tetap wajib meskipun release pertama sudah terbit: satu backup
+harus dibuktikan dapat diekstrak, dibaca sebagai `PrivateKeyEntry`, dan
+menghasilkan fingerprint SHA-256 yang sama. Bukti drill tersebut belum tersimpan
+di repo. Jangan menyimpan hasil ekstrak lebih lama dari keperluan drill.
 
 ## 4. RC signing tidak memakai production key
 
@@ -87,11 +90,12 @@ identity belum tersentuh dan mencegah secret production tersedia pada workflow
 branch/PR. Signature RC dapat berubah antar-run sehingga update mungkin meminta
 uninstall; RC bukan tempat satu-satunya menyimpan project penting.
 
-## 5. Production workflow contract — source implemented, CI pending
+## 5. Production workflow contract
 
-Workflow source menerapkan kontrak berikut, tetapi belum boleh disebut berhasil
-sebelum berada di default branch, environment secrets dipasang langsung oleh
-user, dan signed artifact lulus verifikasi:
+Pola ini **CI VERIFIED untuk v1.0.20**. Revisi hardening v1.0.21 masih berstatus
+IMPLEMENTED pada branch sampai canonical CI dan signed draft menjalankannya.
+Setiap versi baru harus diverifikasi ulang; keberhasilan v1.0.20 bukan bukti
+otomatis bagi v1.0.21:
 
 1. hanya berjalan dari tag/version yang disetujui;
 2. memakai GitHub Environment terproteksi + approval;
@@ -99,12 +103,13 @@ user, dan signed artifact lulus verifikasi:
 4. membatasi setiap secret ke step minimum—jangan job-level `env`;
 5. mendekode keystore hanya ke `$RUNNER_TEMP`;
 6. tidak mencetak password, base64, atau keystore path sensitif;
-7. build satu optimized production APK/AAB;
+7. build satu optimized production APK dan menjalankan JVM tests;
 8. menjalankan `apksigner verify --verbose --print-certs`;
 9. membandingkan fingerprint signer dengan nilai publik di dokumen ini;
 10. menghasilkan SHA-256 artifact;
-11. menghapus keystore sementara pada `always()` cleanup;
-12. baru membuat GitHub Release setelah seluruh verifikasi hijau.
+11. menghapus keystore dalam shell step yang sama **sebelum** upload/release action;
+12. memverifikasi key tetap tidak ada pada cleanup akhir;
+13. baru membuat draft GitHub Release setelah seluruh verifikasi hijau.
 
 Nama secret yang direncanakan, tanpa nilai:
 

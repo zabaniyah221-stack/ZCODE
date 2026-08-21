@@ -1,7 +1,14 @@
 # Roadmap v1.0.20 — One Optimized APK Performance Gate
 
 Tanggal audit: 2026-08-20
-Status: **OPTIMIZED BUILD CI + DEVICE VERIFIED; terminal keyboard fix LOCALLY VERIFIED**
+Status: **HISTORICAL PLAN — v1.0.20 PRODUCTION CI VERIFIED AND RELEASED**
+
+> Evidence correction 2026-08-21: production run `32472551816` succeeded and
+> public release `v1.0.20` was published at `2026-08-21T11:07:48Z`. The repo
+> still does not contain the final physical-device production UAT report or an
+> independent re-download signer/hash verification. “Released” must not be read
+> as those missing evidence levels.
+
 Basis: `main` merge commit `cd982da` (v1.0.19 correctness/stability)
 Target branch saat implementasi: `arena/v1020-performance`
 
@@ -1577,12 +1584,12 @@ Mutation proof                   : 21 RED→GREEN
 Full local gate                  : 620 PASSED
 Kotlin lexical sanity            : 61 files
 npm/editor supply-chain          : PASSED
-Production compiler CI           : PENDING
-Production signed CI             : PENDING
-GitHub environment secrets       : NOT CONFIGURED
-Production APK signed            : NO
-Production device UAT            : NO
-Public release                   : NO
+Production compiler CI           : CI VERIFIED — run 32472551816
+Production signed CI             : CI VERIFIED — expected signer matched
+GitHub environment secrets       : CONFIGURED FOR PRODUCTION RUN (values not in repo)
+Production APK signed            : YES — workflow evidence
+Production device UAT            : NOT EVIDENCED IN REPO
+Public release                   : RELEASED — v1.0.20, 2026-08-21T11:07:48Z
 ```
 
 ## 9.6 Production UAT

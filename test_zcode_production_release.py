@@ -1,4 +1,4 @@
-"""Permanent guards for the single-build ZCODE v1.0.20 production release.
+"""Permanent guards for the single-build ZCODE v1.0.21 production candidate.
 
 Production signing is fail-closed: source may be reviewed without secrets, but
 assembleRelease must never fall back to a debug key. One manually approved build
@@ -20,7 +20,7 @@ CANONICAL_WORKFLOW = ROOT / ".github/workflows/build.yml"
 CANONICAL_WORKFLOW_MIRROR = ROOT / "ci/workflows/build.yml"
 SIGNING_POLICY = ROOT / "docs/SIGNING_ZCODE.md"
 ROADMAP = ROOT / "docs/ROADMAP_V1020_OPTIMIZED_BUILD.md"
-RELEASE_NOTES = ROOT / "docs/RELEASE_NOTES_V1.0.20.md"
+RELEASE_NOTES = ROOT / "docs/RELEASE_NOTES_V1.0.21.md"
 SKILLS = ROOT / "docs/SKILLS.md"
 EXPECTED_SIGNER = "401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2"
 
@@ -124,8 +124,8 @@ class TestProductionBuildContract:
 
     def test_version_and_main_identity_are_exact(self):
         props = read(ROOT / "gradle.properties")
-        assert "zcode.versionName=1.0.20" in props
-        assert "zcode.versionCode=23" in props
+        assert "zcode.versionName=1.0.21" in props
+        assert "zcode.versionCode=24" in props
         manifest = read(MAIN_MANIFEST)
         strings = read(MAIN_STRINGS)
         assert 'android:taskAffinity="com.zaba.zcode"' in manifest
@@ -188,6 +188,18 @@ class TestSingleProductionWorkflow:
     def test_workflow_and_mirrors_are_identical(self):
         assert self.source() == read(WORKFLOW_MIRROR)
         assert read(CANONICAL_WORKFLOW) == read(CANONICAL_WORKFLOW_MIRROR)
+        for name in ("build-wheels.yml",):
+            assert read(ROOT / ".github/workflows" / name) == read(ROOT / "ci/workflows" / name)
+
+    def test_every_third_party_action_is_pinned_to_full_commit_sha(self):
+        for workflow in (ROOT / ".github/workflows").glob("*.yml"):
+            for line in read(workflow).splitlines():
+                if "uses:" not in line:
+                    continue
+                ref = line.split("uses:", 1)[1].strip().split()[0]
+                assert re.search(r"@[0-9a-f]{40}$", ref), (
+                    f"{workflow.name} action tidak dipin full SHA: {ref}"
+                )
 
     def test_manual_protected_production_only(self):
         src = self.source()
@@ -195,7 +207,7 @@ class TestSingleProductionWorkflow:
         assert "push:" not in src and "pull_request:" not in src
         assert "environment: production" in src
         assert "permissions:" in src and "contents: write" in src
-        assert "BUILD-v1.0.20" in src
+        assert "BUILD-v1.0.21" in src
         assert "concurrency:" in src
 
     def test_exactly_one_release_apk_is_built(self):
@@ -206,7 +218,7 @@ class TestSingleProductionWorkflow:
         assert "assemblePerformance" not in src
         assert "find app/build/outputs/apk/release" in src
         assert "app/build/outputs/apk/debug" not in src
-        assert "ZCODE-v1.0.20.apk" in src
+        assert "ZCODE-v1.0.21.apk" in src
         assert "ZCODE-Fase12-APK" not in src
         assert "ZCODE-v1.0.20-rc1" not in src
 
@@ -228,12 +240,23 @@ class TestSingleProductionWorkflow:
         assert src.count("secrets.ZCODE_RELEASE_STORE_PASSWORD") == 1
         assert src.count("secrets.ZCODE_RELEASE_KEY_ALIAS") == 1
         assert src.count("secrets.ZCODE_RELEASE_KEY_PASSWORD") == 1
-        materialize = src[src.index("Materialize production signing identity"):src.index("Build exactly one optimized production APK")]
-        build_step = src[src.index("Build exactly one optimized production APK"):src.index("Verify package, optimization, assets, and signer")]
-        assert "KEYSTORE_B64" in materialize
-        assert "STORE_PASSWORD" not in materialize and "KEY_PASSWORD" not in materialize
-        assert "KEYSTORE_B64" not in build_step
-        assert "STORE_PASSWORD" in build_step and "KEY_PASSWORD" in build_step
+        secure_start = src.index("Materialize, build, verify, and destroy production signing identity")
+        upload_start = src.index("Upload the one production APK", secure_start)
+        secure_step = src[secure_start:upload_start]
+        for token in (
+            "KEYSTORE_B64",
+            "STORE_PASSWORD",
+            "KEY_PASSWORD",
+            "trap cleanup_keystore EXIT",
+            "./gradlew testReleaseUnitTest assembleRelease",
+            "apksigner",
+            "cleanup_keystore",
+            "trap - EXIT",
+            'test ! -e "$KEYSTORE"',
+        ):
+            assert token in secure_step, f"secure signing step kehilangan {token}"
+        # Key must be destroyed before the first post-build third-party upload action.
+        assert secure_step.rindex("cleanup_keystore") < len(secure_step)
         assert "$RUNNER_TEMP/zcode-release.jks" in src
         assert "shred -u" in src
         assert "if: always()" in src
@@ -243,8 +266,8 @@ class TestSingleProductionWorkflow:
         src = self.source()
         for token in (
             "com.zaba.zcode",
-            "versionCode='23'",
-            "versionName='1.0.20'",
+            "versionCode='24'",
+            "versionName='1.0.21'",
             "application-label:'ZCODE'",
             "application-debuggable",
             "profileable",
@@ -264,12 +287,12 @@ class TestSingleProductionWorkflow:
         assert "gh release create" in src
         assert "--draft" in src
         assert "--target \"$GITHUB_SHA\"" in src
-        assert "docs/RELEASE_NOTES_V1.0.20.md" in src
+        assert "docs/RELEASE_NOTES_V1.0.21.md" in src
         assert "gh release view" in src
         assert "git ls-remote --exit-code --tags" in src
-        assert "upload-artifact@v4" in src
+        assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4" in src
         assert "zcode-production-apk" in src
-        assert "ZCODE-v1.0.20.apk.sha256" in src
+        assert "ZCODE-v1.0.21.apk.sha256" in src
         assert "release-promotion" not in src.lower()
 
     def test_canonical_debug_does_not_emit_competing_apk(self):
@@ -306,25 +329,25 @@ class TestProductionSigningPolicy:
         ]
         assert not found, f"private signing material ditemukan: {found}"
 
-    def test_release_claims_remain_honest_before_workflow_runs(self):
+    def test_release_claims_separate_v1020_evidence_from_v1021_candidate(self):
         policy = read(SIGNING_POLICY)
         roadmap = read(ROADMAP)
         notes = read(RELEASE_NOTES)
         skills = read(SKILLS)
         for token in (
-            "CI PRODUCTION SIGNING       : NOT CONFIGURED",
-            "PRODUCTION APK SIGNED       : NO",
-            "PUBLIC RELEASE              : NO",
+            "PRODUCTION WORKFLOW v1.0.20 : CI VERIFIED",
+            "PUBLIC RELEASE              : YES — v1.0.20",
+            "v1.0.21 SIGNED/DEVICE/RELEASE: NOT YET VERIFIED",
+            "INDEPENDENT ASSET RE-DOWNLOAD: NOT VERIFIED",
         ):
             assert token in policy
         assert "ONE PRODUCTION BUILD" in roadmap
-        assert "Mutation proof                   : 21 RED→GREEN" in roadmap
-        assert "Full local gate                  : 620 PASSED" in roadmap
-        assert "Production compiler CI           : PENDING" in roadmap
-        assert "Production signed CI             : PENDING" in roadmap
-        assert "Public release                   : NO" in roadmap
-        assert "ZCODE v1.0.20" in notes
-        assert "draft release" in notes.lower()
+        assert "Production compiler CI           : CI VERIFIED" in roadmap
+        assert "Production device UAT            : NOT EVIDENCED IN REPO" in roadmap
+        assert "Public release                   : RELEASED — v1.0.20" in roadmap
+        assert "ZCODE v1.0.21" in notes
+        assert "NOT DEVICE VERIFIED" in notes
+        assert "NOT RELEASED" in notes
         assert "SKILL 26 — Production signing" in skills
 
     def test_no_credential_like_material_is_tracked(self):
@@ -343,3 +366,24 @@ class TestProductionSigningPolicy:
             except (UnicodeDecodeError, OSError):
                 pass
         assert not hits, f"credential-like token ditemukan: {hits}"
+
+
+class TestOfficialGradleWrapper:
+    EXPECTED_WRAPPER_SHA256 = "d3b261c2820e9e3d8d639ed084900f11f4a86050a8f83342ade7b6bc9b0d2bdd"
+    EXPECTED_DISTRIBUTION_SHA256 = "9d926787066a081739e8200858338b4a69e837c3a821a33aca9db09dd4a41026"
+
+    def test_official_gradle_85_wrapper_is_present_and_pinned(self):
+        import hashlib
+        jar = ROOT / "gradle/wrapper/gradle-wrapper.jar"
+        properties = read(ROOT / "gradle/wrapper/gradle-wrapper.properties")
+        assert jar.is_file() and jar.stat().st_size > 40_000
+        assert hashlib.sha256(jar.read_bytes()).hexdigest() == self.EXPECTED_WRAPPER_SHA256
+        assert "gradle-8.5-bin.zip" in properties
+        assert f"distributionSha256Sum={self.EXPECTED_DISTRIBUTION_SHA256}" in properties
+
+    def test_gradlew_is_official_launcher_not_success_stub(self):
+        launcher = read(ROOT / "gradlew")
+        assert "org.gradle.wrapper.GradleWrapperMain" in launcher
+        assert "gradle not found" not in launcher
+        assert "skipping assemble" not in launcher
+        assert (ROOT / "gradlew.bat").is_file()
