@@ -1109,3 +1109,67 @@ Current : PARKED — DON'T RUSH
 Prioritas sebelum Workbench tetap optimization gate, release/signing strategy,
 backup/recovery, dan runtime safety. Tidak ada perubahan project explorer, Git,
 plugin, atau workbench dalam push terminal keyboard ini.
+
+---
+
+# 6. FINAL FOCUSED DEVICE UAT — PERFORMANCE PERF1
+
+**Tanggal:** 2026-08-21
+**Artifact:** `ZCODE-v1.0.19-perf1`, artifact ID `9429914889`
+**CI run:** `32433313815`
+**Commit:** `d62af5a3365385b84278044bbf1af2bd3083f3d4`
+**Perangkat:** INFINIX X6532C, Android 14/API 34, `armeabi-v7a`
+
+User menjalankan focused regression pada APK Performance/R8 baru setelah fix
+keyboard terminal. Seluruh checklist berikut dilaporkan lulus:
+
+```text
+Run chatbot                         : PASS
+Keyboard awal muncul                : PASS
+Tutup IME → tap output → IME buka   : PASS
+Ulang close/reopen 3–5 kali         : PASS
+Ketik/kirim melalui IME Done        : PASS
+Scroll dan fling terminal           : PASS
+Long-press selection                : PASS
+Salin                               : PASS
+Bagikan                             : PASS
+^C                                  : PASS
+Diagnostics/Crash check             : PASS — tidak ada regresi dilaporkan
+```
+
+UAT navigasi umum juga dilaporkan melampaui ekspektasi user:
+
+- tap, swipe, dan perpindahan tab terasa sangat lancar;
+- gesture membuka sidebar tetap responsif;
+- transisi dari sidebar menuju Settings berjalan halus;
+- menu dan layar Compose tidak lagi menunjukkan lag dominan Debug build;
+- editor tetap CodeMirror 6 dan ikut terasa lancar.
+
+Komentar user tentang kesan "tidak sampai 3 ms" dicatat hanya sebagai ekspresi
+kepuasan, **bukan angka pengukuran teknis**, karena sesi ini tidak memakai
+FrameMetrics/Macrobenchmark. Klaim yang sah adalah smoothness tersebut
+**DEVICE VERIFIED secara observasional** pada perangkat target.
+
+Status setelah focused UAT:
+
+```text
+Optimized responsiveness      : DEVICE VERIFIED
+Terminal keyboard reopen      : DEVICE VERIFIED
+Repeated IME close/open       : DEVICE VERIFIED
+IME Done/input                : DEVICE VERIFIED
+Scroll/fling                  : DEVICE VERIFIED
+Selection/Salin/Bagikan       : DEVICE VERIFIED
+^C                            : DEVICE VERIFIED
+Canonical Debug regression    : CI VERIFIED — run 32433313805
+Performance/R8 build          : CI VERIFIED — run 32433313815
+Focused perf1 functional gate : PASSED
+Optimized v1.0.20 foundation  : GO FOR PR REVIEW
+Merged                        : NO
+Released                      : NO
+```
+
+Keputusan co-lead: optimized build layak diproses sebagai fondasi v1.0.20.
+Tahap berikutnya adalah audit diff, PR menuju `main`, review, dan merge hanya
+setelah checkpoint bersama. Identitas `1.0.19-perf1`, workflow branch khusus,
+dan ephemeral debug signing belum boleh disalahartikan sebagai konfigurasi
+rilis publik v1.0.20.
