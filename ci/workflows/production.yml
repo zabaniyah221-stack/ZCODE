@@ -1,0 +1,225 @@
+name: Build ZCODE Production — v1.0.20
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type BUILD-v1.0.20 to create the signed draft release"
+        required: true
+        type: string
+
+concurrency:
+  group: zcode-production-v1.0.20
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run full local-equivalent gate
+        run: |
+          pip install --break-system-packages pillow pytest packaging
+          bash tools/check.sh
+          python3 tools/kotlin_sanity_check.py
+          python3 tools/npm_supply_chain_check.py
+          git diff --check
+
+  build-production:
+    if: inputs.confirm == 'BUILD-v1.0.20'
+    needs: check
+    runs-on: ubuntu-22.04
+    environment: production
+    permissions:
+      contents: write
+    env:
+      EXPECTED_SIGNER: 401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+      RELEASE_TAG: v1.0.20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Python 3.11 for Chaquopy
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.5
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.5
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-production-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties', 'settings.gradle.kts', 'app/build.gradle.kts', 'app/proguard-release.pro') }}
+
+      - name: Materialize production signing identity
+        env:
+          ZCODE_RELEASE_KEYSTORE_B64: ${{ secrets.ZCODE_RELEASE_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ZCODE_RELEASE_KEYSTORE_B64:-}" ]; then
+            echo "Missing required production secret: ZCODE_RELEASE_KEYSTORE_B64"
+            exit 1
+          fi
+          KEYSTORE="$RUNNER_TEMP/zcode-release.jks"
+          printf '%s' "$ZCODE_RELEASE_KEYSTORE_B64" | base64 --decode > "$KEYSTORE"
+          chmod 600 "$KEYSTORE"
+          test -s "$KEYSTORE"
+          echo "ZCODE_RELEASE_STORE_FILE=$KEYSTORE" >> "$GITHUB_ENV"
+
+      - name: Build exactly one optimized production APK
+        env:
+          ZCODE_RELEASE_STORE_PASSWORD: ${{ secrets.ZCODE_RELEASE_STORE_PASSWORD }}
+          ZCODE_RELEASE_KEY_ALIAS: ${{ secrets.ZCODE_RELEASE_KEY_ALIAS }}
+          ZCODE_RELEASE_KEY_PASSWORD: ${{ secrets.ZCODE_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in \
+            ZCODE_RELEASE_STORE_PASSWORD \
+            ZCODE_RELEASE_KEY_ALIAS \
+            ZCODE_RELEASE_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production secret: $name"
+              exit 1
+            fi
+          done
+          if [ "$ZCODE_RELEASE_KEY_ALIAS" != "zcode-release" ]; then
+            echo "Unexpected production key alias"
+            exit 1
+          fi
+          python3 --version
+          set -o pipefail
+          if gradle assembleRelease --stacktrace --warning-mode all 2>&1 | tee production-build.log; then
+            echo "BUILD_PRODUCTION_OK"
+          else
+            rc=${PIPESTATUS[0]}
+            echo "BUILD_PRODUCTION_FAILED rc=$rc"
+            tail -n 250 production-build.log
+            exit "$rc"
+          fi
+
+      - name: Verify package, optimization, assets, and signer
+        run: |
+          set -euo pipefail
+          mapfile -t APKS < <(find app/build/outputs/apk/release -name "*.apk" -type f)
+          if [ "${#APKS[@]}" -ne 1 ]; then
+            echo "Expected exactly one release APK, found ${#APKS[@]}"
+            exit 1
+          fi
+          APK="${APKS[0]}"
+          AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt"
+          APKSIGNER="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+
+          "$AAPT" dump badging "$APK" | tee production-badging.txt
+          grep -q "package: name='com.zaba.zcode'" production-badging.txt
+          grep -q "versionCode='23'" production-badging.txt
+          grep -q "versionName='1.0.20'" production-badging.txt
+          grep -q "application-label:'ZCODE'" production-badging.txt
+          if grep -q '^application-debuggable' production-badging.txt; then
+            echo "Production APK must not be debuggable"
+            exit 1
+          fi
+
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | tee production-manifest.txt
+          grep -q 'com.zaba.zcode' production-manifest.txt
+          grep -q ':rebirth' production-manifest.txt
+          if grep -q 'E: profileable' production-manifest.txt; then
+            echo "Public production APK must not be profileable"
+            exit 1
+          fi
+
+          unzip -Z1 "$APK" > production-apk-files.txt
+          grep -q 'assets/editor/codemirror.bundle.js' production-apk-files.txt
+          grep -q 'assets/chaquopy' production-apk-files.txt
+
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee production-apksigner.txt
+          SIGNER_SHA=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' production-apksigner.txt \
+            | head -n 1 | tr '[:upper:]' '[:lower:]' | tr -d ':[:space:]')
+          test -n "$SIGNER_SHA"
+          test "$SIGNER_SHA" = "$EXPECTED_SIGNER"
+
+          OUT="$RUNNER_TEMP/zcode-production-apk"
+          mkdir -p "$OUT"
+          cp "$APK" "$OUT/ZCODE-v1.0.20.apk"
+          cp production-apksigner.txt "$OUT/apksigner.txt"
+          (
+            cd "$OUT"
+            sha256sum ZCODE-v1.0.20.apk > ZCODE-v1.0.20.apk.sha256
+          )
+
+      - name: Upload the one production APK for internal UAT
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZCODE-v1.0.20-production
+          path: ${{ runner.temp }}/zcode-production-apk/*
+          if-no-files-found: error
+
+      - name: Collect technical build reports
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/zcode-production-reports"
+          cp production-build.log "$RUNNER_TEMP/zcode-production-reports/" 2>/dev/null || true
+          cp production-badging.txt "$RUNNER_TEMP/zcode-production-reports/" 2>/dev/null || true
+          cp production-manifest.txt "$RUNNER_TEMP/zcode-production-reports/" 2>/dev/null || true
+          if [ -d app/build/outputs/mapping/release ]; then
+            cp -R app/build/outputs/mapping/release "$RUNNER_TEMP/zcode-production-reports/r8-mapping"
+          fi
+
+      - name: Upload technical reports without a second APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZCODE-v1.0.20-production-technical-reports
+          path: ${{ runner.temp }}/zcode-production-reports/*
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Create private draft release from the exact UAT bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1 ||
+             git ls-remote --exit-code --tags origin "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release or tag $RELEASE_TAG already exists; refusing to overwrite"
+            exit 1
+          fi
+          OUT="$RUNNER_TEMP/zcode-production-apk"
+          gh release create "$RELEASE_TAG" \
+            "$OUT/ZCODE-v1.0.20.apk" \
+            "$OUT/ZCODE-v1.0.20.apk.sha256" \
+            "$OUT/apksigner.txt" \
+            --draft \
+            --target "$GITHUB_SHA" \
+            --title "ZCODE v1.0.20" \
+            --notes-file docs/RELEASE_NOTES_V1.0.20.md
+
+      - name: Destroy temporary production keystore
+        if: always()
+        run: |
+          KEYSTORE="$RUNNER_TEMP/zcode-release.jks"
+          if [ -f "$KEYSTORE" ]; then
+            shred -u "$KEYSTORE"
+          fi
+          test ! -e "$KEYSTORE"

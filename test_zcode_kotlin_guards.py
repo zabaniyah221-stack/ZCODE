@@ -4489,6 +4489,124 @@ class TestUniversalAgentsGuide:
         )
 
 
+class TestContext7BrowserRuntimePlaybookV1020:
+    """Riset current-docs harus berakhir pada bukti runtime yang berlabel jujur."""
+
+    def test_agents_mengatur_context7_primary_source_dan_runtime_ladder(self):
+        agents = read(ROOT / "AGENTS.md")
+        for contract in (
+            "Documentation retrieval tools are evidence aids, not authorities",
+            "https://context7.com/docs/overview",
+            "https://github.com/upstash/context7",
+            "Context7 and search results are indexes into evidence",
+            "Resolve social/secondary claims to their primary source",
+            "Runtime browser verification ladder",
+            "isolated profile",
+            "explicit network allowlists",
+            "process/profile/cache cleanup",
+            "red→green verification with the same audit",
+            "Never\n  dispatch concurrent write/edit operations against the same file",
+        ):
+            assert contract in agents, f"AGENTS.md kehilangan kontrak riset: {contract}"
+
+    def test_skills_merekam_resep_context7_dan_chrome_resmi(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        for contract in (
+            "SKILL 24 — Context7 + Chrome DevTools",
+            "https://context7.com/docs/overview",
+            "https://github.com/upstash/context7",
+            "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+            "chrome-devtools-mcp 1.7.0",
+            "Chrome for Testing 152.0.7977.54",
+            "BROWSER-HARNESS VERIFIED",
+            "profile             : isolated",
+            "usage statistics    : OFF",
+            "CrUX field lookup   : OFF",
+            "workspace                  : clean",
+            "Jangan paralelkan dua writer pada file yang sama",
+            "Parallel execution aman ditentukan oleh **write set**",
+        ):
+            assert contract in skills, f"SKILLS kehilangan resep browser: {contract}"
+
+    def test_skills_membedakan_bukti_cm6_a11y_dan_noise(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        for contract in (
+            "DOM .cm-line ter-render               : 45–65",
+            "viewport ratio                        : 0,9–1,3%",
+            "meta-description`, `robots.txt`, dan `llms.txt`",
+            "#4D7A5A` terhadap `#0A100D` hanya ±3,88:1",
+            "#4D7A5A → #5A8F68",
+            "Accessibility score : 0,82 → 1,00",
+            "ZCODE source implementation: NOT YET",
+            "browser harness hijau tidak boleh menggantikan CI build",
+        ):
+            assert contract in skills, f"SKILLS kehilangan evidence/limit: {contract}"
+
+
+class TestEditorAccessibilityV1020:
+    """Tiga temuan browser harness: nama textbox, contrast gutter, dan zoom aman."""
+
+    JS = ROOT / "editor-src/src/editor.js"
+    BUNDLE = ROOT / "app/src/main/assets/editor/codemirror.bundle.js"
+    INDEX = ROOT / "app/src/main/assets/editor/index.html"
+    SCREEN = UI / "editor/EditorScreen.kt"
+
+    def test_content_editable_memiliki_nama_dan_bundle_sinkron(self):
+        src = strip_kt_comments(read(self.JS))
+        assert "EditorView.contentAttributes.of" in src
+        assert '"aria-label": "Editor kode Python"' in src
+        bundle = read(self.BUNDLE)
+        assert "Editor kode Python" in bundle, (
+            "source editor sudah accessible tetapi shipped bundle belum direbuild"
+        )
+
+    def test_gutter_memenuhi_contrast_dan_bundle_sinkron(self):
+        src = strip_kt_comments(read(self.JS))
+        start = src.index('".cm-gutters"')
+        end = src.index('".cm-lineNumbers', start)
+        gutter = src[start:end]
+        assert 'backgroundColor: "#0A100D"' in gutter
+        assert 'color: "#5A8F68"' in gutter
+        assert 'color: "#4D7A5A"' not in gutter
+        assert "#5A8F68" in read(self.BUNDLE), (
+            "warna source berubah tetapi shipped bundle belum direbuild"
+        )
+
+    def test_viewport_dan_webview_mengaktifkan_pinch_tanpa_tombol_legacy(self):
+        index = read(self.INDEX)
+        assert "user-scalable=no" not in index
+        assert 'content="width=device-width, initial-scale=1.0"' in index
+        screen = strip_kt_comments(read(self.SCREEN))
+        for contract in (
+            "setSupportZoom(true)",
+            "setBuiltInZoomControls(true)",
+            "setDisplayZoomControls(false)",
+        ):
+            assert contract in screen, f"kontrak zoom WebView hilang: {contract}"
+
+    def test_multitouch_tidak_disalahartikan_sebagai_tap_ime(self):
+        screen = strip_kt_comments(read(self.SCREEN))
+        assert "var hadMultiplePointers = false" in screen
+        assert "MotionEvent.ACTION_POINTER_DOWN" in screen
+        assert "hadMultiplePointers = true" in screen
+        assert re.search(r"val isTap\s*=\s*!hadMultiplePointers\s*&&", screen), (
+            "akhir pinch tidak boleh membuka keyboard seolah tap satu jari"
+        )
+
+    def test_playbook_mencatat_bukti_dan_batas_android(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        for contract in (
+            "Pinch→IME false-tap guard   : DEVICE VERIFIED",
+            "Shipped CM6 bundle          : BROWSER-HARNESS VERIFIED",
+            "Lighthouse accessibility   : 1,00",
+            "9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e",
+            "Physical editor gesture UAT : DEVICE VERIFIED",
+            "per-tab zoom isolation DEVICE OBSERVED",
+            "TalkBack spoken label       : NOT DEVICE VERIFIED",
+        ):
+            assert contract in skills, f"evidence/batas a11y hilang: {contract}"
+
+
 class TestSemanticPackageLogsV1019:
     """Package log meaning comes from types, never decorative status text."""
 

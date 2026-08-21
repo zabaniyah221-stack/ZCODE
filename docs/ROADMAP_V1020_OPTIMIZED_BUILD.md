@@ -1173,3 +1173,430 @@ Tahap berikutnya adalah audit diff, PR menuju `main`, review, dan merge hanya
 setelah checkpoint bersama. Identitas `1.0.19-perf1`, workflow branch khusus,
 dan ephemeral debug signing belum boleh disalahartikan sebagai konfigurasi
 rilis publik v1.0.20.
+
+---
+
+# 7. PRE-RC ACCESSIBILITY GATE — EDITOR WEBVIEW
+
+**Tanggal:** 2026-08-21
+**Branch:** `arena/v1020-pre-rc-a11y`
+**Basis:** merge `main` `46ed60e`
+
+Chrome DevTools MCP terhadap shipped CodeMirror bundle menemukan tiga gap yang
+relevan bagi produk, terpisah dari noise SEO halaman asset:
+
+```text
+CM6 textbox accessible name : missing
+Gutter contrast              : 3,88:1 (#4D7A5A / #0A100D)
+Viewport zoom                : blocked by user-scalable=no
+```
+
+Implementasi pre-RC:
+
+1. `EditorView.contentAttributes` memberi `aria-label="Editor kode Python"`;
+2. gutter menjadi `#5A8F68` (sekitar 5,09:1 terhadap `#0A100D`);
+3. meta viewport tidak lagi menolak scaling;
+4. Android WebView mengaktifkan support/built-in pinch zoom dan menyembunyikan
+   tombol zoom overlay legacy;
+5. touch listener mencatat `ACTION_POINTER_DOWN`, sehingga final `ACTION_UP`
+   setelah pinch tidak disalahartikan sebagai tap yang membuka IME;
+6. generated `codemirror.bundle.js` direbuild dari exact lockfile.
+
+Bukti shipped bundle baru:
+
+```text
+SHA-256:
+9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e
+
+Accessible tree textbox : "Editor kode Python"
+Computed gutter color   : rgb(90, 143, 104)
+Computed gutter bg      : rgb(10, 16, 13)
+Lighthouse a11y         : 1,00
+aria-input-field-name   : PASS
+color-contrast          : PASS
+meta-viewport           : PASS
+5.000 logical lines     : 54 rendered DOM lines
+alpha_5000 visible      : PASS
+Console after clean load: no warning/error
+External network        : none
+```
+
+Seven implementation mutations turned the intended tests red:
+
+```text
+accessible-name source removed
+accessible-name bundle made stale
+gutter source reverted
+gutter bundle made stale
+user-scalable=no restored
+built-in pinch disabled
+multi-touch IME guard bypassed
+```
+
+Semua dipulihkan dan focused gate hijau. Insiden agent saat implementasi juga
+menghasilkan rule permanen: dua writer tidak boleh dijalankan paralel terhadap
+file yang sama; write set harus disjoint.
+
+Status setelah CI dan focused device UAT:
+
+```text
+Agent/Context7/MCP playbook : CI VERIFIED
+Editor accessibility source : CI VERIFIED
+Generated CM6 bundle         : BROWSER-HARNESS + CI VERIFIED
+Canonical Debug              : CI VERIFIED — run 32446512404
+Performance/R8               : CI VERIFIED — run 32446511762
+Pinch/selection/IME gesture  : DEVICE VERIFIED
+Per-tab zoom isolation       : DEVICE OBSERVED — satu sesi
+TalkBack spoken label        : NOT DEVICE VERIFIED
+Merged                       : NO
+RC configured                : NO
+Released                     : NO
+```
+
+Focused UAT pada INFINIX X6532C, Android 14/API34, ARMv7:
+
+```text
+pinch zoom in/out editor                 : PASS
+single tap still opens IME               : PASS
+pinch completion does not open IME       : PASS
+IME typing/Backspace/Enter/Done          : PASS
+one-finger vertical/horizontal scroll    : PASS
+selection handles + copy/paste           : PASS
+switch tabs while zoomed                 : PASS
+edge swipe sidebar                       : PASS
+rotate portrait/landscape with keyboard  : PASS
+reset/readability after process reopen   : PASS
+Python run + Diagnostics sanity          : PASS
+visual gutter readability                : PASS
+```
+
+Device observation yang paling menonjol: tab pertama dapat tetap zoomed ketika
+user pindah ke tab kedua yang tetap pada skala normal. Bukti ini berlaku untuk
+isolasi selama perpindahan tab dalam sesi yang diuji. Jangan mengklaim zoom
+persist setelah process restart tanpa test khusus. TalkBack bersifat opsional
+dan belum dilaporkan diuji, sehingga accessible label tetap hanya
+BROWSER-HARNESS + CI VERIFIED.
+
+Sumber:
+
+- https://codemirror.net/docs/ref/#view.EditorView%5EcontentAttributes
+- https://developer.android.com/reference/android/webkit/WebSettings#setSupportZoom(boolean)
+- https://developer.android.com/reference/android/webkit/WebSettings#setBuiltInZoomControls(boolean)
+- https://developer.android.com/develop/ui/views/layout/webapps/targeting
+- https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport
+- https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+- https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html
+- https://github.com/ChromeDevTools/chrome-devtools-mcp
+- https://context7.com/docs/overview
+- https://github.com/upstash/context7
+
+---
+
+# 8. PROMOTION TO v1.0.20-rc1
+
+**Tanggal:** 2026-08-21
+**Branch:** `arena/v1020-rc1`
+**Basis:** pre-RC device evidence commit `709f125`
+
+Keputusan co-lead: setelah optimized build, terminal regression, accessibility,
+pinch/IME, selection, scroll, sidebar, rotation, Python run, dan Diagnostics
+lulus focused device UAT, Performance experiment dipromosikan menjadi satu
+internal Release Candidate.
+
+## 8.1 Identity
+
+```text
+Label          : ZCODE RC
+Application ID : com.zaba.zcode.rc
+Version name   : 1.0.20-rc1
+Version code   : 23
+Build type     : rc
+Debuggable     : false
+Profileable    : true
+R8             : ON — compatibility mode
+Obfuscation    : OFF
+Resource shrink: OFF
+Signing        : ephemeral CI debug key
+```
+
+Production identity `com.zaba.zcode` dan user-owned production key tidak dipakai
+pada RC. RC tetap dapat dipasang berdampingan dan tidak mengunci production
+package ke certificate sementara.
+
+## 8.2 One-APK workflow
+
+Performance build type/workflow/source-set lama dipensiunkan, bukan dibiarkan
+sebagai jalur ketiga:
+
+```text
+performance build type  → rc
+.performance package    → .rc
+assemblePerformance     → assembleRc
+Performance workflow    → RC workflow
+1.0.19-perf1 artifact   → 1.0.20-rc1 artifact
+```
+
+Push `arena/v1020-rc1` dikecualikan dari canonical Debug workflow. RC workflow
+menjalankan full gate, membangun `assembleRc`, memverifikasi package/version/
+label/non-debuggable/profileable/rebirth/assets/signature, lalu mengunggah:
+
+```text
+1 user artifact     : ZCODE-v1.0.20-rc1
+                      (exactly one APK + SHA-256 + signer report)
+1 technical artifact: R8 mapping/build/manifest reports, tanpa APK kedua
+```
+
+Pada future pull request dari branch RC, canonical checks boleh berjalan tetapi
+job build/upload Debug dilewati. Post-merge `main` tetap boleh menjalankan
+canonical Debug sebagai regression evidence; itu bukan artifact RC untuk user.
+
+## 8.3 Production signing identity — recorded, not consumed
+
+User membuat dan memverifikasi `PrivateKeyEntry` RSA 4096-bit untuk future
+`com.zaba.zcode`. Public SHA-256 certificate fingerprint:
+
+```text
+40:13:92:19:3B:73:42:63:C8:EC:CE:93:E1:2B:E1:F7:
+F3:07:20:3A:FE:42:82:DC:25:50:09:40:88:F3:8B:D2
+```
+
+Private key/password tidak pernah dikirim kepada agent dan tidak berada di
+repository. User melaporkan dua off-device copies pada dua akun Google Drive.
+Byte-for-byte recovery drill belum memiliki evidence di repo, sehingga status
+itu tidak dinaikkan secara otomatis.
+
+Policy: `docs/SIGNING_ZCODE.md`.
+
+## 8.4 Permanent guards and mutation proof
+
+RC guard mencakup:
+
+- exact version/application ID/label/task affinity;
+- non-debuggable/profileable/minified/no resource shrink;
+- conservative JS/Chaquopy/Android entry-point keeps;
+- retirement seluruh legacy Performance paths;
+- exact RC workflow + canonical Debug branch/PR exclusion;
+- exactly one user APK;
+- no production secret/keystore in RC workflow/repo;
+- workflow mirrors identical;
+- public signing fingerprint recorded without false release/recovery claim.
+
+Thirteen mutations were proven red, then restored green:
+
+```text
+RC package suffix reverted
+version rolled back
+R8 disabled
+JS bridge keep removed
+Chaquopy keep removed
+task affinity reverted
+assembleDebug substituted
+canonical Debug exclusion removed
+production secret reference injected
+Debug APK path injected
+legacy Performance file resurrected
+RC workflow mirror drifted
+recovery status falsely promoted
+```
+
+## 8.5 Verification status before CI
+
+```text
+RC identity/configuration     : IMPLEMENTED + LOCALLY VERIFIED
+Legacy Performance retirement : IMPLEMENTED + LOCALLY VERIFIED
+One-APK workflow              : IMPLEMENTED + LOCALLY VERIFIED
+Focused RC guards             : 22 PASSED
+Mutation proof                : 13 RED→GREEN
+Full local gate               : 626 PASSED
+Kotlin lexical sanity         : 61 files
+npm/editor supply-chain       : PASSED
+CI compile/R8                 : PENDING
+RC APK device UAT             : PENDING
+Production signing            : NOT CONFIGURED
+Merged                        : NO
+Released                      : NO
+```
+
+## 8.6 RC1 device sanity after artifact exists
+
+```text
+install/launch ZCODE RC
+confirm label + version/package in Diagnostics
+open existing/new files and switch tabs
+pinch + single-tap IME + typing/backspace/Done
+selection/copy/paste + horizontal/vertical scroll
+sidebar/settings transitions
+run pure Python
+run native package/rebirth sanity
+terminal input/^C
+close/reopen and confirm workspace
+inspect Diagnostics/Crash
+```
+
+---
+
+# 9. ONE PRODUCTION BUILD → DRAFT → UAT → PUBLISH
+
+**Tanggal desain/implementasi:** 2026-08-21
+**Branch:** `arena/v1020-production`
+**Basis:** RC1 CI + device verification
+
+Keputusan co-lead: tidak membuat dua production APK untuk update probe. Satu
+`assembleRelease` menghasilkan satu APK yang:
+
+```text
+signed once
+→ verified once
+→ uploaded as internal artifact
+→ attached as private draft release
+→ device UAT menggunakan exact bytes
+→ draft dipublikasikan tanpa rebuild
+```
+
+Trade-off diterima: update continuity belum DEVICE VERIFIED pada v1.0.20 dan
+baru memperoleh bukti saat update production nyata berikutnya memakai package,
+key, dan versionCode yang konsisten.
+
+## 9.1 Final production identity
+
+```text
+Application ID : com.zaba.zcode
+Label          : ZCODE
+Version        : 1.0.20
+Version code   : 23
+Build type     : release
+Debuggable     : false
+Profileable    : false
+R8             : ON — compatibility mode
+Obfuscation    : OFF
+Resource shrink: OFF
+Expected signer:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+```
+
+RC/Performance variants, source sets, workflows, and guard files dipensiunkan
+agar tidak menjadi alternate release path.
+
+## 9.2 Fail-closed signing
+
+Gradle release signing hanya membaca empat environment value:
+
+```text
+ZCODE_RELEASE_STORE_FILE
+ZCODE_RELEASE_STORE_PASSWORD
+ZCODE_RELEASE_KEY_ALIAS
+ZCODE_RELEASE_KEY_PASSWORD
+```
+
+Tidak ada fallback debug. Workflow production menerima keystore sebagai base64
+GitHub Environment secret, materialize hanya di `$RUNNER_TEMP`, dan menjalankan
+`shred -u` pada cleanup `always()`.
+
+Password/JKS tidak boleh dikirim kepada agent. User memasukkan secrets langsung
+ke GitHub Environment `production` setelah workflow direview dan berada di
+default branch.
+
+PAT lama yang pernah tampil di chat wajib direvoke sebelum production secrets
+dipasang. Token yang dapat mengubah workflow tidak boleh tetap aktif setelah
+private signing material tersedia bagi environment.
+
+## 9.3 Protected manual workflow
+
+Production workflow:
+
+- hanya `workflow_dispatch`;
+- membutuhkan confirmation `BUILD-v1.0.20`;
+- memakai `environment: production`;
+- `contents: write` hanya pada production job;
+- concurrency mencegah dua build production berjalan bersamaan;
+- canonical main/production branch tidak membuat Debug APK;
+- PR production tetap menjalankan `:app:compileDebugKotlin` sebagai compiler
+  evidence tanpa assemble/upload APK;
+- memverifikasi tepat satu output APK;
+- gagal jika package/version/label/debuggable/profileable/assets/signer salah;
+- gagal jika tag/draft release sudah ada;
+- membuat `v1.0.20` sebagai **draft**, bukan public release.
+
+Satu user artifact/draft memuat:
+
+```text
+ZCODE-v1.0.20.apk
+ZCODE-v1.0.20.apk.sha256
+apksigner.txt
+```
+
+Technical R8/build reports terpisah dan tidak membawa APK kedua.
+
+## 9.4 Promotion without rebuild
+
+Setelah workflow sukses:
+
+1. catat APK SHA-256 dan signer SHA-256;
+2. download artifact/draft APK;
+3. install berdampingan dengan RC;
+4. pindahkan/copy project penting; jangan uninstall RC dulu;
+5. jalankan focused production UAT;
+6. cocokkan hash APK UAT dengan draft asset;
+7. publish existing draft tanpa build/tag baru.
+
+Jika UAT gagal, draft tetap unpublished dan public status tetap `NO`.
+
+## 9.5 Mutation proof and current verification status
+
+Twenty-one production mutations turned the intended guard red, then were restored:
+
+```text
+debug signing fallback
+missing Gradle signing environment
+R8 disabled
+profileable enabled
+RC path resurrected
+JS bridge keep removed
+automatic production trigger
+unprotected environment
+Debug build substituted
+workflow signing secret removed
+signing secrets widened to job-level third-party actions
+keystore shred removed
+expected signer changed
+draft flag removed
+tag overwrite guard removed
+production Debug exclusion removed
+main Debug APK re-enabled
+workflow mirror drifted
+false public-release claim
+private .jks injected into repository
+compile-only PR gate removed
+```
+
+```text
+Production build/signing config : IMPLEMENTED LOCALLY
+Single-build draft workflow      : IMPLEMENTED LOCALLY
+Production guard suite           : 16 PASSED
+Mutation proof                   : 21 RED→GREEN
+Full local gate                  : 620 PASSED
+Kotlin lexical sanity            : 61 files
+npm/editor supply-chain          : PASSED
+Production compiler CI           : PENDING
+Production signed CI             : PENDING
+GitHub environment secrets       : NOT CONFIGURED
+Production APK signed            : NO
+Production device UAT            : NO
+Public release                   : NO
+```
+
+## 9.6 Production UAT
+
+```text
+verify launcher label ZCODE
+verify Diagnostics version 1.0.20
+verify package com.zaba.zcode where observable
+verify signer fingerprint and APK SHA-256
+create/open/copy project files from RC export
+multi-tab edit + per-file Undo/Redo
+pinch/IME/selection/scroll/sidebar/settings
+pure Python run + terminal input/^C
+native package/rebirth sanity
+close/reopen workspace persistence
+Diagnostics/Crash final check
+```

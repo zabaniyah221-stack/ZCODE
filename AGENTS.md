@@ -32,6 +32,9 @@ OpenAI discovery guide: <https://developers.openai.com/codex/guides/agents-md>
 - Check lifecycle, ownership, cancellation, persistence, error paths, rotation,
   accessibility, low-resource behavior, and rollback where relevant.
 - Prefer a smaller complete change over a broad half-working change.
+- Parallelize independent reads or operations on disjoint files only. Never
+  dispatch concurrent write/edit operations against the same file; stale input
+  snapshots can overwrite, duplicate, or misplace another edit.
 - Treat generated artifacts, schemas, documentation, and tests as part of the
   product contract.
 
@@ -376,6 +379,78 @@ Use source quality in this order when possible:
 4. reproducible experiment;
 5. reputable secondary analysis;
 6. community anecdotes only as leads.
+
+### 17.1 Documentation retrieval tools are evidence aids, not authorities
+
+Tools such as Context7 can retrieve current, version-specific library
+documentation and reduce stale-API mistakes. Use them when an implementation
+turns on a framework/library API, but preserve this chain:
+
+1. identify the exact library and version from the repository lock/build files;
+2. resolve the matching documentation/library ID rather than accepting the
+   first fuzzy name match;
+3. query one decision-relevant topic at a time;
+4. record the returned version/quality metadata and direct URL;
+5. cross-check high-impact claims against upstream official docs, source, tests,
+   or release notes;
+6. verify behavior in the shipped/runtime environment when feasible.
+
+A retrieval score, trust score, snippet count, or generated summary is not proof
+that an API exists in the pinned version or works on the target platform.
+Context7 and search results are indexes into evidence, not substitutes for the
+upstream source or execution.
+
+Official Context7 references:
+
+- https://context7.com/docs/overview
+- https://github.com/upstash/context7
+
+### 17.2 Resolve social/secondary claims to their primary source
+
+A screenshot, short video, social post, or short URL is a lead. Before adopting
+its recommendation:
+
+- resolve redirects and identify the exact project/version;
+- obtain transcript/metadata when the visible page is inaccessible;
+- locate the maintainer-owned repository and official documentation;
+- inspect requirements, license, lifecycle hooks, telemetry, privacy, and
+  security boundaries;
+- separate what was read, installed, launched, and exercised;
+- pin experimental tooling exactly instead of silently using `latest`.
+
+Do not report “practiced” when only a README or video was read.
+
+### 17.3 Runtime browser verification ladder
+
+For browser or embedded-web surfaces, prefer this evidence ladder:
+
+```text
+source inspection
+→ structural/static guard
+→ isolated real-browser harness
+→ embedded host integration
+→ target platform/device verification
+```
+
+A real-browser harness may inspect the accessibility tree, console, network,
+DOM state, screenshots, memory, and performance traces. It can expose bugs that
+static source guards miss, but it does not prove a different host lifecycle,
+input stack, browser/WebView version, OS, ABI, or device.
+
+Safe browser-agent experiments must use an isolated profile, no personal login
+or credentials, explicit network allowlists, telemetry/field-data uploads off,
+pinned tooling, ephemeral assets outside the persisted workspace, and complete
+process/profile/cache cleanup. Prove the cleanup. Treat browser-control tools
+as privileged: they can inspect and modify everything inside their browser
+profile.
+
+For accessibility findings:
+
+- inspect the failing element and explanation, not only the aggregate score;
+- separate product-relevant failures from host/context noise;
+- perform red→green verification with the same audit;
+- do not ship a harness-only mutation without source guards and target UX/input
+  verification.
 
 For comparative research:
 

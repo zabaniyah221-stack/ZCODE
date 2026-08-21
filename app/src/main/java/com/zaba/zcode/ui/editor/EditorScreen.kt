@@ -146,6 +146,12 @@ fun EditorScreen(
                         allowUniversalAccessFromFileURLs = false
                         blockNetworkLoads = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        // Accessibility v1.0.20: izinkan pinch zoom, tetapi jangan
+                        // tampilkan tombol zoom overlay Android yang deprecated.
+                        // Meta viewport editor juga tidak lagi memblokir scaling.
+                        setSupportZoom(true)
+                        setBuiltInZoomControls(true)
+                        setDisplayZoomControls(false)
                     }
                     layoutParams = android.view.ViewGroup.LayoutParams(
                         android.view.ViewGroup.LayoutParams.MATCH_PARENT,
@@ -163,16 +169,24 @@ fun EditorScreen(
                     var downX = 0f
                     var downY = 0f
                     var downTime = 0L
+                    var hadMultiplePointers = false
                     setOnTouchListener { v, event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 downX = event.x
                                 downY = event.y
                                 downTime = System.currentTimeMillis()
+                                hadMultiplePointers = false
+                            }
+                            MotionEvent.ACTION_POINTER_DOWN -> {
+                                // Akhir gesture pinch mengirim ACTION_UP satu jari.
+                                // Jangan salah menganggapnya tap lalu membuka IME.
+                                hadMultiplePointers = true
                             }
                             MotionEvent.ACTION_UP -> {
                                 val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
-                                val isTap = Math.abs(event.x - downX) < slop &&
+                                val isTap = !hadMultiplePointers &&
+                                    Math.abs(event.x - downX) < slop &&
                                     Math.abs(event.y - downY) < slop &&
                                     System.currentTimeMillis() - downTime <
                                     android.view.ViewConfiguration.getLongPressTimeout()

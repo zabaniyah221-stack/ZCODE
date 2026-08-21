@@ -1521,3 +1521,567 @@ solusi kelas masalah.
 LOCALLY VERIFIED. CI compile, Android task handoff, visual transition, workspace
 restore, dan post-install native import masih wajib dibuktikan oleh canonical
 CI + UAT INFINIX X6532C/API34/ARMv7 sebelum disebut DEVICE VERIFIED.
+
+
+---
+
+## SKILL 24 — Context7 + Chrome DevTools: riset harus berujung pada runtime evidence (2026-08-21)
+
+**Trigger:** user mengirim video pendek tentang Chrome DevTools MCP. Short URL
+TikTok tidak dapat dibaca oleh fetch biasa (HTTP 403), tetapi redirect,
+rehydration metadata, dan subtitle resmi dapat diekstrak. Klaim video kemudian
+dilacak ke repo maintainer, package exact, skill resmi, dan eksperimen browser
+nyata. Hasilnya bukan hanya “tool berhasil dipasang”: harness editor asli ZCODE
+menemukan tiga gap accessibility yang lolos 613 test struktural.
+
+### 24.1 Context7 dipakai untuk menemukan dokumentasi yang tepat, bukan menjadi hakim akhir
+
+Context7 membawa dokumentasi library yang current/version-specific ke agent.
+Untuk ZCODE, ia berguna saat keputusan bergantung pada Compose, CodeMirror,
+Android WebView, Chaquopy, atau library lain yang API-nya bergerak. Namun hasil
+retrieval tetap harus ditautkan ke source upstream dan diuji pada lapisan yang
+sesuai.
+
+Protokol ZCODE:
+
+1. Baca versi exact dari build file, lockfile, atau bundle inventory.
+2. Resolve library ID yang tepat; jangan pilih hanya karena nama mirip.
+3. Prefer ID/version yang cocok dengan versi proyek.
+4. Query satu pertanyaan teknis per call agar snippet tidak bercampur.
+5. Catat version, source URL, trust/quality metadata, dan batas sampling.
+6. Cross-check keputusan penting ke official docs/source/test/release notes.
+7. Jalankan eksperimen atau artifact/device gate bila klaim menyentuh runtime.
+
+`trust score`, jumlah snippet, atau ringkasan Context7 adalah metadata pencarian,
+bukan status verifikasi produk. Contoh: dokumentasi CodeMirror tentang viewport
+rendering menguatkan desain, tetapi bukti ZCODE baru naik setelah bundle asli
+menampilkan 45–65 DOM line untuk dokumen 5.000 baris pada browser harness.
+
+Sumber resmi Context7:
+
+- https://context7.com/docs/overview
+- https://github.com/upstash/context7
+
+Contoh library ZCODE:
+
+- https://context7.com/codemirror/view
+- https://codemirror.net/docs/ref/
+
+### 24.2 Social/video adalah lead; resolve sampai primary source
+
+Jangan menyimpulkan teknologi dari caption atau tampilan video. Jalur yang
+terbukti:
+
+```text
+short URL
+→ resolve redirect
+→ metadata + subtitle/transcript
+→ identifikasi nama project
+→ maintainer-owned repository
+→ requirements/license/privacy
+→ exact package + integrity
+→ isolated runtime experiment
+```
+
+Pada eksperimen ini:
+
+```text
+Video claim     : Chrome DevTools MCP dapat browser automation/debug/perf
+Primary repo    : ChromeDevTools/chrome-devtools-mcp
+Package exact   : chrome-devtools-mcp 1.7.0
+License         : Apache-2.0
+Node requirement: ^20.19.0 || ^22.12.0 || >=23
+Browser         : Chrome for Testing 152.0.7977.54
+```
+
+Sumber langsung:
+
+- https://github.com/ChromeDevTools/chrome-devtools-mcp
+- https://github.com/ChromeDevTools/chrome-devtools-mcp/tree/main/skills
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/chrome-devtools/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/chrome-devtools-cli/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/a11y-debugging/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/debug-optimize-lcp/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/memory-leak-debugging/SKILL.md
+
+### 24.3 Kontrak sandbox untuk browser-control tool
+
+Chrome DevTools MCP adalah capability privileged: client dapat membaca dan
+mengubah seluruh konten browser profile. Eksperimen wajib:
+
+```text
+profile             : isolated, tanpa akun/login/cookie user
+network             : localhost allowlist bila target lokal
+usage statistics    : OFF
+CrUX field lookup   : OFF
+update checks       : OFF
+network headers     : redacted
+package             : exact pin + integrity/lock
+assets/profile/cache: /var/tmp, bukan workspace
+credentials         : tidak pernah dibuka ke browser
+cleanup             : daemon, browser, server, port, profile, cache, trace
+```
+
+Environment yang terbukti di sandbox Debian 13:
+
+- Node 20.20.2 memenuhi requirement package 1.7.0;
+- Chrome for Testing dapat berjalan tanpa `apt install` sistem;
+- library desktop yang hilang diunduh sebagai `.deb`, lalu diekstrak lokal
+  menggunakan `dpkg-deb -x` ke `/var/tmp`;
+- `LD_LIBRARY_PATH` diarahkan ke hasil extract;
+- unresolved `ldd` wajib nol sebelum browser start;
+- seluruh dependency/runtime dihapus setelah eksperimen.
+
+Missing library yang pernah muncul:
+
+```text
+libnspr4, libnss3, libnssutil3, libatk-1.0,
+libatk-bridge-2.0, libXdamage, libxkbcommon, libasound, libatspi
+```
+
+Jangan menyebut “sandbox tidak bisa browser” hanya karena launch pertama gagal.
+Pecah dependency chain dan selesaikan secara lokal. Tetapi jangan memasang paket
+OS agresif, membuka browser profile pribadi, atau menonaktifkan isolation demi
+mengejar status hijau.
+
+### 24.4 Harness editor ZCODE: apa yang asli dan apa yang dimock
+
+Harness menyalin ke `/var/tmp`:
+
+```text
+app/src/main/assets/editor/index.html
+app/src/main/assets/editor/codemirror.bundle.js
+app/src/main/assets/editor/fonts/*
+```
+
+Bundle harus identik byte-for-byte dengan shipped asset. Pada eksperimen:
+
+```text
+codemirror.bundle.js SHA-256:
+4169f7a706257985b384d11ea4ece1d765be83049dbe8ab2134ceb751bb7fb8d
+```
+
+Satu script harness dimuat **sebelum** bundle untuk meniru hanya kontrak Android:
+
+```text
+window.ZCODE.onEditorReady()
+window.ZCODE.onCodeChange(documentId, code, canUndo, canRedo)
+```
+
+Yang dapat dibuktikan:
+
+- CM6 init/render;
+- JS bridge contract;
+- per-file EditorState/history;
+- Undo/Redo dan document identity;
+- console/network/CSP;
+- accessibility tree;
+- viewport DOM behavior;
+- browser-side performance trace.
+
+Yang **tidak** dapat dibuktikan:
+
+- Compose recomposition/navigation;
+- Android WebView version dan lifecycle;
+- Kotlin `Handler` callback timing;
+- IME/touch/selection Android;
+- Chaquopy/native runtime;
+- ARMv7/device performance.
+
+Gunakan status **BROWSER-HARNESS VERIFIED**, bukan DEVICE VERIFIED.
+
+### 24.5 Tangga browser verification
+
+```text
+source + official docs
+→ lexical/structural guard
+→ exact shipped asset in isolated Chrome
+→ Android WebView/full emulator
+→ physical ARMv7 device
+```
+
+Workflow Chrome DevTools yang terbukti:
+
+```text
+navigate
+→ accessibility snapshot
+→ identify UID/role
+→ interact or evaluate bridge API
+→ inspect DOM state
+→ inspect console
+→ inspect network
+→ screenshot
+→ performance trace
+→ audit
+→ mutation red→green
+→ cleanup audit
+```
+
+Output besar ditulis ke file di `/var/tmp`; jangan memenuhi context dengan raw
+trace/heapsnapshot. Heap snapshot tidak dipaksakan pada sandbox 1.9 GiB tanpa
+swap kecuali ada bug memory yang jelas dan budget aman.
+
+### 24.6 Bukti CM6 yang didapat
+
+Runtime gate pada bundle asli:
+
+```text
+onEditorReady                         : PASS, tepat 1 kali
+onCodeChange identity/history flags   : PASS
+alpha.py + beta.py state terpisah     : PASS
+Undo/Redo per file                    : PASS
+lint/whitespace/diagnostic toggle     : PASS
+console warning/error normal          : none
+external fetch                        : blocked
+external network request              : 0
+```
+
+Stress gate:
+
+```text
+large-alpha.py                        : 5.000 baris
+large-beta.py                         : 5.000 baris
+state switches                        : 24
+DOM .cm-line ter-render               : 45–65
+viewport ratio                        : 0,9–1,3%
+gotoLine(5000)                        : alpha_5000 terlihat
+console error                         : none
+compressed performance trace          : ±1,71 MB
+```
+
+Durasi harness host tidak boleh dipasarkan sebagai frame time Android atau
+prediksi ARMv7. Bukti yang sah: CM6 melakukan viewport rendering dan state
+switch tidak melempar runtime error pada Chrome tersebut.
+
+### 24.7 Accessibility: bedakan temuan produk dari noise asset page
+
+Lighthouse pada halaman internal dapat melaporkan SEO/web-publishing failure
+seperti `meta-description`, `robots.txt`, dan `llms.txt`. Itu tidak relevan bagi
+`file:///android_asset/editor/index.html` dan bukan bug ZCODE.
+
+Tiga temuan yang relevan:
+
+1. `.cm-content[role=textbox]` tidak memiliki accessible name;
+2. line-number gutter `#4D7A5A` terhadap `#0A100D` hanya ±3,88:1, di bawah
+   target normal-text 4,5:1;
+3. viewport memakai `user-scalable=no`, sehingga browser audit menolak zoom
+   bagi pengguna low-vision.
+
+Mutation hanya pada runtime copy:
+
+```text
+aria-label="Python code editor"
+#4D7A5A → #5A8F68               (±5,09:1)
+hapus user-scalable=no
+```
+
+Hasil audit yang sama:
+
+```text
+Accessibility score : 0,82 → 1,00
+aria-input-field-name: RED → GREEN
+color-contrast       : RED → GREEN
+meta-viewport        : RED → GREEN
+accessibility textbox: bernama "Python code editor"
+```
+
+Status awal saat temuan dicatat:
+
+```text
+Three a11y findings        : BROWSER-HARNESS REPRODUCED
+Harness mutations          : RED→GREEN VERIFIED
+ZCODE source implementation: NOT YET
+Android touch/IME/device    : NOT YET
+```
+
+Status setelah batch pre-RC dan focused device UAT pada 2026-08-21:
+
+```text
+Accessible name source     : IMPLEMENTED
+Gutter contrast source     : DEVICE VERIFIED
+Pinch WebView + meta        : DEVICE VERIFIED
+Pinch→IME false-tap guard   : DEVICE VERIFIED
+Shipped CM6 bundle          : BROWSER-HARNESS VERIFIED
+Lighthouse accessibility   : 1,00
+5k-line viewport regression : PASS — 54 DOM lines
+Static/mutation guards      : LOCALLY VERIFIED — 7 mutations RED→GREEN
+Canonical Debug CI          : CI VERIFIED — run 32446512404
+Performance/R8 CI           : CI VERIFIED — run 32446511762
+Physical editor gesture UAT : DEVICE VERIFIED — INFINIX X6532C/API34/ARMv7
+TalkBack spoken label       : NOT DEVICE VERIFIED
+```
+
+Focused UAT lulus untuk pinch in/out, pinch tidak membuka IME, single tap tetap
+membuka IME, typing/Backspace/Enter/Done, selection handle, copy/paste, scroll
+vertikal/horizontal, edge-swipe sidebar, rotasi dengan keyboard, reopen sanity,
+Python run, Diagnostics, dan visual gutter. Dalam satu sesi, tab pertama dapat
+tetap zoomed saat tab kedua tampil pada skala normal. Ini dicatat sebagai
+**per-tab zoom isolation DEVICE OBSERVED**, bukan janji persistence zoom setelah
+process restart.
+
+Bundle baru yang diuji:
+
+```text
+codemirror.bundle.js SHA-256:
+9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e
+```
+
+Lighthouse memicu request audit ke `/llms.txt` dan `/robots.txt`; CSP
+`connect-src 'none'` menolaknya dan console mencatat issue. Itu noise audit
+halaman asset, bukan error CM6. Reload sebelum stress menghasilkan console
+bersih.
+
+Aturan implementasi:
+
+- accessible name dapat masuk sebagai perubahan nonvisual kecil, tetapi tetap
+  dijaga source + shipped bundle;
+- gutter contrast adalah perubahan visual: review tema dan device screenshot;
+- menghapus `user-scalable=no` adalah perubahan interaction contract: audit
+  pinch zoom, selection, drag, scroll, drawer gesture, dan IME sebelum adopsi;
+- tiga perubahan harus punya guard yang benar-benar merah saat invariant
+  dihapus/dikembalikan;
+- browser harness hijau tidak boleh menggantikan CI build dan focused device UAT.
+
+### 24.8 Cleanup adalah bagian dari hasil
+
+Sebelum menutup eksperimen, buktikan:
+
+```text
+MCP daemon/browser process : absent
+local HTTP server          : stopped
+browser debug port         : closed
+profile/cache/dependency   : deleted
+large trace/screenshot     : deleted atau sengaja diarsipkan dengan alasan
+workspace                  : clean, executable-bit drift dipulihkan
+credentials                : tidak pernah masuk profile/log/URL
+```
+
+Eksperimen yang berhasil tetapi meninggalkan browser berprivilege, port terbuka,
+profile login, atau ratusan MB cache bukan eksperimen selesai.
+
+### 24.9 Jangan paralelkan dua writer pada file yang sama
+
+**Insiden 2026-08-21:** dua `edit_file` paralel menyentuh
+`editor-src/src/editor.js`. Masing-masing mulai dari snapshot yang dapat berbeda;
+perubahan accessible-name tidak masuk pada lokasi target dan fragmen handshake
+terduplikasi di EOF. Esbuild menangkapnya sebagai syntax error sebelum bundle
+terkirim.
+
+Aturan permanen:
+
+- reads, searches, dan operasi pada file berbeda boleh paralel;
+- dua write/edit pada file yang sama wajib serial;
+- setelah tiap batch edit, periksa diff file yang disentuh sebelum generator;
+- generated artifact tidak dibangun sampai source diff dan syntax bersih;
+- bila tool edit fuzzy memilih lokasi salah, akui sebagai bug agent, pulihkan
+  source, lalu buat guard/proses yang mencegah pengulangan.
+
+Parallel execution aman ditentukan oleh **write set**, bukan karena tool call
+terlihat independen.
+
+
+---
+
+## SKILL 25 — Release Candidate adalah channel terisolasi, bukan production release (2026-08-21)
+
+**Trigger:** optimized Performance variant sudah device-verified dan user meminta
+satu APK saja tanpa Debug APK. Mengganti label saja akan meninggalkan tiga jalur
+(Debug, Performance, RC) dan dua artifact user. Promotion yang benar harus
+memensiunkan eksperimen lama dan membuat ownership workflow eksplisit.
+
+### Aturan RC ZCODE
+
+1. RC memakai package terpisah (`com.zaba.zcode.rc`) sampai production signing
+   dan data migration siap.
+2. `versionName` dasar naik ke target (`1.0.20`); suffix `-rc1` hanya pada build
+   type RC. `versionCode` tetap monotonic.
+3. RC mewarisi optimization yang sudah device-verified: non-debuggable,
+   profileable, R8 compatibility mode, no obfuscation, no resource shrink.
+4. Performance build type/source-set/workflow/test lama dipensiunkan; jangan
+   biarkan eksperimen lama hidup sebagai alternate release path.
+5. Push branch RC dimiliki workflow RC. Canonical Debug harus mengecualikan push
+   tersebut agar satu commit tidak menghasilkan dua APK user.
+6. Pull request RC boleh menjalankan canonical checks, tetapi job yang
+   build/upload Debug APK harus skip.
+7. Satu user artifact boleh berisi satu APK, checksum, dan signer report.
+   Technical R8 artifact terpisah boleh ada, tetapi tidak boleh membawa APK
+   kedua.
+8. RC tidak pernah membaca production signing secrets. Ephemeral signature dan
+   risiko uninstall harus dinyatakan di release notes.
+9. Production key metadata publik boleh dicatat; private key/password/base64
+   tidak boleh masuk agent, repo, log, artifact, atau branch.
+10. RC hijau di CI belum public release dan belum membuktikan update continuity.
+
+### Identity RC1
+
+```text
+applicationId : com.zaba.zcode.rc
+label         : ZCODE RC
+versionName   : 1.0.20-rc1
+versionCode   : 23
+artifact      : ZCODE-v1.0.20-rc1
+```
+
+### One-APK verification
+
+Guard harus membuktikan:
+
+```text
+assembleRc ada
+assembleDebug/assemblePerformance tidak ada di RC workflow
+canonical push mengecualikan arena/v1020-rc1
+canonical PR build job skip untuk head RC
+artifact user tidak menunjuk outputs/apk/debug
+legacy Performance files tidak ada
+workflow source dan mirror identik
+```
+
+### Signing ladder
+
+```text
+RC ephemeral key
+→ RC device sanity
+→ recovery drill production key
+→ protected tag-only production workflow
+→ signer fingerprint equality
+→ public release
+```
+
+Jangan melompati recovery drill hanya karena keystore dapat dibaca sekali.
+Public certificate fingerprint source of truth hidup di
+`docs/SIGNING_ZCODE.md`; workflow production future wajib membandingkan signer
+APK dengan fingerprint itu sebelum release dibuat.
+
+### Evidence labels
+
+```text
+RC CONFIGURED     : variant/workflow/source-set ada
+RC CI VERIFIED    : assembleRc + artifact contract hijau
+RC DEVICE VERIFIED: named RC artifact lulus focused device sanity
+PRODUCTION SIGNED : APK com.zaba.zcode memakai expected production fingerprint
+RELEASED          : verified production artifact benar-benar dipublikasikan
+```
+
+Kelima status tersebut tidak boleh disingkat menjadi “rilis selesai”.
+
+Sumber:
+
+- Android build variants dan `applicationIdSuffix`:
+  https://developer.android.com/build/build-variants
+- GitHub workflow branch/path filters:
+  https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax
+- Android app signing:
+  https://developer.android.com/studio/publish/app-signing
+- GitHub deployment environments:
+  https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
+
+
+---
+
+## SKILL 26 — Production signing: one build, exact-byte draft promotion (2026-08-21)
+
+**Trigger:** RC1 lulus dan user memilih satu production APK saja, bukan build
+candidate + update probe. Solusinya bukan mengurangi signer verification, tetapi
+memisahkan build dari publish: satu signed binary masuk draft, diuji, lalu draft
+yang sama dipublikasikan.
+
+### Kontrak satu build
+
+```text
+assembleRelease once
+→ verify package/version/assets/R8/signer
+→ checksum
+→ Actions artifact
+→ private draft release
+→ device UAT exact bytes
+→ publish existing draft, no rebuild
+```
+
+Tidak boleh ada workflow “promotion” yang membangun APK lagi. SHA-256 APK yang
+diuji harus sama dengan draft asset yang dipublikasikan.
+
+### Fail-closed Gradle signing
+
+- release menggunakan signing config `production`;
+- config hanya membaca environment, tidak path/password literal;
+- tanpa satu dari empat value, assembleRelease harus gagal;
+- release tidak pernah fallback ke debug keystore;
+- `com.zaba.zcode` tidak memakai suffix;
+- public build non-debuggable dan non-profileable;
+- production R8 memakai boundaries yang sudah lulus RC/device evidence;
+- production PR tetap mengompilasi Kotlin lewat `:app:compileDebugKotlin`, tetapi
+  tidak boleh assemble atau upload APK Debug pesaing.
+
+### Secret custody
+
+Agent tidak meminta atau menerima password, JKS, base64, atau encrypted-backup
+password. User memasukkan langsung ke protected GitHub Environment. Secret
+harus di-inject pada step minimum yang membutuhkannya—bukan job-level `env`
+yang membuatnya tersedia bagi setup/cache/upload third-party actions.
+
+Sebelum secrets dipasang:
+
+1. review production workflow dari default branch;
+2. revoke PAT/token lama yang pernah tampil di chat;
+3. pastikan only intended maintainers dapat mengubah workflow/environment;
+4. pasang exact four secrets;
+5. manual approval baru diberikan setelah commit SHA dan workflow diff dibaca.
+
+Compromised workflow-write token + production environment adalah kombinasi
+berbahaya: attacker dapat mengubah workflow untuk menyalin keystore ketika job
+disetujui.
+
+### Signer verification
+
+`apksigner --print-certs` harus menghasilkan normalized SHA-256:
+
+```text
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+```
+
+Workflow wajib fail sebelum draft creation jika signer kosong/berbeda. Public
+fingerprint aman di repo; private material tidak.
+
+### Draft release semantics
+
+Draft bukan RELEASED. Ia menjadi staging area private bagi exact production
+bytes. Workflow harus menolak overwrite bila tag/release sudah ada. UAT gagal →
+draft jangan dipublish. UAT lulus → publish existing draft tanpa rebuild.
+
+### One-build trade-off
+
+Dengan tidak membuat production versionCode kedua:
+
+```text
+SIGNER VERIFIED             : dapat dibuktikan sekarang
+PACKAGE/INSTALL VERIFIED    : dapat dibuktikan sekarang
+UPDATE CONTINUITY VERIFIED  : belum; menunggu update production berikutnya
+```
+
+Jangan mengubah “Android seharusnya mempertahankan data” menjadi DEVICE VERIFIED
+tanpa dua versionCode nyata. Dokumentasikan batas ini di release notes.
+
+### Release status ladder
+
+```text
+PRODUCTION CONFIGURED
+→ PRODUCTION CI VERIFIED
+→ PRODUCTION SIGNED
+→ PRODUCTION DEVICE VERIFIED
+→ DRAFT APPROVED
+→ RELEASED
+```
+
+Setiap panah membutuhkan evidence sendiri. Draft release, Actions artifact, dan
+GitHub tag tidak otomatis berarti public release.
+
+Sumber:
+
+- Android app signing:
+  https://developer.android.com/studio/publish/app-signing
+- GitHub encrypted secrets:
+  https://docs.github.com/actions/security-guides/using-secrets-in-github-actions
+- GitHub environments:
+  https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
+- GitHub CLI release creation:
+  https://cli.github.com/manual/gh_release_create

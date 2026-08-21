@@ -167,7 +167,8 @@ const zcodeTheme = EditorView.theme(
     // Gutter ramping — port dari .ace_gutter + .ace_gutter-cell override
     ".cm-gutters": {
       backgroundColor: "#0A100D",
-      color: "#4D7A5A",
+      // WCAG AA normal text: 5.09:1 terhadap background gutter.
+      color: "#5A8F68",
       border: "none",
       borderRight: "1px solid #111612",
     },
@@ -345,6 +346,9 @@ function buildState(doc) {
       indentOnInput(),
       foldGutter(),
       EditorView.lineWrapping, // wrap: true (perilaku Ace lama)
+      // Nama semantic untuk TalkBack/screen reader. Tanpa ini CM6 hanya
+      // diumumkan sebagai textbox generik tanpa konteks.
+      EditorView.contentAttributes.of({ "aria-label": "Editor kode Python" }),
       EditorState.tabSize.of(4),
       indentUnit.of("    "), // useSoftTabs + tabSize 4
       keymap.of([
