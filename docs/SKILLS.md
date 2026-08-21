@@ -1785,14 +1785,41 @@ meta-viewport        : RED → GREEN
 accessibility textbox: bernama "Python code editor"
 ```
 
-Status saat skill ini ditulis:
+Status awal saat temuan dicatat:
 
 ```text
-Three a11y findings       : BROWSER-HARNESS REPRODUCED
-Harness mutations         : RED→GREEN VERIFIED
+Three a11y findings        : BROWSER-HARNESS REPRODUCED
+Harness mutations          : RED→GREEN VERIFIED
 ZCODE source implementation: NOT YET
-Android touch/IME/device   : NOT YET
+Android touch/IME/device    : NOT YET
 ```
+
+Status setelah batch pre-RC pada 2026-08-21:
+
+```text
+Accessible name source     : IMPLEMENTED
+Gutter contrast source     : IMPLEMENTED
+Pinch WebView + meta        : IMPLEMENTED
+Pinch→IME false-tap guard   : IMPLEMENTED
+Shipped CM6 bundle          : BROWSER-HARNESS VERIFIED
+Lighthouse accessibility   : 1,00
+5k-line viewport regression : PASS — 54 DOM lines
+Static/mutation guards      : LOCALLY VERIFIED — 7 mutations RED→GREEN
+Android CI compile          : NOT YET
+Physical touch/IME/pinch UAT: NOT YET
+```
+
+Bundle baru yang diuji:
+
+```text
+codemirror.bundle.js SHA-256:
+9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e
+```
+
+Lighthouse memicu request audit ke `/llms.txt` dan `/robots.txt`; CSP
+`connect-src 'none'` menolaknya dan console mencatat issue. Itu noise audit
+halaman asset, bukan error CM6. Reload sebelum stress menghasilkan console
+bersih.
 
 Aturan implementasi:
 
@@ -1821,3 +1848,23 @@ credentials                : tidak pernah masuk profile/log/URL
 
 Eksperimen yang berhasil tetapi meninggalkan browser berprivilege, port terbuka,
 profile login, atau ratusan MB cache bukan eksperimen selesai.
+
+### 24.9 Jangan paralelkan dua writer pada file yang sama
+
+**Insiden 2026-08-21:** dua `edit_file` paralel menyentuh
+`editor-src/src/editor.js`. Masing-masing mulai dari snapshot yang dapat berbeda;
+perubahan accessible-name tidak masuk pada lokasi target dan fragmen handshake
+terduplikasi di EOF. Esbuild menangkapnya sebagai syntax error sebelum bundle
+terkirim.
+
+Aturan permanen:
+
+- reads, searches, dan operasi pada file berbeda boleh paralel;
+- dua write/edit pada file yang sama wajib serial;
+- setelah tiap batch edit, periksa diff file yang disentuh sebelum generator;
+- generated artifact tidak dibangun sampai source diff dan syntax bersih;
+- bila tool edit fuzzy memilih lokasi salah, akui sebagai bug agent, pulihkan
+  source, lalu buat guard/proses yang mencegah pengulangan.
+
+Parallel execution aman ditentukan oleh **write set**, bukan karena tool call
+terlihat independen.

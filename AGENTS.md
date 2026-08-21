@@ -32,6 +32,9 @@ OpenAI discovery guide: <https://developers.openai.com/codex/guides/agents-md>
 - Check lifecycle, ownership, cancellation, persistence, error paths, rotation,
   accessibility, low-resource behavior, and rollback where relevant.
 - Prefer a smaller complete change over a broad half-working change.
+- Parallelize independent reads or operations on disjoint files only. Never
+  dispatch concurrent write/edit operations against the same file; stale input
+  snapshots can overwrite, duplicate, or misplace another edit.
 - Treat generated artifacts, schemas, documentation, and tests as part of the
   product contract.
 

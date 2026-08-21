@@ -4505,6 +4505,7 @@ class TestContext7BrowserRuntimePlaybookV1020:
             "explicit network allowlists",
             "process/profile/cache cleanup",
             "red→green verification with the same audit",
+            "Never\n  dispatch concurrent write/edit operations against the same file",
         ):
             assert contract in agents, f"AGENTS.md kehilangan kontrak riset: {contract}"
 
@@ -4522,6 +4523,8 @@ class TestContext7BrowserRuntimePlaybookV1020:
             "usage statistics    : OFF",
             "CrUX field lookup   : OFF",
             "workspace                  : clean",
+            "Jangan paralelkan dua writer pada file yang sama",
+            "Parallel execution aman ditentukan oleh **write set**",
         ):
             assert contract in skills, f"SKILLS kehilangan resep browser: {contract}"
 
@@ -4538,6 +4541,68 @@ class TestContext7BrowserRuntimePlaybookV1020:
             "browser harness hijau tidak boleh menggantikan CI build",
         ):
             assert contract in skills, f"SKILLS kehilangan evidence/limit: {contract}"
+
+
+class TestEditorAccessibilityV1020:
+    """Tiga temuan browser harness: nama textbox, contrast gutter, dan zoom aman."""
+
+    JS = ROOT / "editor-src/src/editor.js"
+    BUNDLE = ROOT / "app/src/main/assets/editor/codemirror.bundle.js"
+    INDEX = ROOT / "app/src/main/assets/editor/index.html"
+    SCREEN = UI / "editor/EditorScreen.kt"
+
+    def test_content_editable_memiliki_nama_dan_bundle_sinkron(self):
+        src = strip_kt_comments(read(self.JS))
+        assert "EditorView.contentAttributes.of" in src
+        assert '"aria-label": "Editor kode Python"' in src
+        bundle = read(self.BUNDLE)
+        assert "Editor kode Python" in bundle, (
+            "source editor sudah accessible tetapi shipped bundle belum direbuild"
+        )
+
+    def test_gutter_memenuhi_contrast_dan_bundle_sinkron(self):
+        src = strip_kt_comments(read(self.JS))
+        start = src.index('".cm-gutters"')
+        end = src.index('".cm-lineNumbers', start)
+        gutter = src[start:end]
+        assert 'backgroundColor: "#0A100D"' in gutter
+        assert 'color: "#5A8F68"' in gutter
+        assert 'color: "#4D7A5A"' not in gutter
+        assert "#5A8F68" in read(self.BUNDLE), (
+            "warna source berubah tetapi shipped bundle belum direbuild"
+        )
+
+    def test_viewport_dan_webview_mengaktifkan_pinch_tanpa_tombol_legacy(self):
+        index = read(self.INDEX)
+        assert "user-scalable=no" not in index
+        assert 'content="width=device-width, initial-scale=1.0"' in index
+        screen = strip_kt_comments(read(self.SCREEN))
+        for contract in (
+            "setSupportZoom(true)",
+            "setBuiltInZoomControls(true)",
+            "setDisplayZoomControls(false)",
+        ):
+            assert contract in screen, f"kontrak zoom WebView hilang: {contract}"
+
+    def test_multitouch_tidak_disalahartikan_sebagai_tap_ime(self):
+        screen = strip_kt_comments(read(self.SCREEN))
+        assert "var hadMultiplePointers = false" in screen
+        assert "MotionEvent.ACTION_POINTER_DOWN" in screen
+        assert "hadMultiplePointers = true" in screen
+        assert re.search(r"val isTap\s*=\s*!hadMultiplePointers\s*&&", screen), (
+            "akhir pinch tidak boleh membuka keyboard seolah tap satu jari"
+        )
+
+    def test_playbook_mencatat_bukti_dan_batas_android(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        for contract in (
+            "Pinch→IME false-tap guard   : IMPLEMENTED",
+            "Shipped CM6 bundle          : BROWSER-HARNESS VERIFIED",
+            "Lighthouse accessibility   : 1,00",
+            "9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e",
+            "Physical touch/IME/pinch UAT: NOT YET",
+        ):
+            assert contract in skills, f"evidence/batas a11y hilang: {contract}"
 
 
 class TestSemanticPackageLogsV1019:

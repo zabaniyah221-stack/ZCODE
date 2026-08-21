@@ -1173,3 +1173,108 @@ Tahap berikutnya adalah audit diff, PR menuju `main`, review, dan merge hanya
 setelah checkpoint bersama. Identitas `1.0.19-perf1`, workflow branch khusus,
 dan ephemeral debug signing belum boleh disalahartikan sebagai konfigurasi
 rilis publik v1.0.20.
+
+---
+
+# 7. PRE-RC ACCESSIBILITY GATE — EDITOR WEBVIEW
+
+**Tanggal:** 2026-08-21
+**Branch:** `arena/v1020-pre-rc-a11y`
+**Basis:** merge `main` `46ed60e`
+
+Chrome DevTools MCP terhadap shipped CodeMirror bundle menemukan tiga gap yang
+relevan bagi produk, terpisah dari noise SEO halaman asset:
+
+```text
+CM6 textbox accessible name : missing
+Gutter contrast              : 3,88:1 (#4D7A5A / #0A100D)
+Viewport zoom                : blocked by user-scalable=no
+```
+
+Implementasi pre-RC:
+
+1. `EditorView.contentAttributes` memberi `aria-label="Editor kode Python"`;
+2. gutter menjadi `#5A8F68` (sekitar 5,09:1 terhadap `#0A100D`);
+3. meta viewport tidak lagi menolak scaling;
+4. Android WebView mengaktifkan support/built-in pinch zoom dan menyembunyikan
+   tombol zoom overlay legacy;
+5. touch listener mencatat `ACTION_POINTER_DOWN`, sehingga final `ACTION_UP`
+   setelah pinch tidak disalahartikan sebagai tap yang membuka IME;
+6. generated `codemirror.bundle.js` direbuild dari exact lockfile.
+
+Bukti shipped bundle baru:
+
+```text
+SHA-256:
+9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e
+
+Accessible tree textbox : "Editor kode Python"
+Computed gutter color   : rgb(90, 143, 104)
+Computed gutter bg      : rgb(10, 16, 13)
+Lighthouse a11y         : 1,00
+aria-input-field-name   : PASS
+color-contrast          : PASS
+meta-viewport           : PASS
+5.000 logical lines     : 54 rendered DOM lines
+alpha_5000 visible      : PASS
+Console after clean load: no warning/error
+External network        : none
+```
+
+Seven implementation mutations turned the intended tests red:
+
+```text
+accessible-name source removed
+accessible-name bundle made stale
+gutter source reverted
+gutter bundle made stale
+user-scalable=no restored
+built-in pinch disabled
+multi-touch IME guard bypassed
+```
+
+Semua dipulihkan dan focused gate hijau. Insiden agent saat implementasi juga
+menghasilkan rule permanen: dua writer tidak boleh dijalankan paralel terhadap
+file yang sama; write set harus disjoint.
+
+Status:
+
+```text
+Agent/Context7/MCP playbook : IMPLEMENTED + LOCALLY VERIFIED
+Editor accessibility source : IMPLEMENTED
+Generated CM6 bundle         : BROWSER-HARNESS VERIFIED
+Static focused tests         : LOCALLY VERIFIED
+Kotlin/Android compile       : NOT YET
+Pinch/selection/IME gesture  : NOT DEVICE VERIFIED
+Merged                       : NO
+RC configured                : NO
+Released                     : NO
+```
+
+Focused device UAT sebelum RC:
+
+```text
+pinch zoom in/out editor
+single tap still opens IME
+pinch completion does not open IME
+one-finger vertical/horizontal scroll
+selection handles + copy/paste
+IME typing/backspace/Done
+switch tabs while zoomed
+edge swipe sidebar
+rotate portrait/landscape with keyboard
+reset/readability after process reopen
+```
+
+Sumber:
+
+- https://codemirror.net/docs/ref/#view.EditorView%5EcontentAttributes
+- https://developer.android.com/reference/android/webkit/WebSettings#setSupportZoom(boolean)
+- https://developer.android.com/reference/android/webkit/WebSettings#setBuiltInZoomControls(boolean)
+- https://developer.android.com/develop/ui/views/layout/webapps/targeting
+- https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/meta/name/viewport
+- https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+- https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html
+- https://github.com/ChromeDevTools/chrome-devtools-mcp
+- https://context7.com/docs/overview
+- https://github.com/upstash/context7
