@@ -2,7 +2,11 @@ name: Build ZCODE APK — Fase 1 & 2 (OLED, File Manager, PTY, Pip, Themes + Cha
 
 on:
   push:
-    branches: [ main, "arena/**" ]
+    branches:
+      - main
+      - "arena/**"
+      # RC branch owns one optimized APK workflow; do not build/upload Debug.
+      - "!arena/v1020-rc1"
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -26,6 +30,9 @@ jobs:
           bash tools/check.sh
 
   build:
+    # RC branch already produced the only user APK via rc.yml. On its PR, keep
+    # canonical tests but do not build/upload a second Debug APK.
+    if: github.event_name != 'pull_request' || github.head_ref != 'arena/v1020-rc1'
     runs-on: ubuntu-22.04
     needs: check
     steps:

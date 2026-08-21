@@ -1289,3 +1289,146 @@ Sumber:
 - https://github.com/ChromeDevTools/chrome-devtools-mcp
 - https://context7.com/docs/overview
 - https://github.com/upstash/context7
+
+---
+
+# 8. PROMOTION TO v1.0.20-rc1
+
+**Tanggal:** 2026-08-21
+**Branch:** `arena/v1020-rc1`
+**Basis:** pre-RC device evidence commit `709f125`
+
+Keputusan co-lead: setelah optimized build, terminal regression, accessibility,
+pinch/IME, selection, scroll, sidebar, rotation, Python run, dan Diagnostics
+lulus focused device UAT, Performance experiment dipromosikan menjadi satu
+internal Release Candidate.
+
+## 8.1 Identity
+
+```text
+Label          : ZCODE RC
+Application ID : com.zaba.zcode.rc
+Version name   : 1.0.20-rc1
+Version code   : 23
+Build type     : rc
+Debuggable     : false
+Profileable    : true
+R8             : ON — compatibility mode
+Obfuscation    : OFF
+Resource shrink: OFF
+Signing        : ephemeral CI debug key
+```
+
+Production identity `com.zaba.zcode` dan user-owned production key tidak dipakai
+pada RC. RC tetap dapat dipasang berdampingan dan tidak mengunci production
+package ke certificate sementara.
+
+## 8.2 One-APK workflow
+
+Performance build type/workflow/source-set lama dipensiunkan, bukan dibiarkan
+sebagai jalur ketiga:
+
+```text
+performance build type  → rc
+.performance package    → .rc
+assemblePerformance     → assembleRc
+Performance workflow    → RC workflow
+1.0.19-perf1 artifact   → 1.0.20-rc1 artifact
+```
+
+Push `arena/v1020-rc1` dikecualikan dari canonical Debug workflow. RC workflow
+menjalankan full gate, membangun `assembleRc`, memverifikasi package/version/
+label/non-debuggable/profileable/rebirth/assets/signature, lalu mengunggah:
+
+```text
+1 user artifact     : ZCODE-v1.0.20-rc1
+                      (exactly one APK + SHA-256 + signer report)
+1 technical artifact: R8 mapping/build/manifest reports, tanpa APK kedua
+```
+
+Pada future pull request dari branch RC, canonical checks boleh berjalan tetapi
+job build/upload Debug dilewati. Post-merge `main` tetap boleh menjalankan
+canonical Debug sebagai regression evidence; itu bukan artifact RC untuk user.
+
+## 8.3 Production signing identity — recorded, not consumed
+
+User membuat dan memverifikasi `PrivateKeyEntry` RSA 4096-bit untuk future
+`com.zaba.zcode`. Public SHA-256 certificate fingerprint:
+
+```text
+40:13:92:19:3B:73:42:63:C8:EC:CE:93:E1:2B:E1:F7:
+F3:07:20:3A:FE:42:82:DC:25:50:09:40:88:F3:8B:D2
+```
+
+Private key/password tidak pernah dikirim kepada agent dan tidak berada di
+repository. User melaporkan dua off-device copies pada dua akun Google Drive.
+Byte-for-byte recovery drill belum memiliki evidence di repo, sehingga status
+itu tidak dinaikkan secara otomatis.
+
+Policy: `docs/SIGNING_ZCODE.md`.
+
+## 8.4 Permanent guards and mutation proof
+
+RC guard mencakup:
+
+- exact version/application ID/label/task affinity;
+- non-debuggable/profileable/minified/no resource shrink;
+- conservative JS/Chaquopy/Android entry-point keeps;
+- retirement seluruh legacy Performance paths;
+- exact RC workflow + canonical Debug branch/PR exclusion;
+- exactly one user APK;
+- no production secret/keystore in RC workflow/repo;
+- workflow mirrors identical;
+- public signing fingerprint recorded without false release/recovery claim.
+
+Thirteen mutations were proven red, then restored green:
+
+```text
+RC package suffix reverted
+version rolled back
+R8 disabled
+JS bridge keep removed
+Chaquopy keep removed
+task affinity reverted
+assembleDebug substituted
+canonical Debug exclusion removed
+production secret reference injected
+Debug APK path injected
+legacy Performance file resurrected
+RC workflow mirror drifted
+recovery status falsely promoted
+```
+
+## 8.5 Verification status before CI
+
+```text
+RC identity/configuration     : IMPLEMENTED + LOCALLY VERIFIED
+Legacy Performance retirement : IMPLEMENTED + LOCALLY VERIFIED
+One-APK workflow              : IMPLEMENTED + LOCALLY VERIFIED
+Focused RC guards             : 22 PASSED
+Mutation proof                : 13 RED→GREEN
+Full local gate               : 626 PASSED
+Kotlin lexical sanity         : 61 files
+npm/editor supply-chain       : PASSED
+CI compile/R8                 : PENDING
+RC APK device UAT             : PENDING
+Production signing            : NOT CONFIGURED
+Merged                        : NO
+Released                      : NO
+```
+
+## 8.6 RC1 device sanity after artifact exists
+
+```text
+install/launch ZCODE RC
+confirm label + version/package in Diagnostics
+open existing/new files and switch tabs
+pinch + single-tap IME + typing/backspace/Done
+selection/copy/paste + horizontal/vertical scroll
+sidebar/settings transitions
+run pure Python
+run native package/rebirth sanity
+terminal input/^C
+close/reopen and confirm workspace
+inspect Diagnostics/Crash
+```

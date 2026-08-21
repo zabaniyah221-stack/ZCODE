@@ -44,11 +44,12 @@ android {
                 "proguard-rules.pro"
             )
         }
-        // v1.0.20 performance gate: satu APK internal yang release-like tetapi
-        // tetap terpisah dari Debug dan production. Tidak memakai release key.
-        create("performance") {
-            applicationIdSuffix = ".performance"
-            versionNameSuffix = "-perf1"
+        // v1.0.20-rc1: satu APK kandidat internal yang optimized/release-like,
+        // tetapi package dan data tetap terpisah dari production. Signing masih
+        // ephemeral debug key; production key user belum masuk CI pada tahap RC.
+        create("rc") {
+            applicationIdSuffix = ".rc"
+            versionNameSuffix = "-rc1"
             isDebuggable = false
             isProfileable = true
             isMinifyEnabled = true
@@ -57,7 +58,7 @@ android {
             matchingFallbacks += listOf("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-performance.pro"
+                "proguard-rc.pro"
             )
         }
     }

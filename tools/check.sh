@@ -60,7 +60,7 @@ test -f app/src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt && echo "✅ P
 test -f app/src/main/java/com/zaba/zcode/core/plugins/PluginHost.kt && echo "✅ PluginHost" || (echo "❌ plugins missing" && exit 1)
 
 echo "[10/10] Run Python strict tests (Fase 0 + Fase 1/2 + redesign Fase 3 + Package Runtime + Kotlin guards)"
-pytest test_zcode_fase0.py test_zcode_fase1.py test_zcode_fase3.py test_zcode_package_runtime.py test_zcode_kotlin_guards.py test_zcode_security_guards.py test_native_runtime_rebirth_guards.py test_zcode_performance_variant.py -v
+pytest test_zcode_fase0.py test_zcode_fase1.py test_zcode_fase3.py test_zcode_package_runtime.py test_zcode_kotlin_guards.py test_zcode_security_guards.py test_native_runtime_rebirth_guards.py test_zcode_rc_variant.py -v
 python3 test_zcode_fase0.py 2>&1 | tail -n 20
 
 echo ""

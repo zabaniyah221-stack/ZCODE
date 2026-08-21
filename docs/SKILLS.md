@@ -1878,3 +1878,99 @@ Aturan permanen:
 
 Parallel execution aman ditentukan oleh **write set**, bukan karena tool call
 terlihat independen.
+
+
+---
+
+## SKILL 25 — Release Candidate adalah channel terisolasi, bukan production release (2026-08-21)
+
+**Trigger:** optimized Performance variant sudah device-verified dan user meminta
+satu APK saja tanpa Debug APK. Mengganti label saja akan meninggalkan tiga jalur
+(Debug, Performance, RC) dan dua artifact user. Promotion yang benar harus
+memensiunkan eksperimen lama dan membuat ownership workflow eksplisit.
+
+### Aturan RC ZCODE
+
+1. RC memakai package terpisah (`com.zaba.zcode.rc`) sampai production signing
+   dan data migration siap.
+2. `versionName` dasar naik ke target (`1.0.20`); suffix `-rc1` hanya pada build
+   type RC. `versionCode` tetap monotonic.
+3. RC mewarisi optimization yang sudah device-verified: non-debuggable,
+   profileable, R8 compatibility mode, no obfuscation, no resource shrink.
+4. Performance build type/source-set/workflow/test lama dipensiunkan; jangan
+   biarkan eksperimen lama hidup sebagai alternate release path.
+5. Push branch RC dimiliki workflow RC. Canonical Debug harus mengecualikan push
+   tersebut agar satu commit tidak menghasilkan dua APK user.
+6. Pull request RC boleh menjalankan canonical checks, tetapi job yang
+   build/upload Debug APK harus skip.
+7. Satu user artifact boleh berisi satu APK, checksum, dan signer report.
+   Technical R8 artifact terpisah boleh ada, tetapi tidak boleh membawa APK
+   kedua.
+8. RC tidak pernah membaca production signing secrets. Ephemeral signature dan
+   risiko uninstall harus dinyatakan di release notes.
+9. Production key metadata publik boleh dicatat; private key/password/base64
+   tidak boleh masuk agent, repo, log, artifact, atau branch.
+10. RC hijau di CI belum public release dan belum membuktikan update continuity.
+
+### Identity RC1
+
+```text
+applicationId : com.zaba.zcode.rc
+label         : ZCODE RC
+versionName   : 1.0.20-rc1
+versionCode   : 23
+artifact      : ZCODE-v1.0.20-rc1
+```
+
+### One-APK verification
+
+Guard harus membuktikan:
+
+```text
+assembleRc ada
+assembleDebug/assemblePerformance tidak ada di RC workflow
+canonical push mengecualikan arena/v1020-rc1
+canonical PR build job skip untuk head RC
+artifact user tidak menunjuk outputs/apk/debug
+legacy Performance files tidak ada
+workflow source dan mirror identik
+```
+
+### Signing ladder
+
+```text
+RC ephemeral key
+→ RC device sanity
+→ recovery drill production key
+→ protected tag-only production workflow
+→ signer fingerprint equality
+→ public release
+```
+
+Jangan melompati recovery drill hanya karena keystore dapat dibaca sekali.
+Public certificate fingerprint source of truth hidup di
+`docs/SIGNING_ZCODE.md`; workflow production future wajib membandingkan signer
+APK dengan fingerprint itu sebelum release dibuat.
+
+### Evidence labels
+
+```text
+RC CONFIGURED     : variant/workflow/source-set ada
+RC CI VERIFIED    : assembleRc + artifact contract hijau
+RC DEVICE VERIFIED: named RC artifact lulus focused device sanity
+PRODUCTION SIGNED : APK com.zaba.zcode memakai expected production fingerprint
+RELEASED          : verified production artifact benar-benar dipublikasikan
+```
+
+Kelima status tersebut tidak boleh disingkat menjadi “rilis selesai”.
+
+Sumber:
+
+- Android build variants dan `applicationIdSuffix`:
+  https://developer.android.com/build/build-variants
+- GitHub workflow branch/path filters:
+  https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax
+- Android app signing:
+  https://developer.android.com/studio/publish/app-signing
+- GitHub deployment environments:
+  https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment

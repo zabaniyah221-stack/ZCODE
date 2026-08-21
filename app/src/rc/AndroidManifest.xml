@@ -8,7 +8,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:taskAffinity="com.zaba.zcode.performance"
+            android:taskAffinity="com.zaba.zcode.rc"
             tools:replace="android:taskAffinity" />
 
     </application>
