@@ -16,6 +16,7 @@ import com.zaba.zcode.core.editor.Severity
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.files.WorkspaceTrashManager
 import com.zaba.zcode.core.plugins.PluginHost
 import com.zaba.zcode.core.plugins.PluginRegistry
 import com.zaba.zcode.core.plugins.PluginRunner
@@ -53,10 +54,14 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     private val filesDir: File = Paths.filesDir(app)
     private val prefs: android.content.SharedPreferences =
         app.getSharedPreferences("zcode_workspace", Context.MODE_PRIVATE)
+    private val workspaceTrash = WorkspaceTrashManager(filesDir, Paths.workspaceTrash(app))
+    private val workspaceMutationLock = Any()
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var validationJob: Job? = null
     private var saveJob: Job? = null
     private var pendingSave = false
+    /** Monotonic identity used to reject stale async plugin results. */
+    private val documentRevisions = mutableMapOf<String, Long>()
 
     // v1.0.18: default GITHUB_DARK (keputusan user 2026-08-15) — RETRO tetap
     // tersedia di cycle; pilihan tersimpan user lama tetap dihormati (baris
@@ -67,6 +72,10 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     var activeCode by mutableStateOf("")
     var syntaxError by mutableStateOf<String?>(null)
     var problems by mutableStateOf<List<Problem>>(emptyList())
+        private set
+
+    /** True only when a fully committed private trash set can be restored. */
+    var canRestoreLastClear by mutableStateOf(false)
         private set
 
     /** Symbol bar (QuickTools) di bawah editor — toggle user, persist di SharedPreferences. */
@@ -152,6 +161,10 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (!filesDir.exists()) {
             filesDir.mkdirs()
         }
+        workspaceTrash.recoverInterruptedClear()?.let { recovered ->
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_CLEAR_RECOVERED", recovered)
+        }
+        canRestoreLastClear = workspaceTrash.hasRestorableClear()
         // CATATAN: kode lama menghapus files/chaquopy/AssetFinder/requirements/pip
         // sudah DIHAPUS — pip 23.3.1 kini resmi di-bundle build-time (gradle chaquopy
         // pip{}), dan folder itu memuat file data pip yang sah (mis. cert bundle TLS).
@@ -195,37 +208,69 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("plugin_enabled_$id", enabled).apply()
     }
 
-    /**
-     * Eksekusi plugin transform Python (port ZABACODE) secara async.
-     * Bila sukses & kode berubah → diterapkan ke file aktif. Callback di Main.
-     */
-    fun runPythonPlugin(pythonId: String, onDone: (Boolean, String) -> Unit) {
-        val code = activeCode
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                PluginRunner.run(getApplication(), pythonId, code)
-            }
-            if (result.ok && result.code != code) {
-                updateCode(result.code)
-            }
-            onDone(result.ok, result.report)
-        }
+    private data class PluginDocumentSnapshot(
+        val documentId: String,
+        val revision: Long,
+        val code: String,
+    )
+
+    private fun pluginSnapshot(): PluginDocumentSnapshot? {
+        val id = activeFile ?: return null
+        return PluginDocumentSnapshot(id, documentRevisions[id] ?: 0L, activeCode)
     }
 
     /**
-     * Overload untuk plugin yang butuh parameter tambahan (go_to_definition, rename_symbol).
-     * Param diteruskan ke PluginRunner.runWithParam.
+     * Apply a plugin result only to the exact document revision it analyzed.
+     * Switching tabs, typing, deleting, renaming, or clearing while Python is
+     * working makes the result stale and therefore read-only/discarded.
      */
-    fun runPythonPlugin(pythonId: String, param: String, onDone: (Boolean, String) -> Unit) {
-        val code = activeCode
+    private fun finishPluginResult(
+        snapshot: PluginDocumentSnapshot,
+        result: com.zaba.zcode.core.plugins.PluginResult,
+        onDone: (Boolean, String) -> Unit,
+    ) {
+        val stillCurrent = activeFile == snapshot.documentId &&
+            (documentRevisions[snapshot.documentId] ?: 0L) == snapshot.revision &&
+            activeCode == snapshot.code
+        if (!stillCurrent) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "PLUGIN_STALE_RESULT",
+                snapshot.documentId,
+            )
+            onDone(false, "Hasil plugin dibatalkan karena dokumen berubah atau tab berpindah.")
+            return
+        }
+        if (result.ok && result.code != snapshot.code) updateCode(result.code)
+        onDone(result.ok, result.report)
+    }
+
+    /** Run a Python plugin against an immutable document snapshot. */
+    fun runPythonPlugin(pythonId: String, onDone: (Boolean, String) -> Unit) {
+        val snapshot = pluginSnapshot()
+        if (snapshot == null) {
+            onDone(false, "Tidak ada dokumen aktif.")
+            return
+        }
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                PluginRunner.runWithParam(getApplication(), pythonId, code, param)
+                PluginRunner.run(getApplication(), pythonId, snapshot.code)
             }
-            if (result.ok && result.code != code) {
-                updateCode(result.code)
+            finishPluginResult(snapshot, result, onDone)
+        }
+    }
+
+    /** Overload for plugins which need an additional parameter. */
+    fun runPythonPlugin(pythonId: String, param: String, onDone: (Boolean, String) -> Unit) {
+        val snapshot = pluginSnapshot()
+        if (snapshot == null) {
+            onDone(false, "Tidak ada dokumen aktif.")
+            return
+        }
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                PluginRunner.runWithParam(getApplication(), pythonId, snapshot.code, param)
             }
-            onDone(result.ok, result.report)
+            finishPluginResult(snapshot, result, onDone)
         }
     }
 
@@ -319,6 +364,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         activeCode = activeFile?.let { FileManager.readFile(filesDir, it).getOrDefault("") } ?: ""
+        FileManager.listFiles(filesDir).forEach { entry ->
+            (entry["name"] as? String)?.let { documentRevisions.putIfAbsent(it, 0L) }
+        }
         symbolBarEnabled = prefs.getBoolean("symbol_bar", true)
         lintGutterEnabled = prefs.getBoolean("lint_gutter", true)
         whitespaceGuardEnabled = prefs.getBoolean("whitespace_guard", false)
@@ -439,6 +487,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         flushSaveSync()
         activeFile = filename
         activeCode = FileManager.readFile(filesDir, filename).getOrDefault("")
+        documentRevisions.putIfAbsent(filename, 0L)
         fileDrafts[filename] = activeCode
         validateSyntaxDebounced(activeCode)
         persistWorkspaceState()
@@ -450,7 +499,13 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
      * topology are durably committed. A failed save must never be followed by
      * killing the process.
      */
-    fun flushSaveSync(verifyAllDrafts: Boolean = false): Boolean {
+    fun flushSaveSync(verifyAllDrafts: Boolean = false): Boolean =
+        synchronized(workspaceMutationLock) {
+            flushSaveSyncLocked(verifyAllDrafts)
+        }
+
+    /** Caller must hold [workspaceMutationLock]. */
+    private fun flushSaveSyncLocked(verifyAllDrafts: Boolean): Boolean {
         saveJob?.cancel()
         val current = activeFile
         val draftsToSave = linkedMapOf<String, String>()
@@ -472,22 +527,25 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                 return false
             }
         }
-        if (draftsToSave.isNotEmpty()) {
-            pendingSave = false
-        }
-        val json = try {
-            JSONObject().apply {
-                put("opened", JSONArray(openedFiles))
-                put("active", activeFile ?: "")
-            }.toString()
-        } catch (e: Exception) {
-            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", e.message ?: "state gagal")
-            return false
-        }
+        if (draftsToSave.isNotEmpty()) pendingSave = false
+        val json = workspaceStateJson() ?: return false
         val committed = prefs.edit().putString("workspace", json).commit()
-        if (committed) com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_OK", activeFile ?: "-")
-        else com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", "commit workspace gagal")
+        if (committed) {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_OK", activeFile ?: "-")
+        } else {
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", "commit workspace gagal")
+        }
         return committed
+    }
+
+    private fun workspaceStateJson(): String? = try {
+        JSONObject().apply {
+            put("opened", JSONArray(openedFiles))
+            put("active", activeFile ?: "")
+        }.toString()
+    } catch (e: Exception) {
+        com.zaba.zcode.core.diagnostics.Breadcrumb.log("WORKSPACE_FLUSH_FAIL", e.message ?: "state gagal")
+        null
     }
 
     fun updateCode(newCode: String) {
@@ -495,6 +553,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         activeCode = newCode
         val current = activeFile ?: return
         fileDrafts[current] = newCode
+        documentRevisions[current] = (documentRevisions[current] ?: 0L) + 1L
 
         pendingSave = true
         saveJob?.cancel()
@@ -519,6 +578,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (filename !in openedFiles) return
         if (fileDrafts[filename] == newCode) return
         fileDrafts[filename] = newCode
+        documentRevisions[filename] = (documentRevisions[filename] ?: 0L) + 1L
         scope.launch(Dispatchers.IO) {
             runCatching { FileManager.saveFile(filesDir, filename, newCode) }
         }
@@ -683,10 +743,14 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun persistExternalOrigins() {
+    private fun externalOriginsJson(origins: Map<String, String> = externalOrigins): String {
         val o = JSONObject()
-        externalOrigins.forEach { (k, v) -> o.put(k, v) }
-        prefs.edit().putString("external_origins", o.toString()).apply()
+        origins.forEach { (k, v) -> o.put(k, v) }
+        return o.toString()
+    }
+
+    private fun persistExternalOrigins() {
+        prefs.edit().putString("external_origins", externalOriginsJson()).apply()
     }
 
     private fun loadExternalOrigins() {
@@ -773,6 +837,8 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                 if (activeFile == securedOld) activeFile = securedNew
                 val draft = fileDrafts.remove(securedOld)
                 if (draft != null) fileDrafts[securedNew] = draft
+                val revision = documentRevisions.remove(securedOld) ?: 0L
+                documentRevisions[securedNew] = revision + 1L
                 externalOrigins.remove(securedOld)?.let { externalOrigins[securedNew] = it }
                 persistExternalOrigins()
                 persistWorkspaceState()
@@ -784,17 +850,47 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
 
     fun deleteFile(filename: String): Boolean {
         val secured = FileManager.secureFilename(filename) ?: return false
-        val file = File(filesDir, secured)
-        if (file.exists() && file.delete()) {
+        saveJob?.cancel()
+        return synchronized(workspaceMutationLock) {
+            val file = File(filesDir, secured)
+            if (!file.isFile || !file.delete()) return@synchronized false
+
+            // Do not call closeFile here: closeFile flushes the active draft and
+            // could recreate the file which was just deleted.
+            val idx = openedFiles.indexOf(secured)
+            val wasActive = activeFile == secured
+            if (idx >= 0) openedFiles.removeAt(idx)
+            fileDrafts.remove(secured)
+            documentRevisions.remove(secured)
             externalOrigins.remove(secured)
+            if (wasActive) {
+                pendingSave = false
+                if (openedFiles.isNotEmpty()) {
+                    val nextIndex = if (idx in openedFiles.indices) idx else openedFiles.lastIndex
+                    val next = openedFiles[nextIndex]
+                    activeFile = next
+                    activeCode = FileManager.readFile(filesDir, next).getOrDefault("")
+                    fileDrafts[next] = activeCode
+                    documentRevisions.putIfAbsent(next, 0L)
+                    validateSyntaxDebounced(activeCode)
+                } else {
+                    activeFile = null
+                    activeCode = ""
+                    syntaxError = null
+                    problems = emptyList()
+                }
+            }
+            lastClosed = secured to System.currentTimeMillis()
             persistExternalOrigins()
-            closeFile(secured)
-            return true
+            persistWorkspaceState()
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log("FILE_DELETE", "$secured ok=true")
+            true
         }
-        return false
     }
 
     fun getAllFiles(): List<Map<String, Any>> = FileManager.listFiles(filesDir)
+
+    fun workspaceFileCount(): Int = workspaceTrash.pythonFileCount()
 
     // ------------------------------------------------------------------
     // Diagnostik sintaksis real-time (Fase 2)
@@ -824,22 +920,182 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         updateCode(beautified)
     }
 
-    fun optimizeActiveImports() {
-        runPythonPlugin("organize_imports") { _, _ -> }
+    fun optimizeActiveImports(onDone: (Boolean, String) -> Unit = { _, _ -> }) {
+        runPythonPlugin("organize_imports", onDone)
     }
 
-    fun clearAllDrafts() {
-        openedFiles.forEach { FileManager.deleteFileIfExists(filesDir, it) }
+    /**
+     * Clear every top-level user .py file, including closed tabs. Files are
+     * committed to app-private trash before workspace topology changes.
+     */
+    fun clearAllDrafts(): Pair<Boolean, String> {
+        saveJob?.cancel()
+        return synchronized(workspaceMutationLock) {
+            if (!flushSaveSyncLocked(verifyAllDrafts = true)) {
+                return@synchronized false to "Clear All dibatalkan karena workspace gagal disimpan."
+            }
+            val oldWorkspace = prefs.getString("workspace", null)
+            val oldOrigins = prefs.getString("external_origins", null)
+            val metadata = JSONObject().apply {
+                if (oldWorkspace == null) put("workspace", JSONObject.NULL) else put("workspace", oldWorkspace)
+                if (oldOrigins == null) put("external_origins", JSONObject.NULL) else put("external_origins", oldOrigins)
+            }.toString()
+
+            val cleared = workspaceTrash.clearAll(metadata)
+            if (!cleared.ok) return@synchronized false to cleared.message
+
+            val seedSave = FileManager.saveFile(filesDir, "main.py", SEED_MAIN_PY)
+            if (seedSave.isFailure) {
+                rollbackCommittedClear(oldWorkspace, oldOrigins)
+                return@synchronized false to "Clear All dibatalkan karena main.py baru tidak dapat dibuat."
+            }
+
+            openedFiles.clear()
+            openedFiles.add("main.py")
+            fileDrafts.clear()
+            fileDrafts["main.py"] = SEED_MAIN_PY
+            documentRevisions.clear()
+            documentRevisions["main.py"] = 0L
+            externalOrigins.clear()
+            activeFile = "main.py"
+            activeCode = SEED_MAIN_PY
+            pendingSave = false
+            syntaxError = null
+            problems = emptyList()
+
+            val newWorkspace = workspaceStateJson()
+            val committed = newWorkspace != null && prefs.edit()
+                .putString("workspace", newWorkspace)
+                .putString("external_origins", externalOriginsJson())
+                .commit()
+            if (!committed) {
+                rollbackCommittedClear(oldWorkspace, oldOrigins)
+                return@synchronized false to "Clear All dibatalkan karena state workspace tidak dapat disimpan."
+            }
+
+            canRestoreLastClear = workspaceTrash.hasRestorableClear()
+            validateSyntaxDebounced(activeCode)
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "WORKSPACE_CLEAR_OK",
+                "count=${cleared.count}",
+            )
+            true to "${cleared.count} file dipindahkan. Restore Last Deletion tersedia di Settings."
+        }
+    }
+
+    /** Restore files and the old tab topology without overwriting newer files. */
+    fun restoreLastClear(): Pair<Boolean, String> {
+        saveJob?.cancel()
+        return synchronized(workspaceMutationLock) {
+            if (!flushSaveSyncLocked(verifyAllDrafts = true)) {
+                return@synchronized false to "Restore dibatalkan karena workspace saat ini gagal disimpan."
+            }
+            val restored = workspaceTrash.beginRestore()
+            if (!restored.ok || restored.metadata == null) {
+                canRestoreLastClear = workspaceTrash.hasRestorableClear()
+                return@synchronized false to restored.message
+            }
+
+            val metadata = try {
+                JSONObject(restored.metadata)
+            } catch (e: Exception) {
+                workspaceTrash.rollbackRestore(restored)
+                return@synchronized false to "Restore dibatalkan karena manifest workspace rusak."
+            }
+            val oldWorkspaceRaw = metadata.opt("workspace")?.takeUnless { it == JSONObject.NULL } as? String
+            val oldOriginsRaw = metadata.opt("external_origins")?.takeUnless { it == JSONObject.NULL } as? String
+            val oldWorkspace = runCatching {
+                oldWorkspaceRaw?.let { JSONObject(it) }
+            }.getOrNull()
+            val oldOpened = oldWorkspace?.optJSONArray("opened")?.let { arr ->
+                (0 until arr.length()).mapNotNull { index ->
+                    arr.optString(index).takeIf { it.isNotBlank() }
+                }
+            }.orEmpty()
+            val restoredOpened = oldOpened.mapNotNull { oldName ->
+                restored.restoredNames[oldName]?.takeIf { File(filesDir, it).isFile }
+            }.distinct().toMutableList()
+            if (restoredOpened.isEmpty()) restoredOpened.addAll(restored.restoredNames.values)
+            val oldActive = oldWorkspace?.optString("active").orEmpty()
+            val restoredActive = restored.restoredNames[oldActive]
+                ?.takeIf { it in restoredOpened }
+                ?: restoredOpened.firstOrNull()
+
+            val restoredOrigins = linkedMapOf<String, String>()
+            runCatching {
+                val origins = JSONObject(oldOriginsRaw ?: "{}")
+                origins.keys().forEach { oldName ->
+                    restored.restoredNames[oldName]?.let { newName ->
+                        restoredOrigins[newName] = origins.optString(oldName)
+                    }
+                }
+            }
+            val stateJson = JSONObject().apply {
+                put("opened", JSONArray(restoredOpened))
+                put("active", restoredActive ?: "")
+            }.toString()
+            val stateCommitted = prefs.edit()
+                .putString("workspace", stateJson)
+                .putString("external_origins", externalOriginsJson(restoredOrigins))
+                .commit()
+            if (!stateCommitted) {
+                workspaceTrash.rollbackRestore(restored)
+                return@synchronized false to "Restore dibatalkan karena topology workspace gagal disimpan."
+            }
+
+            openedFiles.clear()
+            openedFiles.addAll(restoredOpened)
+            fileDrafts.clear()
+            documentRevisions.clear()
+            externalOrigins.clear()
+            externalOrigins.putAll(restoredOrigins)
+            activeFile = restoredActive
+            activeCode = restoredActive?.let { FileManager.readFile(filesDir, it).getOrDefault("") } ?: ""
+            restoredActive?.let {
+                fileDrafts[it] = activeCode
+                documentRevisions[it] = 0L
+            }
+            pendingSave = false
+            validateSyntaxDebounced(activeCode)
+
+            val trashRemoved = workspaceTrash.finishRestore(restored)
+            canRestoreLastClear = workspaceTrash.hasRestorableClear()
+            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                "WORKSPACE_RESTORE_OK",
+                "count=${restored.count} trashRemoved=$trashRemoved",
+            )
+            val conflictCount = restored.restoredNames.count { (old, new) -> old != new }
+            val conflictNote = if (conflictCount == 0) "" else " $conflictCount file memakai nama baru karena bentrok."
+            val cleanupNote = if (trashRemoved) "" else " Salinan pemulihan lama belum dapat dibersihkan."
+            true to "${restored.count} file berhasil dipulihkan.$conflictNote$cleanupNote"
+        }
+    }
+
+    /** Roll back a clear which committed files but failed to commit new state. */
+    private fun rollbackCommittedClear(oldWorkspace: String?, oldOrigins: String?) {
+        val seed = File(filesDir, "main.py")
+        if (seed.isFile && runCatching { seed.readText() == SEED_MAIN_PY }.getOrDefault(false)) {
+            seed.delete()
+        }
+        val restored = workspaceTrash.beginRestore()
+        val restoredOk = restored.ok && restored.restoredNames.all { (old, new) -> old == new }
+        if (restoredOk) workspaceTrash.finishRestore(restored)
+        else if (restored.ok) workspaceTrash.rollbackRestore(restored)
+
+        val editor = prefs.edit()
+        if (oldWorkspace == null) editor.remove("workspace") else editor.putString("workspace", oldWorkspace)
+        if (oldOrigins == null) editor.remove("external_origins") else editor.putString("external_origins", oldOrigins)
+        editor.commit()
+
         openedFiles.clear()
         fileDrafts.clear()
+        documentRevisions.clear()
         externalOrigins.clear()
-        persistExternalOrigins()
+        loadExternalOrigins()
         activeFile = null
         activeCode = ""
-        syntaxError = null
-        // hanya hapus state workspace — preferensi UI (symbol_bar dsb.) tetap dipertahankan
-        prefs.edit().remove("workspace").apply()
         loadSavedWorkspace()
+        canRestoreLastClear = workspaceTrash.hasRestorableClear()
     }
 
     override fun onCleared() {

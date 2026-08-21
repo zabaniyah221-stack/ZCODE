@@ -6,9 +6,6 @@ import com.chaquo.python.Python
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 
 /**
  * RuntimeProbe — capture runtime eksak (SPEC-001 Phase 0 "Capture exact runtime"):
@@ -56,27 +53,20 @@ object RuntimeProbe {
 
     private fun probeChaquopy(context: Context, androidApi: Int?): RuntimeInfo {
         val appContext = context.applicationContext
-        val result = AtomicReference<JSONObject?>(null)
-        val latch = CountDownLatch(1)
-        Thread {
-            try {
-                if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(appContext)) {
-                    result.set(null)
-                    return@Thread
-                }
+        // The caller owns the worker dispatcher. Do not spawn a second thread
+        // and return a fallback while that thread keeps using Chaquopy unseen.
+        val raw = try {
+            if (!com.zaba.zcode.core.execution.PythonRuntime.ensureStarted(appContext)) {
+                null
+            } else {
                 val py = Python.getInstance().getModule("package_runtime.probe")
                 val json = py.callAttr("probe_runtime_json", androidApi ?: -1).toString()
-                result.set(JSONObject(json))
-            } catch (e: Exception) {
-                result.set(null)
-            } finally {
-                latch.countDown()
+                JSONObject(json)
             }
-        }.start()
-        latch.await(20, TimeUnit.SECONDS)
-        val raw = result.get()
-        if (raw == null) return probeHost(androidApi)
-        return fromJson(raw)
+        } catch (_: Exception) {
+            null
+        }
+        return raw?.let(::fromJson) ?: probeHost(androidApi)
     }
 
     private fun probeHost(androidApi: Int?): RuntimeInfo {

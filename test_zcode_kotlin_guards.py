@@ -26,6 +26,7 @@ Run: pytest test_zcode_kotlin_guards.py -v
 """
 import json
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).parent
@@ -3304,9 +3305,9 @@ class TestBengkelV1018Kotlin:
         assert "0x7F" in blok and "setExecutable" in blok and "setReadable" in blok, (
             "deteksi magic ELF + setReadable/setExecutable harus ada"
         )
-        # dipanggil SEBELUM copyRecursively
-        j = src.find("normalizePermissions(versionDir)")
-        k = src.find("versionDir.copyRecursively")
+        # dipanggil SEBELUM copyRecursively pada source staging
+        j = src.find("normalizePermissions(source)")
+        k = src.find("source.copyRecursively")
         assert 0 < j < k, "normalizePermissions harus dipanggil sebelum copyRecursively"
 
     # ---- Bug W: validator token, bukan substring ----
@@ -3474,7 +3475,7 @@ class TestRotateResilienceA0:
 
     def test_manual_tab_console_tidak_kelaparan_tanpa_mutasi_focus_tree(self):
         src = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
-        manual = src[src.index("private fun ManualTab("):src.index("private fun initialConsole")]
+        manual = src[src.index("private fun ManualTab("):src.index("private fun categoryDescription")]
         assert "BoxWithConstraints" in manual, (
             "ManualTab tetap mengukur ruang untuk console portrait/landscape"
         )
@@ -3964,9 +3965,11 @@ class TestPipTapTabsV1019:
 
     def test_enum_adalah_satu_sumber_state(self):
         src = self._src()
-        assert "private enum class PipTab { LIBRARY, MANUAL }" in src
-        assert "var activeTab by remember { mutableStateOf(PipTab.LIBRARY) }" in src
-        assert 'mutableStateOf("LIBRARY")' not in src, (
+        operation_owner = strip_kt_comments(read(UI / "settings/PackageOperationViewModel.kt"))
+        assert "enum class PipTab { LIBRARY, MANUAL }" in src
+        assert "var activeTab by operations.activeTab" in src
+        assert "val activeTab = mutableStateOf(PipTab.LIBRARY)" in operation_owner
+        assert 'mutableStateOf("LIBRARY")' not in src + operation_owner, (
             "string activeTab membuat mapping tab rapuh"
         )
         assert "when (activeTab)" in src
@@ -3998,10 +4001,12 @@ class TestPipTapTabsV1019:
         for declaration in (
             "val libraryListState = rememberLazyListState()",
             "val manualPageScroll = rememberScrollState()",
-            'var packageName by remember { mutableStateOf("") }',
             "val consoleScroll = rememberScrollState()",
         ):
             assert declaration in owner, f"state owner hilang: {declaration}"
+        operation_owner = strip_kt_comments(read(UI / "settings/PackageOperationViewModel.kt"))
+        assert "var packageName by operations.packageName" in owner
+        assert 'val packageName = mutableStateOf("")' in operation_owner
         assert "listState = libraryListState" in src
         assert "state = listState" in src
         assert "pageScroll = manualPageScroll" in src
@@ -4017,7 +4022,9 @@ class TestPipTapTabsV1019:
 
     def test_operasi_memiliki_snapshot_dan_input_logically_locked(self):
         src = self._src()
-        assert "var activeRequirement by remember" in src
+        operation_owner = strip_kt_comments(read(UI / "settings/PackageOperationViewModel.kt"))
+        assert "var activeRequirement by operations.activeRequirement" in src
+        assert "val activeRequirement = mutableStateOf<String?>(null)" in operation_owner
         assert src.count("activeRequirement = trimmed") >= 2, (
             "analyze dan install wajib memiliki snapshot requirement sendiri"
         )
@@ -4030,7 +4037,7 @@ class TestPipTapTabsV1019:
         )
         call = src[src.index("PipTab.MANUAL -> ManualTab("):]
         assert "if (!isInstalling && !isAnalyzing) packageName = value" in call[:1500]
-        manual = src[src.index("private fun ManualTab("):src.index("private fun initialConsole")]
+        manual = src[src.index("private fun ManualTab("):src.index("private fun categoryDescription")]
         assert "Requirement dikunci selama operasi:" in manual
         assert "enabled = true" in manual
         assert "enabled = if (cancellable)" not in manual
@@ -4784,3 +4791,244 @@ class TestUninstallHardeningV1019:
         skills = read(ROOT / "docs/SKILLS.md")
         assert "SKILL 20 — Uninstall tanpa reverse graph" in skills
         assert "Satu operasi sukses memiliki satu owner telemetry" in skills
+
+
+class TestV1021WorkspaceDataSafety:
+    """Behavioral wiring guards for the v1.0.21 data-safety hotfix."""
+
+    def test_settings_clear_all_has_confirmation_and_counts_all_files(self):
+        settings = strip_kt_comments(read(UI / "settings/SettingsScreen.kt"))
+        assert "confirmClearAll" in settings and "AlertDialog(" in settings
+        assert "workspaceFileCount()" in settings
+        assert "vm.clearAllDrafts()" in settings
+        main = strip_kt_comments(read(APP / "MainActivity.kt"))
+        assert "onClearAll" not in main, "Settings must own confirmation before destructive callback"
+
+    def test_clear_all_uses_private_transactional_trash_not_open_tabs(self):
+        vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
+        start = vm.index("fun clearAllDrafts()")
+        end = vm.index("fun restoreLastClear()", start)
+        block = vm[start:end]
+        assert "workspaceTrash.clearAll(metadata)" in block
+        assert "if (!flushSaveSyncLocked(verifyAllDrafts = true))" in block
+        assert "openedFiles.forEach" not in block
+        manager = read(APP / "core/files/WorkspaceTrashManager.kt")
+        assert "StandardCopyOption.ATOMIC_MOVE" in manager
+        assert "recoverInterruptedClear" in manager
+        assert "beginRestore" in manager and "finishRestore" in manager
+
+    def test_delete_active_file_never_calls_closefile_after_delete(self):
+        vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
+        start = vm.index("fun deleteFile(")
+        end = vm.index("fun getAllFiles", start)
+        block = vm[start:end]
+        assert "closeFile(" not in block
+        assert "saveJob?.cancel()" in block
+        assert "synchronized(workspaceMutationLock)" in block
+        assert "pendingSave = false" in block
+
+    def test_run_fails_closed_when_flush_fails(self):
+        workbench = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        start = workbench.index("vm.applyAutoTrimIfEnabled()")
+        block = workbench[start:start + 900]
+        assert "if (!vm.flushSaveSync())" in block
+        assert '"RUN_SAVE_FAIL"' in block
+        assert "return@FloatingActionButton" in block
+        assert block.index("return@FloatingActionButton") < block.index('"SAVE_OK"')
+
+    def test_plugin_result_is_bound_to_document_revision(self):
+        vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
+        assert "PluginDocumentSnapshot" in vm
+        assert "documentId" in vm and "revision" in vm
+        assert "documentRevisions" in vm
+        assert '"PLUGIN_STALE_RESULT"' in vm
+        finish = vm[vm.index("private fun finishPluginResult"):vm.index("fun runPythonPlugin", vm.index("private fun finishPluginResult"))]
+        assert "activeFile == snapshot.documentId" in finish
+        assert "activeCode == snapshot.code" in finish
+        assert "updateCode(result.code)" in finish
+
+
+class TestV1021GenerationActivationSafety:
+    """Guards the ordering invariants which make package rollback truthful."""
+
+    def test_activation_never_deletes_active_package_before_state_commit(self):
+        tx = strip_kt_comments(read(PKGENG / "TransactionManager.kt"))
+        start = tx.index("fun activate(")
+        end = tx.index("private fun normalizePermissions", start)
+        block = tx[start:end]
+        assert ".incoming-" in block and "__zcode_" in block
+        assert "verifyCopiedTree(source, incoming)" in block
+        assert "StandardCopyOption.ATOMIC_MOVE" in block
+        assert "writeAtomicFile(installedFile" in block
+        before_commit = block[:block.index("writeAtomicFile(installedFile")]
+        assert "target.deleteRecursively" not in before_commit
+        assert "packageRoot.deleteRecursively" not in before_commit
+        assert "current.put" not in block, "old state object must not mutate before commit"
+
+    def test_failed_activation_deletes_only_new_generations(self):
+        tx = strip_kt_comments(read(PKGENG / "TransactionManager.kt"))
+        start = tx.index("} catch (e: Exception) {", tx.index("fun activate("))
+        end = tx.index("private fun normalizePermissions", start)
+        rollback = tx[start:end]
+        assert "it.incoming.deleteRecursively()" in rollback
+        assert "it.finalDir.deleteRecursively()" in rollback
+        assert 'oldEnvironmentPreserved = true' in rollback
+        assert "installedFile.delete" not in rollback
+
+    def test_atomic_state_recovered_before_any_runtime_reader(self):
+        app = strip_kt_comments(read(APP / "ZcodeApp.kt"))
+        tx = strip_kt_comments(read(PKGENG / "TransactionManager.kt"))
+        assert "AtomicFile(file).openRead()" in tx
+        assert "TransactionManager.recoverInstalledState(this)" in app
+        assert app.index("TransactionManager.recoverInstalledState(this)") < app.index("TelemetryStore.init(this)")
+
+    def test_sqlite_cache_uses_actual_generation_path(self):
+        engine = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        assert "activation.activatedPaths.getValue(p.canonicalName)" in engine
+        assert "db.upsertInstalled(p.canonicalName, p.version, activePath" in engine
+        assert '"site-packages/${p.canonicalName}/${p.version}"' not in engine[
+            engine.index("val activation ="):engine.index("TelemetryStore.increment(\"install_success\")")
+        ]
+
+    def test_uninstall_commits_inactive_pointer_before_cleanup(self):
+        tx = strip_kt_comments(read(PKGENG / "TransactionManager.kt"))
+        start = tx.index("fun uninstall(")
+        block = tx[start:tx.index("companion object", start)]
+        state = block.index("writeAtomicFile(installedFile")
+        delete = block.index("dir.deleteRecursively()")
+        assert state < delete
+        assert "expectedPrefix" in block and "canonicalFile" in block
+
+    def test_ui_no_longer_claims_unconditional_rollback_integrity(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "environment lama utuh" not in pip
+        assert "tidak ada perubahan environment aktif yang di-commit" in pip
+
+
+class TestV1021RuntimeAndWheelHardening:
+    def test_batch_timeout_kills_process_before_reader_join(self):
+        src = strip_kt_comments(read(EXEC / "ExecutionEngine.kt"))
+        start = src.index("val finished = withTimeoutOrNull")
+        block = src[start:src.index("RunResult(process.exitValue()", start)]
+        assert block.index("process.destroyForcibly()") < block.index("jobs.forEach { it.join(")
+        assert "join(READER_JOIN_TIMEOUT_MS)" in block
+        assert "jobs.forEach { it.join() }" not in block
+
+    def test_runtime_probe_does_not_spawn_unowned_timeout_thread(self):
+        src = strip_kt_comments(read(PKGENG / "RuntimeProbe.kt"))
+        start = src.index("private fun probeChaquopy")
+        block = src[start:src.index("private fun probeHost", start)]
+        assert "Thread {" not in block
+        assert "CountDownLatch" not in src
+        assert "latch.await" not in src
+
+    def test_wheel_extraction_has_count_and_uncompressed_budgets(self):
+        src = strip_kt_comments(read(PKGENG / "Verifier.kt"))
+        for token in (
+            "MAX_EXTRACTED_BYTES",
+            "MAX_WHEEL_ENTRIES",
+            "MAX_ENTRY_NAME_CHARS",
+            "seenEntries",
+            "extractedBytes += n",
+        ):
+            assert token in src
+
+    def test_wheel_record_and_plan_identity_are_verified(self):
+        verifier = strip_kt_comments(read(PKGENG / "Verifier.kt"))
+        engine = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        for token in (
+            "expectedName",
+            "expectedVersion",
+            "Wheel-Version",
+            "verifyRecord",
+            "RECORD hash mismatch",
+            "actualFiles != rows.keys",
+        ):
+            assert token in verifier
+        assert "expectedName = p.canonicalName" in engine
+        assert "expectedVersion = p.version" in engine
+        assert "expectedName = sp.canonicalName" in engine
+
+    def test_compatibility_uses_ordering_not_inequality(self):
+        src = strip_kt_comments(read(PKGENG / "CompatibilityEngine.kt"))
+        installed = src[src.index("if (installedVersion != null)"):src.index("when (details.status)")]
+        assert "comparePythonVersions" in installed
+        assert "ordering > 0" in installed
+        assert "tv != installedVersion" not in installed
+
+
+class TestV1021PackageOperationOwner:
+    def test_activity_owns_one_package_operation_viewmodel(self):
+        main = strip_kt_comments(read(APP / "MainActivity.kt"))
+        owner = strip_kt_comments(read(UI / "settings/PackageOperationViewModel.kt"))
+        assert "private val packageOperations: PackageOperationViewModel by viewModels()" in main
+        assert "packageOperations = packageOperations" in main
+        assert "val engine = PackageEngineV2(app.applicationContext)" in owner
+        assert "viewModelScope" in owner and "operationMutex.withLock" in owner
+
+    def test_pipscreen_does_not_own_engine_or_operation_coroutine(self):
+        pip = strip_kt_comments(read(UI / "settings/PipScreen.kt"))
+        assert "operations: PackageOperationViewModel" in pip
+        assert "val engine = operations.engine" in pip
+        assert "remember { PackageEngineV2(context) }" not in pip
+        assert "scope.launch(Dispatchers.Default)" not in pip
+        assert pip.count("operations.launchOperation") >= 3
+        assert "operations.postToMain { handleEngineStep(step) }" in pip
+
+    def test_owner_persists_requirement_console_cancel_and_tab_state(self):
+        owner = strip_kt_comments(read(UI / "settings/PackageOperationViewModel.kt"))
+        for token in (
+            "activeRequirement",
+            "consoleLines",
+            "isInstalling",
+            "isAnalyzing",
+            "isCancelling",
+            "pendingRiskyPlan",
+            "activeTab",
+            "operationId",
+        ):
+            assert token in owner
+        assert "engine.cancelCurrentOperation()" in owner
+        assert "engine.requestInstallCancel()" in owner
+
+    def test_uninstall_acquires_same_engine_lock_at_backend_boundary(self):
+        engine = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        start = engine.index("fun uninstall(")
+        end = engine.index("fun listInstalled", start)
+        block = engine[start:end]
+        assert "if (!tryAcquire())" in block
+        assert "finally" in block and "release()" in block
+
+
+class TestCatalogGeneratorNeverDowngradesShippedKnowledge:
+    def test_generator_has_fail_closed_regression_gate_before_writes(self):
+        source = read(ROOT / "tools/generate_catalog.py")
+        assert "def _regression_errors" in source
+        assert "shipped_names - source_names" in source
+        assert "set(shipped_tested) - set(TESTED_MANIFEST)" in source
+        gate = source.index("regression_errors = _regression_errors(packages)")
+        first_write = source.index("tmp.write_text(content", gate)
+        assert gate < first_write
+        assert "REFUSING TO OVERWRITE" in source
+        assert "sys.exit(2)" in source[gate:first_write]
+
+    def test_check_reports_current_drift_without_mutating_assets(self):
+        import hashlib
+        import subprocess
+        paths = [
+            ROOT / "app/src/main/assets/package_catalog/packages.json",
+            ROOT / "app/src/main/assets/package_catalog/tested-manifest.json",
+        ]
+        before = [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tools/generate_catalog.py"), "--check"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        after = [hashlib.sha256(path.read_bytes()).hexdigest() for path in paths]
+        assert before == after
+        if result.returncode != 0:
+            assert "DATA REGRESSION" in result.stdout
+            assert "generator kehilangan" in result.stdout

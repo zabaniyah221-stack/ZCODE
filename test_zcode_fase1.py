@@ -387,6 +387,58 @@ class TestZcodePluginsBackend:
         d = json.loads(r.stdout.strip().splitlines()[-1])
         assert d["ok"] is False  # graceful, tidak crash
 
+    @staticmethod
+    def _load_plugin_module():
+        # Compile current source bytes directly: importlib bytecode caching can
+        # otherwise hide a same-size mutation restored within one timestamp tick.
+        import types
+        module = types.ModuleType("zcode_plugins_test")
+        source = PY_PLUGINS.read_text(encoding="utf-8")
+        exec(compile(source, str(PY_PLUGINS), "exec"), module.__dict__)
+        return module
+
+    def test_rename_symbol_preserves_strings_comments_and_formatting(self):
+        module = self._load_plugin_module()
+        source = 'foo = 1\nprint("foo")  # foo comment\nprint(foo)\n'
+        result = module.run_with_param("rename_symbol", source, "foo:bar")
+        assert result["ok"] is True
+        assert result["code"] == 'bar = 1\nprint("foo")  # foo comment\nprint(bar)\n'
+
+    def test_rename_symbol_rejects_keyword_and_fstring_instead_of_partial_edit(self):
+        module = self._load_plugin_module()
+        source = 'value = 1\nprint(f"{value}")\n'
+        keyword_result = module.run_with_param("rename_symbol", source, "value:class")
+        fstring_result = module.run_with_param("rename_symbol", source, "value:item")
+        assert keyword_result["ok"] is False and keyword_result["code"] == source
+        assert fstring_result["ok"] is False and fstring_result["code"] == source
+
+    def test_type_hint_generator_preserves_complex_defaults_and_signature_markers(self):
+        import ast
+        module = self._load_plugin_module()
+        source = (
+            "def h(a, /, x=make_default(), *args, flag=True, **kwargs):\n"
+            "    return x\n"
+        )
+        result = module.run("type_hint_generator", source)
+        assert result["ok"] is True
+        assert "make_default()" in result["code"]
+        assert "x: Any=make_default()" in result["code"]
+        assert "/" in result["code"] and "*args: Any" in result["code"]
+        ast.parse(result["code"])
+
+    def test_organize_imports_safe_mode_is_byte_preserving(self):
+        module = self._load_plugin_module()
+        source = (
+            '"""module docs"""\n'
+            "from __future__ import annotations\n"
+            "import side_effect_plugin\n"
+            "print('ready')\n"
+        )
+        result = module.run("organize_imports", source)
+        assert result["ok"] is True
+        assert result["code"] == source
+        assert "Safe mode" in result["report"]
+
 
 class TestPluginKotlin:
     def test_plugin_runner_dual_backend(self):

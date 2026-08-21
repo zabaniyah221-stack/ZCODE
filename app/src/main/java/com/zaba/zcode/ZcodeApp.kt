@@ -8,6 +8,7 @@ import android.os.Process
 import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.diagnostics.CrashReporter
 import com.zaba.zcode.core.packageengine.TelemetryStore
+import com.zaba.zcode.core.packageengine.TransactionManager
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -41,6 +42,12 @@ class ZcodeApp : Application() {
         }
         CrashReporter.install(this, version)
         Breadcrumb.log("APP_START", "v$version api=${android.os.Build.VERSION.SDK_INT} abi=${android.os.Build.SUPPORTED_ABIS.firstOrNull()}")
+
+        // installed.json uses AtomicFile during package activation. Recover a
+        // possible interrupted write before Python/UI reads the file directly.
+        if (!TransactionManager.recoverInstalledState(this)) {
+            Breadcrumb.log("PKG_STATE_RECOVERY_FAIL", "installed.json")
+        }
 
         // Telemetri lokal (SPEC-001 dashboard metric) — init sekali di process.
         // Dibungkus try/catch: telemetri TIDAK boleh menggagalkan startup.

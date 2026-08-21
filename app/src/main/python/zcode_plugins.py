@@ -12,8 +12,11 @@ Antarmuka:
     CLI: python3 zcode_plugins.py <plugin_id> <input_file>  → JSON ke stdout
 """
 import ast
+import io
 import json
+import keyword
 import sys
+import tokenize
 
 
 class DuplicateLineDetector:
@@ -111,7 +114,7 @@ class SmartCommentGenerator:
 
 
 class VariableTypeHintGenerator:
-    """Adds type hint annotations to Python functions, importing typing package if necessary."""
+    """Insert annotations without reconstructing signatures or defaults."""
 
     @staticmethod
     def infer_type_by_default(default_node) -> str:
@@ -125,226 +128,170 @@ class VariableTypeHintGenerator:
                 return "float"
             if isinstance(val, str):
                 return "str"
-            if val is None:
-                return "Optional[Any]"
         elif isinstance(default_node, ast.List):
             return "list"
         elif isinstance(default_node, ast.Dict):
             return "dict"
+        elif isinstance(default_node, ast.Set):
+            return "set"
+        elif isinstance(default_node, ast.Tuple):
+            return "tuple"
         return "Any"
 
     @staticmethod
-    def generate(code: str) -> tuple:
-        report = []
-        current = code
-        has_any_imports = "from typing import Any" in code or "import typing" in code
+    def _line_offsets(code: str) -> list[int]:
+        offsets = [0]
+        for line in code.splitlines(keepends=True):
+            offsets.append(offsets[-1] + len(line))
+        return offsets
 
-        # Process one function per pass, re-parsing so line offsets stay valid
-        # after each edit, and never overwrite an existing return annotation.
-        skipped = set()
-        while True:
-            try:
-                tree = ast.parse(current)
-            except SyntaxError as e:
-                return current, [f"SyntaxError: {str(e)}"] + report
+    @staticmethod
+    def _offset(offsets: list[int], position: tuple[int, int]) -> int:
+        line, column = position
+        return offsets[line - 1] + column
 
-            target = None
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef) and node.name not in skipped:
-                    target = node
-                    break
-            if target is None:
-                break
-
-            args = target.args.args
-            defaults = target.args.defaults
-
-            defaults_map = {}
-            for idx, default in enumerate(reversed(defaults)):
-                arg_idx = len(args) - 1 - idx
-                if arg_idx >= 0:
-                    defaults_map[args[arg_idx].arg] = default
-
-            needs_annotation = any(
-                arg.arg != 'self' and arg.annotation is None for arg in args
-            )
-            if not needs_annotation and target.returns is not None:
-                skipped.add(target.name)
+    @staticmethod
+    def _signature_colons(code: str, functions: list[ast.AST]) -> dict[int, int]:
+        """Map node identity to the source offset of its header colon."""
+        offsets = VariableTypeHintGenerator._line_offsets(code)
+        tokens = list(tokenize.generate_tokens(io.StringIO(code).readline))
+        result = {}
+        for node in functions:
+            start_line = node.lineno
+            start_col = node.col_offset
+            def_index = next((
+                index for index, token in enumerate(tokens)
+                if token.type == tokenize.NAME and token.string == "def" and
+                (token.start[0] > start_line or
+                 (token.start[0] == start_line and token.start[1] >= start_col))
+            ), None)
+            if def_index is None:
                 continue
+            depth = 0
+            for token in tokens[def_index + 1:]:
+                if token.type == tokenize.OP:
+                    if token.string in "([{":
+                        depth += 1
+                    elif token.string in ")]}":
+                        depth -= 1
+                    elif token.string == ":" and depth == 0:
+                        result[id(node)] = VariableTypeHintGenerator._offset(offsets, token.start)
+                        break
+        return result
 
-            lines = current.split('\n')
-            sig_start_idx = target.lineno - 1
-            sig_end_idx = target.body[0].lineno - 1
+    @staticmethod
+    def _typing_import_offset(code: str, tree: ast.Module) -> int:
+        offsets = VariableTypeHintGenerator._line_offsets(code)
+        insert_line = 1
+        lines = code.splitlines(keepends=True)
+        while insert_line <= len(lines) and (
+            (insert_line == 1 and lines[insert_line - 1].startswith("#!")) or
+            (insert_line <= 2 and "coding" in lines[insert_line - 1][:40])
+        ):
+            insert_line += 1
+        body_index = 0
+        if tree.body and isinstance(tree.body[0], ast.Expr) and isinstance(
+            getattr(tree.body[0], "value", None), ast.Constant
+        ) and isinstance(tree.body[0].value.value, str):
+            insert_line = max(insert_line, getattr(tree.body[0], "end_lineno", tree.body[0].lineno) + 1)
+            body_index = 1
+        while body_index < len(tree.body):
+            node = tree.body[body_index]
+            if not (isinstance(node, ast.ImportFrom) and node.module == "__future__"):
+                break
+            insert_line = max(insert_line, getattr(node, "end_lineno", node.lineno) + 1)
+            body_index += 1
+        return offsets[min(insert_line - 1, len(offsets) - 1)]
 
-            def_line = lines[sig_start_idx]
-            indent = len(def_line) - len(def_line.lstrip())
-            indent_str = " " * indent
+    @staticmethod
+    def generate(code: str) -> tuple:
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as exc:
+            return code, [f"SyntaxError: {exc}"]
 
-            arg_strs = []
-            for arg in args:
-                if arg.arg == 'self':
-                    arg_strs.append('self')
+        functions = [
+            node for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+        if not functions:
+            return code, ["No functions found to add type hints."]
+
+        offsets = VariableTypeHintGenerator._line_offsets(code)
+        colons = VariableTypeHintGenerator._signature_colons(code, functions)
+        edits: list[tuple[int, str]] = []
+        report = []
+        uses_any = False
+
+        for function in functions:
+            positional = list(function.args.posonlyargs) + list(function.args.args)
+            defaults_map = {}
+            for arg, default in zip(positional[-len(function.args.defaults):], function.args.defaults):
+                defaults_map[id(arg)] = default
+            for arg, default in zip(function.args.kwonlyargs, function.args.kw_defaults):
+                if default is not None:
+                    defaults_map[id(arg)] = default
+            all_args = positional + list(function.args.kwonlyargs)
+            if function.args.vararg is not None:
+                all_args.append(function.args.vararg)
+            if function.args.kwarg is not None:
+                all_args.append(function.args.kwarg)
+
+            changed = False
+            for arg in all_args:
+                if arg.arg in {"self", "cls"} or arg.annotation is not None:
                     continue
-                arg_repr = arg.arg
-                if arg.annotation is None:
-                    inferred = "Any"
-                    if arg.arg in defaults_map:
-                        inferred = VariableTypeHintGenerator.infer_type_by_default(
-                            defaults_map[arg.arg])
-                    arg_repr += f": {inferred}"
+                annotation = VariableTypeHintGenerator.infer_type_by_default(defaults_map.get(id(arg)))
+                uses_any = uses_any or annotation == "Any"
+                end = (arg.end_lineno, arg.end_col_offset)
+                edits.append((VariableTypeHintGenerator._offset(offsets, end), f": {annotation}"))
+                changed = True
+            if function.returns is None and id(function) in colons:
+                edits.append((colons[id(function)], " -> Any"))
+                uses_any = True
+                changed = True
+            if changed:
+                report.append(f"Injected safe type hints into function '{function.name}'.")
 
-                if arg.arg in defaults_map:
-                    default_node = defaults_map[arg.arg]
-                    if isinstance(default_node, ast.Constant):
-                        val_repr = repr(default_node.value)
-                    elif isinstance(default_node, ast.List):
-                        val_repr = "[]"
-                    elif isinstance(default_node, ast.Dict):
-                        val_repr = "{}"
-                    else:
-                        val_repr = "None"
-                    arg_repr += f" = {val_repr}"
-                arg_strs.append(arg_repr)
+        if not edits:
+            return code, ["No functions found to add type hints."]
 
-            # Preserve an existing return annotation instead of forcing -> Any:
-            if target.returns is None:
-                return_part = " -> Any:"
-            else:
-                return_part = ":"
+        has_any = any(
+            isinstance(node, ast.ImportFrom) and node.module == "typing" and
+            any(alias.name in {"Any", "*"} and (alias.asname in {None, "Any"}) for alias in node.names)
+            for node in tree.body
+        )
+        if uses_any and not has_any:
+            edits.append((VariableTypeHintGenerator._typing_import_offset(code, tree), "from typing import Any\n"))
 
-            new_sig = f"{indent_str}def {target.name}({', '.join(arg_strs)}){return_part}"
-
-            del lines[sig_start_idx:sig_end_idx]
-            lines.insert(sig_start_idx, new_sig)
-            report.append(f"Injected variable type hints into function '{target.name}' signature.")
-            current = '\n'.join(lines)
-            skipped.add(target.name)
-
-        if report and not has_any_imports:
-            current = "from typing import Any, Optional\n" + current
-
-        if not report:
-            return current, ["No functions found to add type hints."]
+        current = code
+        for offset, text in sorted(edits, key=lambda item: item[0], reverse=True):
+            current = current[:offset] + text + current[offset:]
+        try:
+            ast.parse(current)
+        except SyntaxError as exc:
+            return code, [f"Transform dibatalkan karena hasil tidak valid: {exc}"]
         return current, report
 
 
 # ---------------------------------------------------------------------------
 class OrganizeImports:
-    """Sorts imports according to PEP-8 (stdlib -> third-party -> local) and removes unused ones."""
-
-    STDLIB_MODULES = {
-        "os", "sys", "math", "json", "time", "random", "datetime", "urllib", "collections",
-        "itertools", "functools", "re", "xml", "csv", "hashlib", "socket", "threading",
-        "multiprocessing", "subprocess", "logging", "ast", "typing", "shutil", "tempfile",
-        "io", "pathlib", "argparse", "uuid", "base64", "select", "selectors", "asyncio"
-    }
+    """Read-only gate until import edits have preview + transactional apply."""
 
     @staticmethod
     def generate(code: str) -> tuple:
-        report = []
+        # Import removal/reordering is not semantics-preserving in Python:
+        # imports may register plugins, mutate process state, or be ordered after a
+        # module docstring and __future__ statements. Until ZCODE has a preview +
+        # transactional edit flow, keep this action read-only rather than corrupt
+        # valid programs while claiming to "optimize" them.
         try:
-            tree = ast.parse(code)
-        except Exception as e:
-            return code, [f"Gagal parse AST karena kesalahan sintaksis: {str(e)}"]
-
-        # 1. Kumpulkan semua nama yang dipakai di seluruh file (selain statement import)
-        used_names = set()
-        class NameVisitor(ast.NodeVisitor):
-            def visit_Name(self, node):
-                used_names.add(node.id)
-                self.generic_visit(node)
-            def visit_Attribute(self, node):
-                if isinstance(node.value, ast.Name):
-                    used_names.add(node.value.id)
-                used_names.add(node.attr)
-                self.generic_visit(node)
-
-        visitor = NameVisitor()
-        for node in tree.body:
-            if not isinstance(node, (ast.Import, ast.ImportFrom)):
-                visitor.visit(node)
-
-        # 2. Cari semua statement import di level paling atas
-        imports_stdlib = []
-        imports_thirdparty = []
-        imports_local = []
-
-        import_nodes = []
-        removed_lines_intervals = []
-
-        for node in tree.body:
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                import_nodes.append(node)
-                end_line = getattr(node, "end_lineno", node.lineno)
-                removed_lines_intervals.append((node.lineno - 1, end_line))
-
-        if not import_nodes:
-            return code, ["Tidak ada statement import yang ditemukan."]
-
-        for node in import_nodes:
-            used_names_in_node = []
-            for name_alias in node.names:
-                imported_name = name_alias.asname or name_alias.name.split(".")[0]
-                if imported_name in used_names:
-                    used_names_in_node.append(name_alias)
-                else:
-                    report.append(f"Membuang import tidak terpakai: '''{name_alias.name}'''")
-
-            if not used_names_in_node:
-                continue
-
-            module_name = ""
-            if isinstance(node, ast.Import):
-                module_name = node.names[0].name.split(".")[0]
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    module_name = node.module.split(".")[0]
-
-            is_stdlib = module_name in OrganizeImports.STDLIB_MODULES
-            is_local = isinstance(node, ast.ImportFrom) and node.level > 0
-
-            import_str = ""
-            if isinstance(node, ast.Import):
-                import_str = "import " + ", ".join(f"{n.name} as {n.asname}" if n.asname else n.name for n in used_names_in_node)
-            elif isinstance(node, ast.ImportFrom):
-                dots = "." * node.level
-                import_str = f"from {dots}{node.module or '''''' } import " + ", ".join(f"{n.name} as {n.asname}" if n.asname else n.name for n in used_names_in_node)
-
-            if is_stdlib:
-                imports_stdlib.append(import_str)
-            elif is_local:
-                imports_local.append(import_str)
-            else:
-                imports_thirdparty.append(import_str)
-
-        imports_stdlib.sort()
-        imports_thirdparty.sort()
-        imports_local.sort()
-
-        import_blocks = []
-        if imports_stdlib:
-            import_blocks.append("\n".join(imports_stdlib))
-        if imports_thirdparty:
-            import_blocks.append("\n".join(imports_thirdparty))
-        if imports_local:
-            import_blocks.append("\n".join(imports_local))
-
-        new_imports_text = "\n\n".join(import_blocks)
-
-        lines = code.split("\n")
-        to_delete = set()
-        for start, end in removed_lines_intervals:
-            for l in range(start, end):
-                to_delete.add(l)
-
-        cleaned_lines = [line for idx, line in enumerate(lines) if idx not in to_delete]
-
-        while cleaned_lines and not cleaned_lines[0].strip():
-            cleaned_lines.pop(0)
-
-        new_code = new_imports_text + "\n\n" + "\n".join(cleaned_lines)
-        report.append("Imports berhasil diurutkan berdasarkan standar PEP-8.")
-        return new_code, report
+            ast.parse(code)
+        except Exception as exc:
+            return code, [f"Gagal parse AST karena kesalahan sintaksis: {exc}"]
+        return code, [
+            "Safe mode: imports tidak diubah otomatis karena urutan dan side effect harus dipreview."
+        ]
 
 
 
@@ -412,33 +359,65 @@ class GoToDefinition:
 
 
 class RenameSymbol:
-    """Renames all occurrences of a symbol inside the same file safely."""
+    """Rename NAME tokens while preserving strings, comments, and formatting."""
 
     @staticmethod
     def rename(code: str, params: str) -> tuple:
         parts = params.split(":")
         if len(parts) != 2:
-            return code, ["Format parameter salah."]
-        old = parts[0].strip()
-        new = parts[1].strip()
+            raise ValueError("Format parameter salah.")
+        old, new = (part.strip() for part in parts)
+        if not old.isidentifier() or keyword.iskeyword(old):
+            raise ValueError("Nama simbol lama bukan identifier Python yang valid.")
+        if not new.isidentifier() or keyword.iskeyword(new):
+            raise ValueError("Nama simbol baru bukan identifier Python yang valid.")
+        if old == new:
+            return code, ["Nama lama dan nama baru sama; source tidak diubah."]
 
-        if not old or not new:
-            return code, ["Nama simbol kosong."]
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as exc:
+            raise ValueError(f"Rename membutuhkan source yang valid: {exc}") from exc
 
-        import re
-        pattern = re.compile(r'\b' + re.escape(old) + r'\b')
-        lines = code.split('\n')
-        new_lines = []
-        for line in lines:
-            if "#" in line:
-                code_part, comment_part = line.split("#", 1)
-                code_part = pattern.sub(new, code_part)
-                new_lines.append(code_part + "#" + comment_part)
-            else:
-                new_lines.append(pattern.sub(new, line))
+        # Python 3.11 tokenize emits an entire f-string as one STRING token. A
+        # token-only rename would therefore leave references inside expressions
+        # inconsistent. Fail closed until the semantic refactor engine handles it.
+        fstring_uses_old = any(
+            isinstance(parent, ast.JoinedStr) and any(
+                isinstance(child, ast.Name) and child.id == old
+                for child in ast.walk(parent)
+            )
+            for parent in ast.walk(tree)
+        )
+        if fstring_uses_old:
+            raise ValueError(
+                "Rename dibatalkan: simbol dipakai di ekspresi f-string yang belum dapat diubah aman."
+            )
 
-        final_code = '\n'.join(new_lines)
-        return final_code, [f"Simbol '{old}' berhasil diganti menjadi '{new}'."]
+        offsets = VariableTypeHintGenerator._line_offsets(code)
+        replacements = []
+        try:
+            tokens = tokenize.generate_tokens(io.StringIO(code).readline)
+            for token in tokens:
+                if token.type == tokenize.NAME and token.string == old:
+                    start = VariableTypeHintGenerator._offset(offsets, token.start)
+                    end = VariableTypeHintGenerator._offset(offsets, token.end)
+                    replacements.append((start, end))
+        except (tokenize.TokenError, IndentationError) as exc:
+            raise ValueError(f"Rename dibatalkan karena token source tidak valid: {exc}") from exc
+
+        if not replacements:
+            return code, [f"Simbol '{old}' tidak ditemukan; source tidak diubah."]
+        current = code
+        for start, end in reversed(replacements):
+            current = current[:start] + new + current[end:]
+        try:
+            ast.parse(current)
+        except SyntaxError as exc:
+            raise ValueError(f"Rename dibatalkan karena hasil tidak valid: {exc}") from exc
+        return current, [
+            f"Simbol '{old}' diganti menjadi '{new}' pada {len(replacements)} token; string dan komentar tidak diubah."
+        ]
 
 
 

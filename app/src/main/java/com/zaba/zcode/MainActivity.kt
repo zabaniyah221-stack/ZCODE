@@ -18,6 +18,7 @@ import com.zaba.zcode.core.samples.SampleEntry
 import com.zaba.zcode.ui.samples.SamplesScreen
 import com.zaba.zcode.ui.settings.AboutScreen
 import com.zaba.zcode.ui.settings.DiagnosticsScreen
+import com.zaba.zcode.ui.settings.PackageOperationViewModel
 import com.zaba.zcode.ui.settings.PipScreen
 import com.zaba.zcode.ui.settings.SettingsScreen
 import com.zaba.zcode.ui.terminal.TerminalScreen
@@ -30,6 +31,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private val vm: WorkspaceViewModel by viewModels()
+    private val packageOperations: PackageOperationViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,7 +45,11 @@ class MainActivity : ComponentActivity() {
                     themeType = vm.themeType,
                     fontFamily = fontFamilyFor(vm.appFontFamily)
                 ) {
-                    AppNavHost(vm = vm, onRestartRuntime = ::requestRuntimeRestart)
+                    AppNavHost(
+                        vm = vm,
+                        packageOperations = packageOperations,
+                        onRestartRuntime = ::requestRuntimeRestart,
+                    )
                 }
             }
         }
@@ -94,6 +100,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppNavHost(
     vm: WorkspaceViewModel,
+    packageOperations: PackageOperationViewModel,
     onRestartRuntime: () -> Boolean,
 ) {
     val nav = rememberNavController()
@@ -161,6 +168,7 @@ private fun AppNavHost(
         composable("pip") {
             PipScreen(
                 context = appContext,
+                operations = packageOperations,
                 onBack = { nav.navigateUp() },
                 onOpenSample = ::openSampleInEditor,
                 onRestartRuntime = onRestartRuntime
@@ -182,10 +190,6 @@ private fun AppNavHost(
             SettingsScreen(
                 vm = vm,
                 onBack = { nav.navigateUp() },
-                onClearAll = {
-                    // F1.4: Clear All dari Settings → konfirmasi tetap wajib
-                    vm.clearAllDrafts()
-                }
             )
         }
     }
