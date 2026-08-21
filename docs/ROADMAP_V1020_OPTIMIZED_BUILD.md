@@ -946,3 +946,166 @@ Performance build/R8          : CI VERIFIED
 Terminal keyboard reopen fix  : IMPLEMENTED + LOCALLY VERIFIED
 Final perf1 functional gate   : menunggu CI + focused device retest
 ```
+
+---
+
+# 5. CATATAN RISET LANJUTAN — EDITOR DAN PROJECT WORKBENCH
+
+**Tanggal:** 2026-08-21
+**Pemicu:** screenshot referensi Acode/VS Code dari user dan diskusi setelah UAT
+optimized build.
+**Status:** **RESEARCH RECORDED / DESIGN DIRECTION ONLY** — bukan scope
+implementasi v1.0.20.
+
+## 5.1 Cara membaca bukti screenshot
+
+Screenshot dipakai sebagai referensi struktur dan discoverability produk:
+Explorer tree, project search, activity rail, richer tabs, Git/GitHub, dan
+plugin ecosystem. Screenshot membuktikan arah UX yang diinginkan, tetapi tidak
+membuktikan engine rendering, performa, permission model, atau arsitektur proses
+aplikasi referensi. Karena itu ZCODE tidak menyalin implementasi atau menganggap
+Canvas sebagai penyebab kelancaran hanya dari tampilan visual.
+
+## 5.2 Arsitektur editor ZCODE yang sebenarnya
+
+```text
+Jetpack Compose
+└── AndroidView
+    └── WebView/Chromium
+        └── CodeMirror 6
+            ├── editable DOM viewport
+            ├── EditorState per file
+            ├── Lezer incremental parser/tree fragments
+            ├── history + selection + IME
+            ├── lint + autocomplete
+            └── hanya merender viewport terlihat + margin
+```
+
+Terminal berbeda dan tidak boleh dijadikan analogi langsung:
+
+```text
+Compose LazyColumn
+├── Text rows + TerminalBuffer
+├── visual cursor
+└── hidden 1dp TextField untuk IME
+```
+
+Terminal adalah grid/stream monospace yang jauh lebih sempit kontraknya.
+Code editor harus menangani grapheme/Unicode, wrapping, selection, cursor,
+clipboard, undo/history, syntax tree, lint, autocomplete, accessibility,
+touch/IME, viewport, dan sinkronisasi document state.
+
+Versi editor saat riset:
+
+```text
+@codemirror/view : 6.43.8
+@codemirror/lint : 6.9.7
+```
+
+CodeMirror 6 memakai viewport rendering dan incremental parsing. Acode current
+source juga memakai CodeMirror 6 sekitar versi yang sama. Maka kelancaran Acode
+bukan bukti bahwa ZCODE harus mengganti editor ke Canvas.
+
+## 5.3 Alternatif yang diperiksa
+
+### Canvas custom editor
+
+Canvas hanya menyelesaikan pixel drawing. ZCODE masih harus membangun sendiri
+IME, grapheme, Unicode, cursor/selection, clipboard, undo, syntax, lint,
+folding, wrapping, accessibility, magnifier/touch, viewport, dan history.
+Biaya correctness serta maintenance jauh melampaui bukti masalah yang ada.
+
+### Sora Editor
+
+Sora adalah alternatif native Android paling realistis: custom View/render,
+layout/input, incremental highlighting, autocomplete, word wrap, undo/redo,
+search, diagnostics, TextMate, dan Tree-sitter. Namun migrasinya membawa biaya
+lifecycle, IME/accessibility, integrasi bridge/state, kemungkinan native ABI,
+dan review lisensi LGPL-2.1. **Tidak dipilih sekarang.**
+
+### Monaco
+
+Monaco tetap editor web/DOM yang tervirtualisasi dan memakai worker. Fitur serta
+bebannya lebih besar; bukan solusi otomatis untuk device ARMv7 low-end.
+
+### Ace
+
+Ace memakai virtual DOM renderer, bukan Canvas. ZCODE sudah bermigrasi dari Ace
+ke CM6; kembali ke Ace tidak didukung bukti device.
+
+### EditText / BasicTextField
+
+Cocok untuk teks sederhana/kecil, tetapi syntax spans dan dokumen besar mudah
+menjadi bottleneck serta akan memindahkan banyak tanggung jawab editor ke kode
+ZCODE sendiri.
+
+Sumber langsung:
+
+- https://codemirror.net/docs/guide/
+- https://codemirror.net/docs/ref/
+- https://codemirror.net/examples/million/
+- https://github.com/Acode-Foundation/Acode
+- https://github.com/Rosemoe/sora-editor
+- https://project-sora.github.io/sora-editor-docs/guide/getting-started
+- https://github.com/microsoft/monaco-editor
+- https://github.com/ajaxorg/ace
+- https://github.com/xtermjs/xterm.js/
+
+## 5.4 Bukti device mengalahkan hipotesis migrasi engine
+
+APK Performance/R8 membuat tap, scroll, swipe, navigasi, Compose screens, dan
+editor menjadi sangat lancar tanpa mengganti CodeMirror 6. Ini menunjukkan
+Debug/JIT/build configuration adalah akar dominan, bukan engine editor.
+
+Keputusan:
+
+```text
+Keep CodeMirror 6                  : ADOPTED FOR v1.0.20
+Canvas/Sora/Monaco migration       : REJECTED FOR CURRENT SCOPE
+Optimized build as v1.0.20 base    : DEVICE-EVIDENCE SUPPORTED
+Confidence keep CodeMirror 6       : 97%
+```
+
+Migrasi engine hanya boleh dibuka lagi bila optimized build menunjukkan
+bottleneck yang khusus editor, reproducible, terukur, dan tidak dapat
+diselesaikan dengan perbaikan lebih kecil.
+
+## 5.5 Project Workbench diparkir untuk v1.0.25
+
+Arah UX dari screenshot diterima untuk riset v1.0.25:
+
+- Explorer tree;
+- search in project;
+- activity rail/navigation yang mudah ditemukan;
+- richer file tabs;
+- Git lokal lalu GitHub;
+- plugin platform paling akhir.
+
+Urutan aman yang direncanakan:
+
+```text
+Project model + backup/recovery
+→ Explorer overlay
+→ Search in project
+→ Command registry
+→ Git local
+→ GitHub
+→ plugin platform last
+```
+
+Pada portrait, Explorer tidak dijadikan panel permanen yang memakan ruang
+editor; gunakan overlay/drawer yang menutup setelah file dipilih. Marketplace
+atau plugin tidak boleh disalin bebas sebelum ada permission model, lifecycle,
+process isolation, recovery, dan threat model.
+
+Keputusan scope:
+
+```text
+v1.0.20 : optimized foundation + terminal regression gate
+v1.0.25 : Project Workbench research target
+Current : PARKED — DON'T RUSH
+```
+
+Prioritas sebelum Workbench tetap optimization gate, release/signing strategy,
+backup/recovery, dan runtime safety. Tidak ada perubahan project explorer, Git,
+plugin, atau workbench dalam push terminal keyboard ini.
