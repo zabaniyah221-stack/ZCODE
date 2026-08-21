@@ -1237,34 +1237,45 @@ Semua dipulihkan dan focused gate hijau. Insiden agent saat implementasi juga
 menghasilkan rule permanen: dua writer tidak boleh dijalankan paralel terhadap
 file yang sama; write set harus disjoint.
 
-Status:
+Status setelah CI dan focused device UAT:
 
 ```text
-Agent/Context7/MCP playbook : IMPLEMENTED + LOCALLY VERIFIED
-Editor accessibility source : IMPLEMENTED
-Generated CM6 bundle         : BROWSER-HARNESS VERIFIED
-Static focused tests         : LOCALLY VERIFIED
-Kotlin/Android compile       : NOT YET
-Pinch/selection/IME gesture  : NOT DEVICE VERIFIED
+Agent/Context7/MCP playbook : CI VERIFIED
+Editor accessibility source : CI VERIFIED
+Generated CM6 bundle         : BROWSER-HARNESS + CI VERIFIED
+Canonical Debug              : CI VERIFIED — run 32446512404
+Performance/R8               : CI VERIFIED — run 32446511762
+Pinch/selection/IME gesture  : DEVICE VERIFIED
+Per-tab zoom isolation       : DEVICE OBSERVED — satu sesi
+TalkBack spoken label        : NOT DEVICE VERIFIED
 Merged                       : NO
 RC configured                : NO
 Released                     : NO
 ```
 
-Focused device UAT sebelum RC:
+Focused UAT pada INFINIX X6532C, Android 14/API34, ARMv7:
 
 ```text
-pinch zoom in/out editor
-single tap still opens IME
-pinch completion does not open IME
-one-finger vertical/horizontal scroll
-selection handles + copy/paste
-IME typing/backspace/Done
-switch tabs while zoomed
-edge swipe sidebar
-rotate portrait/landscape with keyboard
-reset/readability after process reopen
+pinch zoom in/out editor                 : PASS
+single tap still opens IME               : PASS
+pinch completion does not open IME       : PASS
+IME typing/Backspace/Enter/Done          : PASS
+one-finger vertical/horizontal scroll    : PASS
+selection handles + copy/paste           : PASS
+switch tabs while zoomed                 : PASS
+edge swipe sidebar                       : PASS
+rotate portrait/landscape with keyboard  : PASS
+reset/readability after process reopen   : PASS
+Python run + Diagnostics sanity          : PASS
+visual gutter readability                : PASS
 ```
+
+Device observation yang paling menonjol: tab pertama dapat tetap zoomed ketika
+user pindah ke tab kedua yang tetap pada skala normal. Bukti ini berlaku untuk
+isolasi selama perpindahan tab dalam sesi yang diuji. Jangan mengklaim zoom
+persist setelah process restart tanpa test khusus. TalkBack bersifat opsional
+dan belum dilaporkan diuji, sehingga accessible label tetap hanya
+BROWSER-HARNESS + CI VERIFIED.
 
 Sumber:
 

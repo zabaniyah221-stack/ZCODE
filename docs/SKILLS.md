@@ -1794,20 +1794,30 @@ ZCODE source implementation: NOT YET
 Android touch/IME/device    : NOT YET
 ```
 
-Status setelah batch pre-RC pada 2026-08-21:
+Status setelah batch pre-RC dan focused device UAT pada 2026-08-21:
 
 ```text
 Accessible name source     : IMPLEMENTED
-Gutter contrast source     : IMPLEMENTED
-Pinch WebView + meta        : IMPLEMENTED
-Pinch→IME false-tap guard   : IMPLEMENTED
+Gutter contrast source     : DEVICE VERIFIED
+Pinch WebView + meta        : DEVICE VERIFIED
+Pinch→IME false-tap guard   : DEVICE VERIFIED
 Shipped CM6 bundle          : BROWSER-HARNESS VERIFIED
 Lighthouse accessibility   : 1,00
 5k-line viewport regression : PASS — 54 DOM lines
 Static/mutation guards      : LOCALLY VERIFIED — 7 mutations RED→GREEN
-Android CI compile          : NOT YET
-Physical touch/IME/pinch UAT: NOT YET
+Canonical Debug CI          : CI VERIFIED — run 32446512404
+Performance/R8 CI           : CI VERIFIED — run 32446511762
+Physical editor gesture UAT : DEVICE VERIFIED — INFINIX X6532C/API34/ARMv7
+TalkBack spoken label       : NOT DEVICE VERIFIED
 ```
+
+Focused UAT lulus untuk pinch in/out, pinch tidak membuka IME, single tap tetap
+membuka IME, typing/Backspace/Enter/Done, selection handle, copy/paste, scroll
+vertikal/horizontal, edge-swipe sidebar, rotasi dengan keyboard, reopen sanity,
+Python run, Diagnostics, dan visual gutter. Dalam satu sesi, tab pertama dapat
+tetap zoomed saat tab kedua tampil pada skala normal. Ini dicatat sebagai
+**per-tab zoom isolation DEVICE OBSERVED**, bukan janji persistence zoom setelah
+process restart.
 
 Bundle baru yang diuji:
 

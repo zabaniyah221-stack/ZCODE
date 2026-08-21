@@ -4596,11 +4596,13 @@ class TestEditorAccessibilityV1020:
     def test_playbook_mencatat_bukti_dan_batas_android(self):
         skills = read(ROOT / "docs/SKILLS.md")
         for contract in (
-            "Pinch→IME false-tap guard   : IMPLEMENTED",
+            "Pinch→IME false-tap guard   : DEVICE VERIFIED",
             "Shipped CM6 bundle          : BROWSER-HARNESS VERIFIED",
             "Lighthouse accessibility   : 1,00",
             "9c5118c863896ad5a7317ae96b3d7867189fb1c346ddb3d3cf3922b43de77b4e",
-            "Physical touch/IME/pinch UAT: NOT YET",
+            "Physical editor gesture UAT : DEVICE VERIFIED",
+            "per-tab zoom isolation DEVICE OBSERVED",
+            "TalkBack spoken label       : NOT DEVICE VERIFIED",
         ):
             assert contract in skills, f"evidence/batas a11y hilang: {contract}"
 
