@@ -44,6 +44,22 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // v1.0.20 performance gate: satu APK internal yang release-like tetapi
+        // tetap terpisah dari Debug dan production. Tidak memakai release key.
+        create("performance") {
+            applicationIdSuffix = ".performance"
+            versionNameSuffix = "-perf1"
+            isDebuggable = false
+            isProfileable = true
+            isMinifyEnabled = true
+            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-performance.pro"
+            )
+        }
     }
 
     compileOptions {

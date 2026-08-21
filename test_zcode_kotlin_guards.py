@@ -363,9 +363,11 @@ class TestTerminalRegresiPR14:
     def test_requestfocus_ditunda_dan_aman(self):
         # requestFocus() sebelum node ter-place → "FocusRequester is not initialized".
         txt = read(UI / "terminal/TerminalScreen.kt")
-        i = txt.find("focusRequester.requestFocus()")
+        marker = txt.find("// Fokus otomatis")
+        assert marker >= 0
+        i = txt.find("focusRequester.requestFocus()", marker)
         assert i >= 0
-        window = txt[max(0, i - 300):i + 100]
+        window = txt[max(marker, i - 300):i + 100]
         assert "runCatching" in window, "requestFocus() wajib dibungkus runCatching"
         assert "withFrameNanos" in window, (
             "requestFocus() wajib ditunda sampai satu frame terlewati (withFrameNanos)"
@@ -385,6 +387,32 @@ class TestTerminalRegresiPR14:
             "appendToTerminal wajib memindahkan tulis-disk (RunLogger/TelemetryStore) "
             "ke Dispatchers.IO — jangan di Main thread."
         )
+
+
+class TestTerminalKeyboardReopenV1020:
+    """IME ditutup tanpa melepas focus: tap terminal wajib meminta IME lagi."""
+
+    def source(self):
+        return strip_kt_comments(read(UI / "terminal/TerminalScreen.kt"))
+
+    def test_reopen_meminta_focus_dan_show_keyboard_explicit(self):
+        src = self.source()
+        start = src.index("fun requestTerminalKeyboard()")
+        end = src.index("\n    fun appendToTerminal", start)
+        helper = src[start:end]
+        assert "focusRequester.requestFocus()" in helper
+        assert "withFrameNanos" in helper
+        assert "keyboardController?.show()" in helper
+        assert "TERMINAL_KEYBOARD_FOCUS_FAIL" in helper
+
+    def test_tap_output_symbol_dan_done_memakai_satu_helper(self):
+        src = self.source()
+        assert ".clickable { requestTerminalKeyboard() }" in src
+        assert src.count("requestTerminalKeyboard()") >= 4, (
+            "helper harus dideklarasikan dan dipakai oleh output tap, symbol insert, "
+            "serta IME Done"
+        )
+        assert "LocalSoftwareKeyboardController.current" in src
 
 
 class TestThrowableTertangkap:
