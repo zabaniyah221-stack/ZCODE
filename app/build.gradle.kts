@@ -32,33 +32,41 @@ android {
         }
     }
 
+    signingConfigs {
+        // Fail-closed production identity. Local Debug configuration remains
+        // usable without secrets, but assembleRelease cannot sign unless all
+        // four environment values are present. Never fall back to debug key.
+        create("production") {
+            val storePath = System.getenv("ZCODE_RELEASE_STORE_FILE")
+            val storePass = System.getenv("ZCODE_RELEASE_STORE_PASSWORD")
+            val alias = System.getenv("ZCODE_RELEASE_KEY_ALIAS")
+            val keyPass = System.getenv("ZCODE_RELEASE_KEY_PASSWORD")
+            if (
+                !storePath.isNullOrBlank() && !storePass.isNullOrBlank() &&
+                !alias.isNullOrBlank() && !keyPass.isNullOrBlank()
+            ) {
+                storeFile = file(storePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
         }
         release {
-            isMinifyEnabled = false
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
-        }
-        // v1.0.20-rc1: satu APK kandidat internal yang optimized/release-like,
-        // tetapi package dan data tetap terpisah dari production. Signing masih
-        // ephemeral debug key; production key user belum masuk CI pada tahap RC.
-        create("rc") {
-            applicationIdSuffix = ".rc"
-            versionNameSuffix = "-rc1"
             isDebuggable = false
-            isProfileable = true
+            isProfileable = false
             isMinifyEnabled = true
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("debug")
-            matchingFallbacks += listOf("release")
+            signingConfig = signingConfigs.getByName("production")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rc.pro"
+                "proguard-release.pro"
             )
         }
     }

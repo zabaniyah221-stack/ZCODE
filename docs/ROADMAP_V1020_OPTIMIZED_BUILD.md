@@ -1432,3 +1432,171 @@ terminal input/^C
 close/reopen and confirm workspace
 inspect Diagnostics/Crash
 ```
+
+---
+
+# 9. ONE PRODUCTION BUILD → DRAFT → UAT → PUBLISH
+
+**Tanggal desain/implementasi:** 2026-08-21
+**Branch:** `arena/v1020-production`
+**Basis:** RC1 CI + device verification
+
+Keputusan co-lead: tidak membuat dua production APK untuk update probe. Satu
+`assembleRelease` menghasilkan satu APK yang:
+
+```text
+signed once
+→ verified once
+→ uploaded as internal artifact
+→ attached as private draft release
+→ device UAT menggunakan exact bytes
+→ draft dipublikasikan tanpa rebuild
+```
+
+Trade-off diterima: update continuity belum DEVICE VERIFIED pada v1.0.20 dan
+baru memperoleh bukti saat update production nyata berikutnya memakai package,
+key, dan versionCode yang konsisten.
+
+## 9.1 Final production identity
+
+```text
+Application ID : com.zaba.zcode
+Label          : ZCODE
+Version        : 1.0.20
+Version code   : 23
+Build type     : release
+Debuggable     : false
+Profileable    : false
+R8             : ON — compatibility mode
+Obfuscation    : OFF
+Resource shrink: OFF
+Expected signer:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+```
+
+RC/Performance variants, source sets, workflows, and guard files dipensiunkan
+agar tidak menjadi alternate release path.
+
+## 9.2 Fail-closed signing
+
+Gradle release signing hanya membaca empat environment value:
+
+```text
+ZCODE_RELEASE_STORE_FILE
+ZCODE_RELEASE_STORE_PASSWORD
+ZCODE_RELEASE_KEY_ALIAS
+ZCODE_RELEASE_KEY_PASSWORD
+```
+
+Tidak ada fallback debug. Workflow production menerima keystore sebagai base64
+GitHub Environment secret, materialize hanya di `$RUNNER_TEMP`, dan menjalankan
+`shred -u` pada cleanup `always()`.
+
+Password/JKS tidak boleh dikirim kepada agent. User memasukkan secrets langsung
+ke GitHub Environment `production` setelah workflow direview dan berada di
+default branch.
+
+PAT lama yang pernah tampil di chat wajib direvoke sebelum production secrets
+dipasang. Token yang dapat mengubah workflow tidak boleh tetap aktif setelah
+private signing material tersedia bagi environment.
+
+## 9.3 Protected manual workflow
+
+Production workflow:
+
+- hanya `workflow_dispatch`;
+- membutuhkan confirmation `BUILD-v1.0.20`;
+- memakai `environment: production`;
+- `contents: write` hanya pada production job;
+- concurrency mencegah dua build production berjalan bersamaan;
+- canonical main/production branch tidak membuat Debug APK;
+- PR production tetap menjalankan `:app:compileDebugKotlin` sebagai compiler
+  evidence tanpa assemble/upload APK;
+- memverifikasi tepat satu output APK;
+- gagal jika package/version/label/debuggable/profileable/assets/signer salah;
+- gagal jika tag/draft release sudah ada;
+- membuat `v1.0.20` sebagai **draft**, bukan public release.
+
+Satu user artifact/draft memuat:
+
+```text
+ZCODE-v1.0.20.apk
+ZCODE-v1.0.20.apk.sha256
+apksigner.txt
+```
+
+Technical R8/build reports terpisah dan tidak membawa APK kedua.
+
+## 9.4 Promotion without rebuild
+
+Setelah workflow sukses:
+
+1. catat APK SHA-256 dan signer SHA-256;
+2. download artifact/draft APK;
+3. install berdampingan dengan RC;
+4. pindahkan/copy project penting; jangan uninstall RC dulu;
+5. jalankan focused production UAT;
+6. cocokkan hash APK UAT dengan draft asset;
+7. publish existing draft tanpa build/tag baru.
+
+Jika UAT gagal, draft tetap unpublished dan public status tetap `NO`.
+
+## 9.5 Mutation proof and current verification status
+
+Twenty-one production mutations turned the intended guard red, then were restored:
+
+```text
+debug signing fallback
+missing Gradle signing environment
+R8 disabled
+profileable enabled
+RC path resurrected
+JS bridge keep removed
+automatic production trigger
+unprotected environment
+Debug build substituted
+workflow signing secret removed
+signing secrets widened to job-level third-party actions
+keystore shred removed
+expected signer changed
+draft flag removed
+tag overwrite guard removed
+production Debug exclusion removed
+main Debug APK re-enabled
+workflow mirror drifted
+false public-release claim
+private .jks injected into repository
+compile-only PR gate removed
+```
+
+```text
+Production build/signing config : IMPLEMENTED LOCALLY
+Single-build draft workflow      : IMPLEMENTED LOCALLY
+Production guard suite           : 16 PASSED
+Mutation proof                   : 21 RED→GREEN
+Full local gate                  : 620 PASSED
+Kotlin lexical sanity            : 61 files
+npm/editor supply-chain          : PASSED
+Production compiler CI           : PENDING
+Production signed CI             : PENDING
+GitHub environment secrets       : NOT CONFIGURED
+Production APK signed            : NO
+Production device UAT            : NO
+Public release                   : NO
+```
+
+## 9.6 Production UAT
+
+```text
+verify launcher label ZCODE
+verify Diagnostics version 1.0.20
+verify package com.zaba.zcode where observable
+verify signer fingerprint and APK SHA-256
+create/open/copy project files from RC export
+multi-tab edit + per-file Undo/Redo
+pinch/IME/selection/scroll/sidebar/settings
+pure Python run + terminal input/^C
+native package/rebirth sanity
+close/reopen workspace persistence
+Diagnostics/Crash final check
+```

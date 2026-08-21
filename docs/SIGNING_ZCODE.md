@@ -2,8 +2,9 @@
 
 **Tanggal identitas dibuat:** 2026-08-21
 **Production package yang dicadangkan:** `com.zaba.zcode`
-**Status:** key dibuat dan entry diverifikasi; production workflow belum
-dikonfigurasi; belum pernah dipakai menandatangani release publik.
+**Status:** key dibuat dan entry diverifikasi; production workflow source sudah
+dirancang fail-closed, tetapi GitHub Environment secrets dan CI signing belum
+dikonfigurasi/diverifikasi; belum pernah dipakai menandatangani release publik.
 
 ## 1. Public certificate metadata
 
@@ -61,6 +62,8 @@ PRIVATE KEY ENTRY           : USER VERIFIED
 PUBLIC FINGERPRINT          : RECORDED
 OFF-DEVICE COPIES           : USER REPORTED (2 accounts)
 BYTE-FOR-BYTE RECOVERY DRILL: NOT EVIDENCED IN REPO
+PRODUCTION WORKFLOW SOURCE  : IMPLEMENTED LOCALLY
+GITHUB ENVIRONMENT SECRETS  : NOT CONFIGURED
 CI PRODUCTION SIGNING       : NOT CONFIGURED
 PRODUCTION APK SIGNED       : NO
 PUBLIC RELEASE              : NO
@@ -84,21 +87,24 @@ identity belum tersentuh dan mencegah secret production tersedia pada workflow
 branch/PR. Signature RC dapat berubah antar-run sehingga update mungkin meminta
 uninstall; RC bukan tempat satu-satunya menyimpan project penting.
 
-## 5. Production workflow contract — future, belum diimplementasikan
+## 5. Production workflow contract — source implemented, CI pending
 
-Ketika RC sudah lulus, workflow release production harus:
+Workflow source menerapkan kontrak berikut, tetapi belum boleh disebut berhasil
+sebelum berada di default branch, environment secrets dipasang langsung oleh
+user, dan signed artifact lulus verifikasi:
 
 1. hanya berjalan dari tag/version yang disetujui;
 2. memakai GitHub Environment terproteksi + approval;
 3. membaca secret dari environment, bukan repository file;
-4. mendekode keystore hanya ke `$RUNNER_TEMP`;
-5. tidak mencetak password, base64, atau keystore path sensitif;
-6. build satu optimized production APK/AAB;
-7. menjalankan `apksigner verify --verbose --print-certs`;
-8. membandingkan fingerprint signer dengan nilai publik di dokumen ini;
-9. menghasilkan SHA-256 artifact;
-10. menghapus keystore sementara pada `always()` cleanup;
-11. baru membuat GitHub Release setelah seluruh verifikasi hijau.
+4. membatasi setiap secret ke step minimum—jangan job-level `env`;
+5. mendekode keystore hanya ke `$RUNNER_TEMP`;
+6. tidak mencetak password, base64, atau keystore path sensitif;
+7. build satu optimized production APK/AAB;
+8. menjalankan `apksigner verify --verbose --print-certs`;
+9. membandingkan fingerprint signer dengan nilai publik di dokumen ini;
+10. menghasilkan SHA-256 artifact;
+11. menghapus keystore sementara pada `always()` cleanup;
+12. baru membuat GitHub Release setelah seluruh verifikasi hijau.
 
 Nama secret yang direncanakan, tanpa nilai:
 

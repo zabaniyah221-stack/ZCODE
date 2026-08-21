@@ -1974,3 +1974,114 @@ Sumber:
   https://developer.android.com/studio/publish/app-signing
 - GitHub deployment environments:
   https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
+
+
+---
+
+## SKILL 26 — Production signing: one build, exact-byte draft promotion (2026-08-21)
+
+**Trigger:** RC1 lulus dan user memilih satu production APK saja, bukan build
+candidate + update probe. Solusinya bukan mengurangi signer verification, tetapi
+memisahkan build dari publish: satu signed binary masuk draft, diuji, lalu draft
+yang sama dipublikasikan.
+
+### Kontrak satu build
+
+```text
+assembleRelease once
+→ verify package/version/assets/R8/signer
+→ checksum
+→ Actions artifact
+→ private draft release
+→ device UAT exact bytes
+→ publish existing draft, no rebuild
+```
+
+Tidak boleh ada workflow “promotion” yang membangun APK lagi. SHA-256 APK yang
+diuji harus sama dengan draft asset yang dipublikasikan.
+
+### Fail-closed Gradle signing
+
+- release menggunakan signing config `production`;
+- config hanya membaca environment, tidak path/password literal;
+- tanpa satu dari empat value, assembleRelease harus gagal;
+- release tidak pernah fallback ke debug keystore;
+- `com.zaba.zcode` tidak memakai suffix;
+- public build non-debuggable dan non-profileable;
+- production R8 memakai boundaries yang sudah lulus RC/device evidence;
+- production PR tetap mengompilasi Kotlin lewat `:app:compileDebugKotlin`, tetapi
+  tidak boleh assemble atau upload APK Debug pesaing.
+
+### Secret custody
+
+Agent tidak meminta atau menerima password, JKS, base64, atau encrypted-backup
+password. User memasukkan langsung ke protected GitHub Environment. Secret
+harus di-inject pada step minimum yang membutuhkannya—bukan job-level `env`
+yang membuatnya tersedia bagi setup/cache/upload third-party actions.
+
+Sebelum secrets dipasang:
+
+1. review production workflow dari default branch;
+2. revoke PAT/token lama yang pernah tampil di chat;
+3. pastikan only intended maintainers dapat mengubah workflow/environment;
+4. pasang exact four secrets;
+5. manual approval baru diberikan setelah commit SHA dan workflow diff dibaca.
+
+Compromised workflow-write token + production environment adalah kombinasi
+berbahaya: attacker dapat mengubah workflow untuk menyalin keystore ketika job
+disetujui.
+
+### Signer verification
+
+`apksigner --print-certs` harus menghasilkan normalized SHA-256:
+
+```text
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+```
+
+Workflow wajib fail sebelum draft creation jika signer kosong/berbeda. Public
+fingerprint aman di repo; private material tidak.
+
+### Draft release semantics
+
+Draft bukan RELEASED. Ia menjadi staging area private bagi exact production
+bytes. Workflow harus menolak overwrite bila tag/release sudah ada. UAT gagal →
+draft jangan dipublish. UAT lulus → publish existing draft tanpa rebuild.
+
+### One-build trade-off
+
+Dengan tidak membuat production versionCode kedua:
+
+```text
+SIGNER VERIFIED             : dapat dibuktikan sekarang
+PACKAGE/INSTALL VERIFIED    : dapat dibuktikan sekarang
+UPDATE CONTINUITY VERIFIED  : belum; menunggu update production berikutnya
+```
+
+Jangan mengubah “Android seharusnya mempertahankan data” menjadi DEVICE VERIFIED
+tanpa dua versionCode nyata. Dokumentasikan batas ini di release notes.
+
+### Release status ladder
+
+```text
+PRODUCTION CONFIGURED
+→ PRODUCTION CI VERIFIED
+→ PRODUCTION SIGNED
+→ PRODUCTION DEVICE VERIFIED
+→ DRAFT APPROVED
+→ RELEASED
+```
+
+Setiap panah membutuhkan evidence sendiri. Draft release, Actions artifact, dan
+GitHub tag tidak otomatis berarti public release.
+
+Sumber:
+
+- Android app signing:
+  https://developer.android.com/studio/publish/app-signing
+- GitHub encrypted secrets:
+  https://docs.github.com/actions/security-guides/using-secrets-in-github-actions
+- GitHub environments:
+  https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
+- GitHub CLI release creation:
+  https://cli.github.com/manual/gh_release_create
