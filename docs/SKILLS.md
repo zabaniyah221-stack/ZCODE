@@ -1521,3 +1521,303 @@ solusi kelas masalah.
 LOCALLY VERIFIED. CI compile, Android task handoff, visual transition, workspace
 restore, dan post-install native import masih wajib dibuktikan oleh canonical
 CI + UAT INFINIX X6532C/API34/ARMv7 sebelum disebut DEVICE VERIFIED.
+
+
+---
+
+## SKILL 24 — Context7 + Chrome DevTools: riset harus berujung pada runtime evidence (2026-08-21)
+
+**Trigger:** user mengirim video pendek tentang Chrome DevTools MCP. Short URL
+TikTok tidak dapat dibaca oleh fetch biasa (HTTP 403), tetapi redirect,
+rehydration metadata, dan subtitle resmi dapat diekstrak. Klaim video kemudian
+dilacak ke repo maintainer, package exact, skill resmi, dan eksperimen browser
+nyata. Hasilnya bukan hanya “tool berhasil dipasang”: harness editor asli ZCODE
+menemukan tiga gap accessibility yang lolos 613 test struktural.
+
+### 24.1 Context7 dipakai untuk menemukan dokumentasi yang tepat, bukan menjadi hakim akhir
+
+Context7 membawa dokumentasi library yang current/version-specific ke agent.
+Untuk ZCODE, ia berguna saat keputusan bergantung pada Compose, CodeMirror,
+Android WebView, Chaquopy, atau library lain yang API-nya bergerak. Namun hasil
+retrieval tetap harus ditautkan ke source upstream dan diuji pada lapisan yang
+sesuai.
+
+Protokol ZCODE:
+
+1. Baca versi exact dari build file, lockfile, atau bundle inventory.
+2. Resolve library ID yang tepat; jangan pilih hanya karena nama mirip.
+3. Prefer ID/version yang cocok dengan versi proyek.
+4. Query satu pertanyaan teknis per call agar snippet tidak bercampur.
+5. Catat version, source URL, trust/quality metadata, dan batas sampling.
+6. Cross-check keputusan penting ke official docs/source/test/release notes.
+7. Jalankan eksperimen atau artifact/device gate bila klaim menyentuh runtime.
+
+`trust score`, jumlah snippet, atau ringkasan Context7 adalah metadata pencarian,
+bukan status verifikasi produk. Contoh: dokumentasi CodeMirror tentang viewport
+rendering menguatkan desain, tetapi bukti ZCODE baru naik setelah bundle asli
+menampilkan 45–65 DOM line untuk dokumen 5.000 baris pada browser harness.
+
+Sumber resmi Context7:
+
+- https://context7.com/docs/overview
+- https://github.com/upstash/context7
+
+Contoh library ZCODE:
+
+- https://context7.com/codemirror/view
+- https://codemirror.net/docs/ref/
+
+### 24.2 Social/video adalah lead; resolve sampai primary source
+
+Jangan menyimpulkan teknologi dari caption atau tampilan video. Jalur yang
+terbukti:
+
+```text
+short URL
+→ resolve redirect
+→ metadata + subtitle/transcript
+→ identifikasi nama project
+→ maintainer-owned repository
+→ requirements/license/privacy
+→ exact package + integrity
+→ isolated runtime experiment
+```
+
+Pada eksperimen ini:
+
+```text
+Video claim     : Chrome DevTools MCP dapat browser automation/debug/perf
+Primary repo    : ChromeDevTools/chrome-devtools-mcp
+Package exact   : chrome-devtools-mcp 1.7.0
+License         : Apache-2.0
+Node requirement: ^20.19.0 || ^22.12.0 || >=23
+Browser         : Chrome for Testing 152.0.7977.54
+```
+
+Sumber langsung:
+
+- https://github.com/ChromeDevTools/chrome-devtools-mcp
+- https://github.com/ChromeDevTools/chrome-devtools-mcp/tree/main/skills
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/chrome-devtools/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/chrome-devtools-cli/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/a11y-debugging/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/debug-optimize-lcp/SKILL.md
+- https://raw.githubusercontent.com/ChromeDevTools/chrome-devtools-mcp/main/skills/memory-leak-debugging/SKILL.md
+
+### 24.3 Kontrak sandbox untuk browser-control tool
+
+Chrome DevTools MCP adalah capability privileged: client dapat membaca dan
+mengubah seluruh konten browser profile. Eksperimen wajib:
+
+```text
+profile             : isolated, tanpa akun/login/cookie user
+network             : localhost allowlist bila target lokal
+usage statistics    : OFF
+CrUX field lookup   : OFF
+update checks       : OFF
+network headers     : redacted
+package             : exact pin + integrity/lock
+assets/profile/cache: /var/tmp, bukan workspace
+credentials         : tidak pernah dibuka ke browser
+cleanup             : daemon, browser, server, port, profile, cache, trace
+```
+
+Environment yang terbukti di sandbox Debian 13:
+
+- Node 20.20.2 memenuhi requirement package 1.7.0;
+- Chrome for Testing dapat berjalan tanpa `apt install` sistem;
+- library desktop yang hilang diunduh sebagai `.deb`, lalu diekstrak lokal
+  menggunakan `dpkg-deb -x` ke `/var/tmp`;
+- `LD_LIBRARY_PATH` diarahkan ke hasil extract;
+- unresolved `ldd` wajib nol sebelum browser start;
+- seluruh dependency/runtime dihapus setelah eksperimen.
+
+Missing library yang pernah muncul:
+
+```text
+libnspr4, libnss3, libnssutil3, libatk-1.0,
+libatk-bridge-2.0, libXdamage, libxkbcommon, libasound, libatspi
+```
+
+Jangan menyebut “sandbox tidak bisa browser” hanya karena launch pertama gagal.
+Pecah dependency chain dan selesaikan secara lokal. Tetapi jangan memasang paket
+OS agresif, membuka browser profile pribadi, atau menonaktifkan isolation demi
+mengejar status hijau.
+
+### 24.4 Harness editor ZCODE: apa yang asli dan apa yang dimock
+
+Harness menyalin ke `/var/tmp`:
+
+```text
+app/src/main/assets/editor/index.html
+app/src/main/assets/editor/codemirror.bundle.js
+app/src/main/assets/editor/fonts/*
+```
+
+Bundle harus identik byte-for-byte dengan shipped asset. Pada eksperimen:
+
+```text
+codemirror.bundle.js SHA-256:
+4169f7a706257985b384d11ea4ece1d765be83049dbe8ab2134ceb751bb7fb8d
+```
+
+Satu script harness dimuat **sebelum** bundle untuk meniru hanya kontrak Android:
+
+```text
+window.ZCODE.onEditorReady()
+window.ZCODE.onCodeChange(documentId, code, canUndo, canRedo)
+```
+
+Yang dapat dibuktikan:
+
+- CM6 init/render;
+- JS bridge contract;
+- per-file EditorState/history;
+- Undo/Redo dan document identity;
+- console/network/CSP;
+- accessibility tree;
+- viewport DOM behavior;
+- browser-side performance trace.
+
+Yang **tidak** dapat dibuktikan:
+
+- Compose recomposition/navigation;
+- Android WebView version dan lifecycle;
+- Kotlin `Handler` callback timing;
+- IME/touch/selection Android;
+- Chaquopy/native runtime;
+- ARMv7/device performance.
+
+Gunakan status **BROWSER-HARNESS VERIFIED**, bukan DEVICE VERIFIED.
+
+### 24.5 Tangga browser verification
+
+```text
+source + official docs
+→ lexical/structural guard
+→ exact shipped asset in isolated Chrome
+→ Android WebView/full emulator
+→ physical ARMv7 device
+```
+
+Workflow Chrome DevTools yang terbukti:
+
+```text
+navigate
+→ accessibility snapshot
+→ identify UID/role
+→ interact or evaluate bridge API
+→ inspect DOM state
+→ inspect console
+→ inspect network
+→ screenshot
+→ performance trace
+→ audit
+→ mutation red→green
+→ cleanup audit
+```
+
+Output besar ditulis ke file di `/var/tmp`; jangan memenuhi context dengan raw
+trace/heapsnapshot. Heap snapshot tidak dipaksakan pada sandbox 1.9 GiB tanpa
+swap kecuali ada bug memory yang jelas dan budget aman.
+
+### 24.6 Bukti CM6 yang didapat
+
+Runtime gate pada bundle asli:
+
+```text
+onEditorReady                         : PASS, tepat 1 kali
+onCodeChange identity/history flags   : PASS
+alpha.py + beta.py state terpisah     : PASS
+Undo/Redo per file                    : PASS
+lint/whitespace/diagnostic toggle     : PASS
+console warning/error normal          : none
+external fetch                        : blocked
+external network request              : 0
+```
+
+Stress gate:
+
+```text
+large-alpha.py                        : 5.000 baris
+large-beta.py                         : 5.000 baris
+state switches                        : 24
+DOM .cm-line ter-render               : 45–65
+viewport ratio                        : 0,9–1,3%
+gotoLine(5000)                        : alpha_5000 terlihat
+console error                         : none
+compressed performance trace          : ±1,71 MB
+```
+
+Durasi harness host tidak boleh dipasarkan sebagai frame time Android atau
+prediksi ARMv7. Bukti yang sah: CM6 melakukan viewport rendering dan state
+switch tidak melempar runtime error pada Chrome tersebut.
+
+### 24.7 Accessibility: bedakan temuan produk dari noise asset page
+
+Lighthouse pada halaman internal dapat melaporkan SEO/web-publishing failure
+seperti `meta-description`, `robots.txt`, dan `llms.txt`. Itu tidak relevan bagi
+`file:///android_asset/editor/index.html` dan bukan bug ZCODE.
+
+Tiga temuan yang relevan:
+
+1. `.cm-content[role=textbox]` tidak memiliki accessible name;
+2. line-number gutter `#4D7A5A` terhadap `#0A100D` hanya ±3,88:1, di bawah
+   target normal-text 4,5:1;
+3. viewport memakai `user-scalable=no`, sehingga browser audit menolak zoom
+   bagi pengguna low-vision.
+
+Mutation hanya pada runtime copy:
+
+```text
+aria-label="Python code editor"
+#4D7A5A → #5A8F68               (±5,09:1)
+hapus user-scalable=no
+```
+
+Hasil audit yang sama:
+
+```text
+Accessibility score : 0,82 → 1,00
+aria-input-field-name: RED → GREEN
+color-contrast       : RED → GREEN
+meta-viewport        : RED → GREEN
+accessibility textbox: bernama "Python code editor"
+```
+
+Status saat skill ini ditulis:
+
+```text
+Three a11y findings       : BROWSER-HARNESS REPRODUCED
+Harness mutations         : RED→GREEN VERIFIED
+ZCODE source implementation: NOT YET
+Android touch/IME/device   : NOT YET
+```
+
+Aturan implementasi:
+
+- accessible name dapat masuk sebagai perubahan nonvisual kecil, tetapi tetap
+  dijaga source + shipped bundle;
+- gutter contrast adalah perubahan visual: review tema dan device screenshot;
+- menghapus `user-scalable=no` adalah perubahan interaction contract: audit
+  pinch zoom, selection, drag, scroll, drawer gesture, dan IME sebelum adopsi;
+- tiga perubahan harus punya guard yang benar-benar merah saat invariant
+  dihapus/dikembalikan;
+- browser harness hijau tidak boleh menggantikan CI build dan focused device UAT.
+
+### 24.8 Cleanup adalah bagian dari hasil
+
+Sebelum menutup eksperimen, buktikan:
+
+```text
+MCP daemon/browser process : absent
+local HTTP server          : stopped
+browser debug port         : closed
+profile/cache/dependency   : deleted
+large trace/screenshot     : deleted atau sengaja diarsipkan dengan alasan
+workspace                  : clean, executable-bit drift dipulihkan
+credentials                : tidak pernah masuk profile/log/URL
+```
+
+Eksperimen yang berhasil tetapi meninggalkan browser berprivilege, port terbuka,
+profile login, atau ratusan MB cache bukan eksperimen selesai.

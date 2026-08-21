@@ -4489,6 +4489,57 @@ class TestUniversalAgentsGuide:
         )
 
 
+class TestContext7BrowserRuntimePlaybookV1020:
+    """Riset current-docs harus berakhir pada bukti runtime yang berlabel jujur."""
+
+    def test_agents_mengatur_context7_primary_source_dan_runtime_ladder(self):
+        agents = read(ROOT / "AGENTS.md")
+        for contract in (
+            "Documentation retrieval tools are evidence aids, not authorities",
+            "https://context7.com/docs/overview",
+            "https://github.com/upstash/context7",
+            "Context7 and search results are indexes into evidence",
+            "Resolve social/secondary claims to their primary source",
+            "Runtime browser verification ladder",
+            "isolated profile",
+            "explicit network allowlists",
+            "process/profile/cache cleanup",
+            "red→green verification with the same audit",
+        ):
+            assert contract in agents, f"AGENTS.md kehilangan kontrak riset: {contract}"
+
+    def test_skills_merekam_resep_context7_dan_chrome_resmi(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        for contract in (
+            "SKILL 24 — Context7 + Chrome DevTools",
+            "https://context7.com/docs/overview",
+            "https://github.com/upstash/context7",
+            "https://github.com/ChromeDevTools/chrome-devtools-mcp",
+            "chrome-devtools-mcp 1.7.0",
+            "Chrome for Testing 152.0.7977.54",
+            "BROWSER-HARNESS VERIFIED",
+            "profile             : isolated",
+            "usage statistics    : OFF",
+            "CrUX field lookup   : OFF",
+            "workspace                  : clean",
+        ):
+            assert contract in skills, f"SKILLS kehilangan resep browser: {contract}"
+
+    def test_skills_membedakan_bukti_cm6_a11y_dan_noise(self):
+        skills = read(ROOT / "docs/SKILLS.md")
+        for contract in (
+            "DOM .cm-line ter-render               : 45–65",
+            "viewport ratio                        : 0,9–1,3%",
+            "meta-description`, `robots.txt`, dan `llms.txt`",
+            "#4D7A5A` terhadap `#0A100D` hanya ±3,88:1",
+            "#4D7A5A → #5A8F68",
+            "Accessibility score : 0,82 → 1,00",
+            "ZCODE source implementation: NOT YET",
+            "browser harness hijau tidak boleh menggantikan CI build",
+        ):
+            assert contract in skills, f"SKILLS kehilangan evidence/limit: {contract}"
+
+
 class TestSemanticPackageLogsV1019:
     """Package log meaning comes from types, never decorative status text."""
 
