@@ -68,7 +68,11 @@ class VerifierTest {
     @Test
     fun recordHashMismatchFailsClosed() {
         val extracted = temporary.newFolder("bad-hash")
-        val file = wheel { record -> record.replaceFirst("sha256=", "sha256=broken") }
+        val file = wheel(
+            mutateRecord = { record: String ->
+                record.replaceFirst("sha256=", "sha256=broken")
+            }
+        )
         assertTrue(Verifier.extractWheel(file, extracted).ok)
 
         val (verified, _) = Verifier.validateWheelMeta(extracted, "demo-pkg", "1.0")

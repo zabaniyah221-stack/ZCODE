@@ -5032,3 +5032,10 @@ class TestCatalogGeneratorNeverDowngradesShippedKnowledge:
         if result.returncode != 0:
             assert "DATA REGRESSION" in result.stdout
             assert "generator kehilangan" in result.stdout
+
+
+class TestVerifierJvmTestCompileRegression:
+    def test_mutate_record_lambda_uses_named_parameter_not_trailing_pair_slot(self):
+        src = read(ROOT / "app/src/test/java/com/zaba/zcode/core/packageengine/VerifierTest.kt")
+        assert "mutateRecord = { record: String ->" in src
+        assert 'wheel { record ->' not in src
