@@ -53,39 +53,26 @@ import androidx.compose.ui.unit.sp
 import com.zaba.zcode.R
 
 /**
- * AboutScreen — identitas ZCODE + Lisensi (MIT) + Contribute.
- * Contribute → GitHub Issues (keputusan tim: langsung ke repo, tanpa email).
- * Deskripsi lama diganti teks lisensi (permintaan user): ramah kontribusi, mengisi
- * ruang kosong, telusur penuh bisa discroll dengan pembatas.
+ * AboutScreen — identity, GPLv3 legal notice/provenance, and contribution links.
+ * The exact GPL/NOTICE/MIT files are shipped under assets/licenses so About and
+ * the distributed APK expose the same bytes guarded by repository tests.
  */
 
-private const val MIT_LICENSE_TEXT = """MIT License
-
-Copyright (c) 2026 ZCODE contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE."""
+private const val ZCODE_SOURCE_URL = "https://github.com/muzape28-blip/ZCODE"
 
 @Composable
 fun AboutScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val gplText = remember {
+        runCatching {
+            context.assets.open("licenses/GPL-3.0.txt")
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+        }.getOrElse { error ->
+            "GPLv3 text gagal dimuat dari APK: ${error.message ?: "unknown error"}"
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -163,17 +150,19 @@ fun AboutScreen(
                 color = Color.Gray
             )
 
-            // ---------- License (MIT) — pembatas + scrollable (permintaan user) ----------
+            // ---------- GPLv3 + provenance — exact text shipped in APK ----------
             Divider(color = Color.White.copy(alpha = 0.08f))
 
             Text(
-                "License — MIT",
+                "License & Provenance — GPLv3",
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                "ZCODE itu open source. Siapa pun bebas membaca, memakai, fork, dan " +
-                    "berkontribusi — tidak perlu izin, tidak perlu sungkan.",
+                "ZCODE memuat bagian turunan ZABACODE dan didistribusikan sebagai " +
+                    "gabungan di bawah GPLv3. Lu boleh memakai, mempelajari, mengubah, " +
+                    "dan membagikannya sesuai GPLv3. Software ini tanpa jaminan. " +
+                    "NOTICE dan lisensi MIT untuk bagian independen juga disertakan di APK.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.LightGray,
                 textAlign = TextAlign.Center
@@ -194,11 +183,25 @@ fun AboutScreen(
                     .padding(12.dp)
             ) {
                 Text(
-                    MIT_LICENSE_TEXT,
+                    gplText,
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
                     fontFamily = FontFamily.Monospace,
                     color = Color.LightGray
+                )
+            }
+
+            Button(
+                onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ZCODE_SOURCE_URL)))
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    "Open Source & Full Notices",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontSize = 12.sp
                 )
             }
 

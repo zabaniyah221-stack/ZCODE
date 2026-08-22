@@ -1,10 +1,10 @@
 """
 ZCODE plugin transform backend (batch anti-sepi, 2026-08).
 
-PORTED FROM ZABACODE (GPLv3), same author (muzape28-blip) — see
-docs/PLAN_BATCH_ANTI_SEPI.md §2.5. Logika kelas dipertahankan apa adanya
-dari zabacode/plugins/implementations.py agar semantik & edge case tetap
-identik (battle-tested). Hanya antarmuka entry (run/run_json/CLI) yang baru.
+DERIVED FROM ZABACODE under GPLv3; copyright Zaqi (muzape28-blip) and
+ZABACODE Contributors. Source revision and modification notice: root NOTICE.
+Logika kelas berasal dari zabacode/plugins/implementations.py dan kemudian
+diadaptasi untuk bridge ZCODE (run/run_json/CLI) serta diperbaiki lebih lanjut.
 
 Antarmuka:
     run(plugin_id, code) -> dict  {ok, code, report}

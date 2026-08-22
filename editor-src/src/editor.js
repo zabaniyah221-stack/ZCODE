@@ -79,7 +79,7 @@ const PY_BUILTINS = [
 ];
 
 // Snippet Pack (S5) — konten IDENTIK dengan SnippetLibrary.kt + template
-// ZABACODE (provenance GPLv3, same author). Jaga sinkron bila diedit!
+// ZABACODE (GPLv3; Zaqi + ZABACODE Contributors; see root NOTICE). Jaga sinkron!
 const SNIPPETS = [
   {
     label: "flask_app",

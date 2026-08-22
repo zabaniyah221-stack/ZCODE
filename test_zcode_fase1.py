@@ -349,7 +349,10 @@ class TestZcodePluginsBackend:
 
     def test_zcode_plugins_provenance_header(self):
         # Kejujuran lisensi (PLAN §2.5): port dari Zabacode GPLv3 wajib tercatat
-        assert "PORTED FROM ZABACODE (GPLv3)" in read(PY_PLUGINS)
+        provenance = read(PY_PLUGINS)
+        assert "DERIVED FROM ZABACODE under GPLv3" in provenance
+        assert "ZABACODE Contributors" in provenance
+        assert "root NOTICE" in provenance
 
     def test_zcode_plugins_three_transforms(self):
         txt = read(PY_PLUGINS)

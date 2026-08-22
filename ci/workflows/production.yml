@@ -149,6 +149,11 @@ jobs:
           unzip -Z1 "$APK" > production-apk-files.txt
           grep -q 'assets/editor/codemirror.bundle.js' production-apk-files.txt
           grep -q 'assets/chaquopy' production-apk-files.txt
+          for license_asset in GPL-3.0.txt MIT.txt NOTICE.txt; do
+            grep -q "assets/licenses/$license_asset" production-apk-files.txt
+            unzip -p "$APK" "assets/licenses/$license_asset" \
+              | cmp - "app/src/main/assets/licenses/$license_asset"
+          done
 
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee production-apksigner.txt
           SIGNER_SHA=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' production-apksigner.txt \
