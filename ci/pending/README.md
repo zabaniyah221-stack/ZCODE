@@ -8,7 +8,8 @@ refusing to allow a GitHub App to create or update workflow
 `.github/workflows/build.yml` without `workflows` permission
 ```
 
-(proven again on 2026-08-22, session branch `arena/01a02739-zcode`).
+(proven again on 2026-08-22, session branch `arena/01a02739-zcode`, and
+re-confirmed on `arena/01a02753-zcode` the same day).
 The live `build.yml` therefore still skips `compile-production-source`
 except on `arena/v1020-production` pull requests.
 
