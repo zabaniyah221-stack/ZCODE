@@ -199,12 +199,25 @@ object Verifier {
             .filter { it.isFile }
             .map { it.relativeTo(extractedDir).invariantSeparatorsPath }
             .toSet()
-        if (actualFiles != rows.keys) {
-            val missing = (actualFiles - rows.keys).take(3)
-            val phantom = (rows.keys - actualFiles).take(3)
+        val distInfoPath = record.parentFile.relativeTo(extractedDir).invariantSeparatorsPath
+        val recordPath = "$distInfoPath/RECORD"
+        val signaturePaths = setOf(
+            "$distInfoPath/RECORD.jws",
+            "$distInfoPath/RECORD.p7s",
+        )
+        if (recordPath !in rows) {
+            return VerifyResult(false, "RECORD wajib mencatat dirinya sendiri")
+        }
+        val listedSignatures = rows.keys intersect signaturePaths
+        if (listedSignatures.isNotEmpty()) {
+            return VerifyResult(false, "Signature wheel tidak boleh dicatat di RECORD: $listedSignatures")
+        }
+        val unlisted = actualFiles - rows.keys - signaturePaths
+        val phantom = rows.keys - actualFiles
+        if (unlisted.isNotEmpty() || phantom.isNotEmpty()) {
             return VerifyResult(
                 false,
-                "RECORD tidak cocok isi wheel; unlisted=$missing missing=$phantom",
+                "RECORD tidak cocok isi wheel; unlisted=${unlisted.take(3)} missing=${phantom.take(3)}",
             )
         }
 
@@ -213,11 +226,9 @@ object Verifier {
             if (!target.path.startsWith(root.path + File.separator) || !target.isFile) {
                 return VerifyResult(false, "RECORD menunjuk file di luar staging: '$path'")
             }
-            val signatureOrRecord = path.endsWith("/RECORD") ||
-                path.endsWith("/RECORD.jws") || path.endsWith("/RECORD.p7s")
             val hashField = columns[1]
             val sizeField = columns[2]
-            if (signatureOrRecord && hashField.isBlank() && sizeField.isBlank()) continue
+            if (path == recordPath && hashField.isBlank() && sizeField.isBlank()) continue
             if (hashField.isBlank() || sizeField.isBlank()) {
                 return VerifyResult(false, "RECORD hash/size kosong untuk '$path'")
             }

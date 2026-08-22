@@ -2,6 +2,7 @@ package com.zaba.zcode.core.packageengine
 
 import android.content.Context
 import android.util.AtomicFile
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.core.logging.SemanticLog
 import com.zaba.zcode.core.logging.SemanticLogKind
@@ -9,8 +10,6 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 
@@ -138,11 +137,11 @@ class TransactionManager(private val context: Context) {
         )
 
         val prepared = mutableListOf<Prepared>()
-        val promoted = mutableListOf<Prepared>()
         val generation = tx.id.filter { it.isLetterOrDigit() || it == '_' }.takeLast(48)
+
+        // Phase A: prepare complete incoming trees while every currently active
+        // generation remains untouched.
         try {
-            // Phase A: copy and verify every package while old active paths remain
-            // untouched. A failure here cannot invalidate installed.json.
             for (p in packages) {
                 requireSafePackageName(p.canonicalName)
                 requireSafePathSegment(p.version, "version")
@@ -171,54 +170,71 @@ class TransactionManager(private val context: Context) {
                     "site-packages/${p.canonicalName}/$finalName",
                 )
             }
+        } catch (error: Exception) {
+            prepared.forEach { runCatching { it.incoming.deleteRecursively() } }
+            runCatching { tx.dir.deleteRecursively() }
+            val reason = "Aktivasi dibatalkan; environment lama dipertahankan: " +
+                (error.message ?: error.javaClass.simpleName)
+            journal(tx.id, "install", "ROLLED_BACK", "ACTIVATION", reason)
+            return ActivationResult(false, reason, oldEnvironmentPreserved = true)
+        }
 
-            // Phase B: promote only fully verified incoming directories. Targets
-            // are unique and non-existing, so no active generation is replaced.
-            for (item in prepared) {
-                Files.move(
-                    item.incoming.toPath(),
-                    item.finalDir.toPath(),
-                    StandardCopyOption.ATOMIC_MOVE,
-                )
-                promoted += item
-            }
+        val next = JSONObject(current.toString())
+        for (item in prepared) {
+            next.put(item.plan.canonicalName, installedEntry(item.plan, item.relativePath))
+        }
 
-            val next = JSONObject(current.toString())
-            for (item in prepared) {
-                next.put(item.plan.canonicalName, installedEntry(item.plan, item.relativePath))
-            }
+        // Phase B + COMMIT BOUNDARY. The helper may roll back only before the
+        // AtomicFile state commit returns. No post-commit callback lives here.
+        val committed = ActivationCommitBoundary.promoteAndCommit(
+            prepared.map { ActivationCommitBoundary.Generation(it.incoming, it.finalDir) }
+        ) {
             writeAtomicFile(installedFile, next.toString().toByteArray(Charsets.UTF_8))
+        }
+        if (committed.isFailure) {
+            runCatching { tx.dir.deleteRecursively() }
+            val error = committed.exceptionOrNull()
+            val reason = "Aktivasi dibatalkan; environment lama dipertahankan: " +
+                (error?.message ?: error?.javaClass?.simpleName ?: "commit gagal")
+            journal(tx.id, "install", "ROLLED_BACK", "ACTIVATION", reason)
+            return ActivationResult(false, reason, oldEnvironmentPreserved = true)
+        }
 
-            // State now points to new generations. Cleanup is deliberately
-            // post-commit and best-effort: failure costs storage, never validity.
-            for (item in prepared) {
-                val packageRoot = item.finalDir.parentFile ?: continue
+        // COMMITTED: installed.json now authoritatively points at finalDir.
+        // Cleanup/log/journal failures may leave stale storage or missing logs,
+        // but must never enter pre-commit rollback or delete active finalDir.
+        val postCommitSteps = mutableListOf<Pair<String, () -> Unit>>()
+        for (item in prepared) {
+            postCommitSteps.add("cleanup ${item.plan.canonicalName}" to {
+                val packageRoot = item.finalDir.parentFile
+                    ?: throw IllegalStateException("Package root hilang")
                 packageRoot.listFiles()?.forEach { candidate ->
                     if (candidate != item.finalDir && !candidate.name.startsWith(".incoming-")) {
-                        runCatching { candidate.deleteRecursively() }
+                        candidate.deleteRecursively()
                     }
                 }
+            })
+            postCommitSteps.add("log ${item.plan.canonicalName}" to {
                 onLog("    activate: ${item.plan.canonicalName}@${item.plan.version}")
-            }
-            tx.dir.deleteRecursively()
-            journal(tx.id, "install", "SUCCESS", null, null)
-            return ActivationResult(
-                ok = true,
-                message = "OK",
-                activatedPaths = prepared.associate { it.plan.canonicalName to it.relativePath },
-            )
-        } catch (e: Exception) {
-            prepared.forEach { runCatching { it.incoming.deleteRecursively() } }
-            promoted.forEach { runCatching { it.finalDir.deleteRecursively() } }
-            tx.dir.deleteRecursively()
-            val reason = "Aktivasi dibatalkan; environment lama dipertahankan: ${e.message ?: e.javaClass.simpleName}"
-            journal(tx.id, "install", "ROLLED_BACK", "ACTIVATION", reason)
-            return ActivationResult(
-                ok = false,
-                message = reason,
-                oldEnvironmentPreserved = true,
-            )
+            })
         }
+        postCommitSteps.add("transaction cleanup" to { tx.dir.deleteRecursively() })
+        postCommitSteps.add("journal success" to {
+            journal(tx.id, "install", "SUCCESS", null, null)
+        })
+        val warnings = ActivationCommitBoundary.runBestEffort(postCommitSteps)
+        if (warnings.isNotEmpty()) {
+            runCatching {
+                Breadcrumb.log("PKG_ACTIVATION_POST_COMMIT_WARN", warnings.joinToString(" | "))
+            }
+        }
+
+        return ActivationResult(
+            ok = true,
+            message = if (warnings.isEmpty()) "OK" else "OK; post-commit warning: ${warnings.joinToString(" | ")}",
+            activatedPaths = prepared.associate { it.plan.canonicalName to it.relativePath },
+            oldEnvironmentPreserved = false,
+        )
     }
 
     /**

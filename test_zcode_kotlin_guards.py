@@ -4389,7 +4389,10 @@ class TestPerFileUndoRedoV1019:
         assert "vm.updateCodeForFile(id, changedCode)" in workbench
         vm = strip_kt_comments(read(APP / "WorkspaceViewModel.kt"))
         assert "fun updateCodeForFile(filename: String, newCode: String)" in vm
-        assert "if (filename !in openedFiles) return" in vm
+        save_block = vm[vm.index("fun updateCodeForFile("):vm.index("fun createNewFile(")]
+        assert "filename !in openedFiles" in save_block
+        assert "QueuedDocumentSave" in vm
+        assert "workspaceMutations.writeIfCurrent" in save_block
 
     def test_close_rename_delete_clear_mengelola_state(self):
         js = read(self.JS)
@@ -4824,7 +4827,7 @@ class TestV1021WorkspaceDataSafety:
         block = vm[start:end]
         assert "closeFile(" not in block
         assert "saveJob?.cancel()" in block
-        assert "synchronized(workspaceMutationLock)" in block
+        assert "workspaceMutations.mutate" in block
         assert "pendingSave = false" in block
 
     def test_run_fails_closed_when_flush_fails(self):
@@ -4858,7 +4861,9 @@ class TestV1021GenerationActivationSafety:
         block = tx[start:end]
         assert ".incoming-" in block and "__zcode_" in block
         assert "verifyCopiedTree(source, incoming)" in block
-        assert "StandardCopyOption.ATOMIC_MOVE" in block
+        boundary = strip_kt_comments(read(PKGENG / "ActivationCommitBoundary.kt"))
+        assert "StandardCopyOption.ATOMIC_MOVE" in boundary
+        assert "ActivationCommitBoundary.promoteAndCommit" in block
         assert "writeAtomicFile(installedFile" in block
         before_commit = block[:block.index("writeAtomicFile(installedFile")]
         assert "target.deleteRecursively" not in before_commit
@@ -4867,13 +4872,16 @@ class TestV1021GenerationActivationSafety:
 
     def test_failed_activation_deletes_only_new_generations(self):
         tx = strip_kt_comments(read(PKGENG / "TransactionManager.kt"))
-        start = tx.index("} catch (e: Exception) {", tx.index("fun activate("))
+        boundary = strip_kt_comments(read(PKGENG / "ActivationCommitBoundary.kt"))
+        start = tx.index("fun activate(")
         end = tx.index("private fun normalizePermissions", start)
-        rollback = tx[start:end]
-        assert "it.incoming.deleteRecursively()" in rollback
-        assert "it.finalDir.deleteRecursively()" in rollback
-        assert 'oldEnvironmentPreserved = true' in rollback
-        assert "installedFile.delete" not in rollback
+        activate = tx[start:end]
+        assert "it.incoming.deleteRecursively()" in activate
+        assert "it.incoming.deleteRecursively()" in boundary
+        assert "it.finalDir.deleteRecursively()" in boundary
+        assert 'oldEnvironmentPreserved = true' in activate
+        assert "installedFile.delete" not in activate
+        assert "oldEnvironmentPreserved = false" in activate
 
     def test_atomic_state_recovered_before_any_runtime_reader(self):
         app = strip_kt_comments(read(APP / "ZcodeApp.kt"))
@@ -4942,7 +4950,10 @@ class TestV1021RuntimeAndWheelHardening:
             "Wheel-Version",
             "verifyRecord",
             "RECORD hash mismatch",
-            "actualFiles != rows.keys",
+            "actualFiles - rows.keys - signaturePaths",
+            "rows.keys - actualFiles",
+            "RECORD.jws",
+            "RECORD.p7s",
         ):
             assert token in verifier
         assert "expectedName = p.canonicalName" in engine
@@ -5037,7 +5048,7 @@ class TestCatalogGeneratorNeverDowngradesShippedKnowledge:
 class TestVerifierJvmTestCompileRegression:
     def test_mutate_record_lambda_uses_named_parameter_not_trailing_pair_slot(self):
         src = read(ROOT / "app/src/test/java/com/zaba/zcode/core/packageengine/VerifierTest.kt")
-        assert "mutateRecord = { record: String ->" in src
+        assert src.count("wheel(mutateRecord =") >= 5
         assert 'wheel { record ->' not in src
 
 

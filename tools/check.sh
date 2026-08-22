@@ -16,7 +16,7 @@ grep -q "nonlocal" $BUNDLE && echo "✅ lang-python (Lezer) terbundle" || (echo 
 grep -q "codemirror.bundle.js" app/src/main/assets/editor/index.html && echo "✅ index.html me-load bundle" || (echo "❌ index.html tidak me-load bundle" && exit 1)
 if grep -qiE "cdnjs|unpkg|jsdelivr" $BUNDLE; then echo "❌ CDN reference ditemukan — offline-first violation" && exit 1; else echo "✅ no CDN"; fi
 grep -q "gotoLine" $BUNDLE && grep -q "frozenset" $BUNDLE && echo "✅ kontrak gotoLine + autocomplete terbundle" || (echo "❌ bundle kehilangan gotoLine/autocomplete" && exit 1)
-test -f app/src/main/python/zcode_plugins.py && grep -q "PORTED FROM ZABACODE (GPLv3)" app/src/main/python/zcode_plugins.py && echo "✅ zcode_plugins.py + provenance header" || (echo "❌ zcode_plugins.py / provenance hilang" && exit 1)
+test -f app/src/main/python/zcode_plugins.py && grep -q "DERIVED FROM ZABACODE under GPLv3" app/src/main/python/zcode_plugins.py && grep -q "ZABACODE Contributors" app/src/main/python/zcode_plugins.py && echo "✅ zcode_plugins.py + contributor provenance header" || (echo "❌ zcode_plugins.py / provenance hilang" && exit 1)
 
 echo "[2/10] Verify npm/editor supply-chain invariants (ChainDrop defense-in-depth)"
 python3 tools/npm_supply_chain_check.py
@@ -60,7 +60,7 @@ test -f app/src/main/java/com/zaba/zcode/ui/settings/PipScreen.kt && echo "✅ P
 test -f app/src/main/java/com/zaba/zcode/core/plugins/PluginHost.kt && echo "✅ PluginHost" || (echo "❌ plugins missing" && exit 1)
 
 echo "[10/10] Run Python strict tests (Fase 0 + Fase 1/2 + redesign Fase 3 + Package Runtime + Kotlin guards)"
-pytest test_zcode_fase0.py test_zcode_fase1.py test_zcode_fase3.py test_zcode_package_runtime.py test_zcode_kotlin_guards.py test_zcode_security_guards.py test_native_runtime_rebirth_guards.py test_zcode_production_release.py -v
+pytest test_zcode_fase0.py test_zcode_fase1.py test_zcode_fase3.py test_zcode_package_runtime.py test_zcode_kotlin_guards.py test_zcode_security_guards.py test_native_runtime_rebirth_guards.py test_zcode_production_release.py test_v1021_commit_and_save_guards.py -v
 python3 test_zcode_fase0.py 2>&1 | tail -n 20
 
 echo ""

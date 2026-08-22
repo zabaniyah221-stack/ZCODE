@@ -23,34 +23,48 @@ class VerifierTest {
         return "sha256=" + Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
     }
 
+    private fun csvPath(path: String): String =
+        if (',' in path || '"' in path) "\"${path.replace("\"", "\"\"")}\"" else path
+
     private fun wheel(
         mutateRecord: (String) -> String = { it },
-        extraZipEntry: Pair<String, ByteArray>? = null,
+        recordedExtras: Map<String, ByteArray> = emptyMap(),
+        unrecordedExtras: Map<String, ByteArray> = emptyMap(),
     ): File {
-        val entries = linkedMapOf(
+        val recorded = linkedMapOf(
             "demo_pkg/__init__.py" to "VALUE = 1\n".toByteArray(),
             "$distInfo/METADATA" to "Metadata-Version: 2.1\nName: demo-pkg\nVersion: 1.0\n".toByteArray(),
             "$distInfo/WHEEL" to "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n".toByteArray(),
         )
+        recorded.putAll(recordedExtras)
         val recordPath = "$distInfo/RECORD"
         val record = buildString {
-            entries.forEach { (path, bytes) ->
-                append(path).append(',').append(sha256Record(bytes)).append(',').append(bytes.size).append('\n')
+            recorded.forEach { (path, bytes) ->
+                append(csvPath(path)).append(',').append(sha256Record(bytes)).append(',').append(bytes.size).append('\n')
             }
             append(recordPath).append(",,\n")
         }.let(mutateRecord).toByteArray()
-        entries[recordPath] = record
-        extraZipEntry?.let { entries[it.first] = it.second }
+        val zipEntries = linkedMapOf<String, ByteArray>()
+        zipEntries.putAll(recorded)
+        zipEntries[recordPath] = record
+        zipEntries.putAll(unrecordedExtras)
 
-        val file = temporary.newFile("demo_pkg-1.0-py3-none-any.whl")
+        val file = temporary.newFile("demo_pkg-${System.nanoTime()}-py3-none-any.whl")
         ZipOutputStream(file.outputStream()).use { zip ->
-            entries.forEach { (path, bytes) ->
+            zipEntries.forEach { (path, bytes) ->
                 zip.putNextEntry(ZipEntry(path))
                 zip.write(bytes)
                 zip.closeEntry()
             }
         }
         return file
+    }
+
+    private fun verify(file: File, folder: String): Verifier.VerifyResult {
+        val extracted = temporary.newFolder(folder)
+        val extract = Verifier.extractWheel(file, extracted)
+        assertTrue(extract.error.orEmpty(), extract.ok)
+        return Verifier.validateWheelMeta(extracted, "demo.pkg", "1.0").first
     }
 
     @Test
@@ -66,31 +80,103 @@ class VerifierTest {
     }
 
     @Test
-    fun recordHashMismatchFailsClosed() {
-        val extracted = temporary.newFolder("bad-hash")
-        val file = wheel(
-            mutateRecord = { record: String ->
-                record.replaceFirst("sha256=", "sha256=broken")
-            }
+    fun signedWheelAllowsJwsAndP7sAbsentFromRecordRows() {
+        val signatures = mapOf(
+            "$distInfo/RECORD.jws" to "{\"payload\":\"test\"}\n".toByteArray(),
+            "$distInfo/RECORD.p7s" to byteArrayOf(0x30, 0x03, 0x01),
         )
-        assertTrue(Verifier.extractWheel(file, extracted).ok)
 
-        val (verified, _) = Verifier.validateWheelMeta(extracted, "demo-pkg", "1.0")
+        val verified = verify(wheel(unrecordedExtras = signatures), "signed")
+
+        assertTrue(verified.error.orEmpty(), verified.ok)
+    }
+
+    @Test
+    fun signatureFilesListedInRecordAreRejectedPerPep427() {
+        val path = "$distInfo/RECORD.jws"
+        val verified = verify(
+            wheel(recordedExtras = mapOf(path to "signature".toByteArray())),
+            "listed-signature",
+        )
+
+        assertFalse(verified.ok)
+        assertTrue(verified.error.orEmpty().contains("tidak boleh dicatat"))
+    }
+
+    @Test
+    fun arbitraryUnlistedFileStillFailsClosed() {
+        val verified = verify(
+            wheel(unrecordedExtras = mapOf("surprise.py" to "bad = True\n".toByteArray())),
+            "unlisted",
+        )
+
+        assertFalse(verified.ok)
+        assertTrue(verified.error.orEmpty().contains("RECORD tidak cocok"))
+    }
+
+    @Test
+    fun phantomRecordRowIsRejected() {
+        val verified = verify(
+            wheel(mutateRecord = { "ghost.py,sha256=AAAA,1\n$it" }),
+            "phantom",
+        )
+
+        assertFalse(verified.ok)
+        assertTrue(verified.error.orEmpty().contains("missing="))
+    }
+
+    @Test
+    fun recordHashMismatchFailsClosed() {
+        val verified = verify(
+            wheel(mutateRecord = { it.replaceFirst("sha256=", "sha256=broken") }),
+            "bad-hash",
+        )
 
         assertFalse(verified.ok)
         assertTrue(verified.error.orEmpty().contains("hash mismatch"))
     }
 
     @Test
-    fun fileMissingFromRecordIsRejected() {
-        val extracted = temporary.newFolder("unlisted")
-        val file = wheel(extraZipEntry = "surprise.py" to "bad = True\n".toByteArray())
-        assertTrue(Verifier.extractWheel(file, extracted).ok)
-
-        val (verified, _) = Verifier.validateWheelMeta(extracted, "demo-pkg", "1.0")
+    fun weakRecordHashAlgorithmIsRejected() {
+        val verified = verify(
+            wheel(mutateRecord = { it.replaceFirst("sha256=", "sha1=") }),
+            "weak-hash",
+        )
 
         assertFalse(verified.ok)
-        assertTrue(verified.error.orEmpty().contains("RECORD tidak cocok"))
+        assertTrue(verified.error.orEmpty().contains("hash lemah"))
+    }
+
+    @Test
+    fun malformedRecordSizeIsRejected() {
+        val verified = verify(
+            wheel(mutateRecord = { it.replaceFirst(Regex(",([0-9]+)\\n"), ",not-a-size\n") }),
+            "bad-size",
+        )
+
+        assertFalse(verified.ok)
+        assertTrue(verified.error.orEmpty().contains("size invalid"))
+    }
+
+    @Test
+    fun duplicateRecordPathIsRejected() {
+        val verified = verify(
+            wheel(mutateRecord = { record -> record.lineSequence().first() + "\n" + record }),
+            "duplicate-record",
+        )
+
+        assertFalse(verified.ok)
+        assertTrue(verified.error.orEmpty().contains("duplikat"))
+    }
+
+    @Test
+    fun quotedCommaPathUsesCsvParsingAndRemainsVerifiable() {
+        val verified = verify(
+            wheel(recordedExtras = mapOf("demo_pkg/data,part.txt" to "hello\n".toByteArray())),
+            "comma-path",
+        )
+
+        assertTrue(verified.error.orEmpty(), verified.ok)
     }
 
     @Test

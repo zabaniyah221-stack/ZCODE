@@ -16,6 +16,7 @@ import com.zaba.zcode.core.editor.Severity
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
+import com.zaba.zcode.core.files.WorkspaceMutationGate
 import com.zaba.zcode.core.files.WorkspaceTrashManager
 import com.zaba.zcode.core.plugins.PluginHost
 import com.zaba.zcode.core.plugins.PluginRegistry
@@ -55,7 +56,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs: android.content.SharedPreferences =
         app.getSharedPreferences("zcode_workspace", Context.MODE_PRIVATE)
     private val workspaceTrash = WorkspaceTrashManager(filesDir, Paths.workspaceTrash(app))
-    private val workspaceMutationLock = Any()
+    private val workspaceMutations = WorkspaceMutationGate()
     private val scope = CoroutineScope(Dispatchers.Main + Job())
     private var validationJob: Job? = null
     private var saveJob: Job? = null
@@ -500,11 +501,11 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
      * killing the process.
      */
     fun flushSaveSync(verifyAllDrafts: Boolean = false): Boolean =
-        synchronized(workspaceMutationLock) {
+        workspaceMutations.mutate {
             flushSaveSyncLocked(verifyAllDrafts)
         }
 
-    /** Caller must hold [workspaceMutationLock]. */
+    /** Caller must hold [workspaceMutations]. */
     private fun flushSaveSyncLocked(verifyAllDrafts: Boolean): Boolean {
         saveJob?.cancel()
         val current = activeFile
@@ -552,10 +553,12 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (newCode == activeCode) return
         activeCode = newCode
         val current = activeFile ?: return
-        fileDrafts[current] = newCode
-        documentRevisions[current] = (documentRevisions[current] ?: 0L) + 1L
+        workspaceMutations.mutate {
+            fileDrafts[current] = newCode
+            documentRevisions[current] = (documentRevisions[current] ?: 0L) + 1L
+            pendingSave = true
+        }
 
-        pendingSave = true
         saveJob?.cancel()
         saveJob = scope.launch {
             delay(600)
@@ -566,6 +569,12 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         validateSyntaxDebounced(newCode)
     }
 
+    private data class QueuedDocumentSave(
+        val documentId: String,
+        val revision: Long,
+        val code: String,
+    )
+
     /**
      * Callback editor membawa ID dokumen agar event WebView yang sempat antre
      * tidak menimpa file baru setelah user cepat berpindah tab.
@@ -575,12 +584,35 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             updateCode(newCode)
             return
         }
-        if (filename !in openedFiles) return
-        if (fileDrafts[filename] == newCode) return
-        fileDrafts[filename] = newCode
-        documentRevisions[filename] = (documentRevisions[filename] ?: 0L) + 1L
+        val queued = workspaceMutations.mutate {
+            if (filename !in openedFiles || fileDrafts[filename] == newCode) {
+                null
+            } else {
+                fileDrafts[filename] = newCode
+                val revision = (documentRevisions[filename] ?: 0L) + 1L
+                documentRevisions[filename] = revision
+                QueuedDocumentSave(filename, revision, newCode)
+            }
+        } ?: return
+
         scope.launch(Dispatchers.IO) {
-            runCatching { FileManager.saveFile(filesDir, filename, newCode) }
+            runCatching {
+                workspaceMutations.writeIfCurrent(
+                    isCurrent = {
+                        queued.documentId in openedFiles &&
+                            documentRevisions[queued.documentId] == queued.revision &&
+                            fileDrafts[queued.documentId] == queued.code
+                    },
+                    write = {
+                        FileManager.saveFile(filesDir, queued.documentId, queued.code).getOrThrow()
+                    },
+                )
+            }.onFailure { error ->
+                com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                    "WORKSPACE_SAVE_FAIL",
+                    "${queued.documentId}: ${error.message ?: "save gagal"}",
+                )
+            }
         }
     }
 
@@ -806,54 +838,58 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
         if (activeFile == filename) {
             flushSaveSync()
         }
-        val idx = openedFiles.indexOf(filename)
-        if (idx == -1) return
-        openedFiles.removeAt(idx)
-        fileDrafts.remove(filename)
-        lastClosed = filename to System.currentTimeMillis()
-        if (activeFile == filename) {
-            if (openedFiles.isNotEmpty()) {
-                val nextIdx = if (idx < openedFiles.size) idx else openedFiles.size - 1
-                selectFile(openedFiles[nextIdx])
-            } else {
-                activeFile = null
-                activeCode = ""
-                syntaxError = null
+        workspaceMutations.mutate {
+            val idx = openedFiles.indexOf(filename)
+            if (idx == -1) return@mutate
+            openedFiles.removeAt(idx)
+            fileDrafts.remove(filename)
+            documentRevisions[filename] = (documentRevisions[filename] ?: 0L) + 1L
+            lastClosed = filename to System.currentTimeMillis()
+            if (activeFile == filename) {
+                if (openedFiles.isNotEmpty()) {
+                    val nextIdx = if (idx < openedFiles.size) idx else openedFiles.size - 1
+                    selectFile(openedFiles[nextIdx])
+                } else {
+                    activeFile = null
+                    activeCode = ""
+                    syntaxError = null
+                }
             }
+            persistWorkspaceState()
         }
-        persistWorkspaceState()
     }
 
     fun renameFile(oldName: String, newName: String): Boolean {
         val securedOld = FileManager.secureFilename(oldName) ?: return false
         val securedNew = FileManager.secureFilename(newName) ?: return false
-        val oldFile = File(filesDir, securedOld)
-        val newFile = File(filesDir, securedNew)
-        if (oldFile.exists() && !newFile.exists()) {
-            val ok = oldFile.renameTo(newFile)
-            if (ok) {
+        return workspaceMutations.mutate {
+            val oldFile = File(filesDir, securedOld)
+            val newFile = File(filesDir, securedNew)
+            if (oldFile.exists() && !newFile.exists() && oldFile.renameTo(newFile)) {
                 val idx = openedFiles.indexOf(securedOld)
                 if (idx != -1) openedFiles[idx] = securedNew
                 if (activeFile == securedOld) activeFile = securedNew
                 val draft = fileDrafts.remove(securedOld)
                 if (draft != null) fileDrafts[securedNew] = draft
-                val revision = documentRevisions.remove(securedOld) ?: 0L
-                documentRevisions[securedNew] = revision + 1L
+                val oldRevision = documentRevisions[securedOld] ?: 0L
+                documentRevisions[securedOld] = oldRevision + 1L
+                documentRevisions[securedNew] = (documentRevisions[securedNew] ?: oldRevision) + 1L
                 externalOrigins.remove(securedOld)?.let { externalOrigins[securedNew] = it }
                 persistExternalOrigins()
                 persistWorkspaceState()
-                return true
+                true
+            } else {
+                false
             }
         }
-        return false
     }
 
     fun deleteFile(filename: String): Boolean {
         val secured = FileManager.secureFilename(filename) ?: return false
         saveJob?.cancel()
-        return synchronized(workspaceMutationLock) {
+        return workspaceMutations.mutate {
             val file = File(filesDir, secured)
-            if (!file.isFile || !file.delete()) return@synchronized false
+            if (!file.isFile || !file.delete()) return@mutate false
 
             // Do not call closeFile here: closeFile flushes the active draft and
             // could recreate the file which was just deleted.
@@ -930,9 +966,9 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun clearAllDrafts(): Pair<Boolean, String> {
         saveJob?.cancel()
-        return synchronized(workspaceMutationLock) {
+        return workspaceMutations.mutate {
             if (!flushSaveSyncLocked(verifyAllDrafts = true)) {
-                return@synchronized false to "Clear All dibatalkan karena workspace gagal disimpan."
+                return@mutate false to "Clear All dibatalkan karena workspace gagal disimpan."
             }
             val oldWorkspace = prefs.getString("workspace", null)
             val oldOrigins = prefs.getString("external_origins", null)
@@ -942,12 +978,12 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
             }.toString()
 
             val cleared = workspaceTrash.clearAll(metadata)
-            if (!cleared.ok) return@synchronized false to cleared.message
+            if (!cleared.ok) return@mutate false to cleared.message
 
             val seedSave = FileManager.saveFile(filesDir, "main.py", SEED_MAIN_PY)
             if (seedSave.isFailure) {
                 rollbackCommittedClear(oldWorkspace, oldOrigins)
-                return@synchronized false to "Clear All dibatalkan karena main.py baru tidak dapat dibuat."
+                return@mutate false to "Clear All dibatalkan karena main.py baru tidak dapat dibuat."
             }
 
             openedFiles.clear()
@@ -970,7 +1006,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                 .commit()
             if (!committed) {
                 rollbackCommittedClear(oldWorkspace, oldOrigins)
-                return@synchronized false to "Clear All dibatalkan karena state workspace tidak dapat disimpan."
+                return@mutate false to "Clear All dibatalkan karena state workspace tidak dapat disimpan."
             }
 
             canRestoreLastClear = workspaceTrash.hasRestorableClear()
@@ -986,21 +1022,21 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
     /** Restore files and the old tab topology without overwriting newer files. */
     fun restoreLastClear(): Pair<Boolean, String> {
         saveJob?.cancel()
-        return synchronized(workspaceMutationLock) {
+        return workspaceMutations.mutate {
             if (!flushSaveSyncLocked(verifyAllDrafts = true)) {
-                return@synchronized false to "Restore dibatalkan karena workspace saat ini gagal disimpan."
+                return@mutate false to "Restore dibatalkan karena workspace saat ini gagal disimpan."
             }
             val restored = workspaceTrash.beginRestore()
             if (!restored.ok || restored.metadata == null) {
                 canRestoreLastClear = workspaceTrash.hasRestorableClear()
-                return@synchronized false to restored.message
+                return@mutate false to restored.message
             }
 
             val metadata = try {
                 JSONObject(restored.metadata)
             } catch (e: Exception) {
                 workspaceTrash.rollbackRestore(restored)
-                return@synchronized false to "Restore dibatalkan karena manifest workspace rusak."
+                return@mutate false to "Restore dibatalkan karena manifest workspace rusak."
             }
             val oldWorkspaceRaw = metadata.opt("workspace")?.takeUnless { it == JSONObject.NULL } as? String
             val oldOriginsRaw = metadata.opt("external_origins")?.takeUnless { it == JSONObject.NULL } as? String
@@ -1040,7 +1076,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                 .commit()
             if (!stateCommitted) {
                 workspaceTrash.rollbackRestore(restored)
-                return@synchronized false to "Restore dibatalkan karena topology workspace gagal disimpan."
+                return@mutate false to "Restore dibatalkan karena topology workspace gagal disimpan."
             }
 
             openedFiles.clear()
