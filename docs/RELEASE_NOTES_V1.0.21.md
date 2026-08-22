@@ -41,6 +41,8 @@ langsung dari production v1.0.20 tanpa uninstall.
   sebelum cleanup direktori best-effort.
 - Pesan rollback diperjelas menjadi: tidak ada perubahan environment aktif yang
   di-commit.
+- Cancel saat mengunduh pustaka pendukung diklasifikasikan sebagai `CANCELLED`,
+  bukan `DOWNLOAD` generik.
 
 ## Package integrity
 
@@ -62,6 +64,8 @@ langsung dari production v1.0.20 tanpa uninstall.
 - Organize Imports masuk safe read-only mode sampai preview + transactional
   change-set tersedia; import Python dapat memiliki side effect dan tidak aman
   dihapus/diurutkan diam-diam.
+- Header plugin memuat pernyataan relicensing eksplisit oleh pemegang hak cipta
+  (port ZABACODE GPLv3 juga dilisensikan MIT ke ZCODE).
 
 ## Runtime dan toolchain
 
@@ -101,9 +105,10 @@ Saat notes ini ditulis:
 
 ```text
 Source implementation       : IMPLEMENTED
-Local Python/static gate     : LOCALLY VERIFIED — 655 passed
-                               (re-verified 2026-08-22 on arena/01a02739-zcode
-                               at 0a0d471; mutation spot-checks red→green)
+Local Python/static gate     : LOCALLY VERIFIED — 657 passed
+                               (re-verified 2026-08-22 on arena/01a02753-zcode;
+                               support-library cancel guard mutation-verified
+                               red→green)
 Debug CI (compile+JVM test)  : CI VERIFIED
                                run 32542213874 (c84d48e push)    build SUCCESS
                                run 32545142292 (c84d48e push)    build SUCCESS
