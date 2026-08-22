@@ -101,8 +101,15 @@ Saat notes ini ditulis:
 
 ```text
 Source implementation       : IMPLEMENTED
-Local Python/static gate     : LOCALLY VERIFIED (652 passed)
-Android/JVM compile          : NOT YET CI VERIFIED
+Local Python/static gate     : LOCALLY VERIFIED
+Previous-branch debug CI     : CI VERIFIED — run 32542213874 on c84d48e
+compile-production-source    : SKIPPED on that run
+  reason                     : job if only matches arena/v1020-production PRs
+  compiler evidence          : already present via debug job
+                               ./gradlew testDebugUnitTest assembleDebug
+  live unskip                : BLOCKED — Arena GitHub App lacks workflows
+                               permission to update .github/workflows/build.yml
+  ready-to-upload source     : ci/pending/build.yml
 Physical ARMv7 update        : NOT DEVICE VERIFIED
 Production signed draft      : NOT CREATED
 Public v1.0.21 release       : NOT RELEASED

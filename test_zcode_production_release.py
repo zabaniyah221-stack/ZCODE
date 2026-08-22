@@ -306,6 +306,25 @@ class TestSingleProductionWorkflow:
         assert "assembleDebug" not in compile_only
         assert "upload-artifact" not in compile_only
 
+    def test_pending_unskip_keeps_compile_only_and_names_this_branch(self):
+        pending = ROOT / "ci/pending/build.yml"
+        src = read(pending)
+        live = read(CANONICAL_WORKFLOW)
+        start = src.index("compile-production-source:")
+        compile_only = src[start:]
+        assert "arena/01a0272f-zcode" in compile_only
+        assert "refs/heads/arena/01a0272f-zcode" in compile_only
+        assert "arena/v1021-production" in compile_only
+        assert ":app:compileDebugKotlin" in compile_only
+        assert "testDebugUnitTest" in compile_only
+        assert "assembleDebug" not in compile_only
+        assert "upload-artifact" not in compile_only
+        # Live GitHub workflow still has the v1.0.20 PR-only gate until the
+        # user uploads this pending file; Arena cannot push .github/workflows.
+        assert "github.head_ref == 'arena/v1020-production'" in live
+        assert "arena/01a0272f-zcode" not in live
+        assert "ci/pending/build.yml" in read(RELEASE_NOTES)
+
 
 class TestProductionSigningPolicy:
     def test_public_identity_is_exact_and_private_material_absent(self):
