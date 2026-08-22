@@ -48,6 +48,7 @@ object ExecutionEngine {
     const val MAX_CODE_BYTES = 512 * 1024 // 512 KB
     const val MAX_OUTPUT_CHARS = 256 * 1024 // 256 KB — cap log in-memory (bukan interactive disk log)
     const val DEFAULT_TIMEOUT_MS = 30_000L // batch timeout 30s — interactive TIDAK memakai ini
+    const val READER_JOIN_TIMEOUT_MS = 2_000L
     const val MAX_INTERACTIVE_INACTIVITY_MS = 60_000L // (tidak dipakai sebagai killer; hanya info)
     const val MAX_INTERACTIVE_BYTES = 8192 // 8KB per send
     const val MAX_INTERACTIVE_QUEUE = 10000
@@ -500,10 +501,20 @@ object ExecutionEngine {
             jobs.forEach { it.start() }
 
             val finished = withTimeoutOrNull(DEFAULT_TIMEOUT_MS) { process.waitFor() }
-            jobs.forEach { it.join() }
+            if (finished == null) {
+                // Kill first: reader threads can be blocked waiting for EOF and
+                // joining them before process termination can wait forever.
+                process.destroyForcibly()
+                process.waitFor(READER_JOIN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            }
+            jobs.forEach { it.join(READER_JOIN_TIMEOUT_MS) }
+            if (jobs.any { it.isAlive }) {
+                runCatching { reader.close() }
+                runCatching { errReader.close() }
+                jobs.filter { it.isAlive }.forEach { it.interrupt() }
+            }
 
             if (finished == null) {
-                process.destroyForcibly()
                 RunResult(false, outSb.toString(), errSb.toString() + "\nTimeout after 30s", true)
             } else {
                 RunResult(process.exitValue() == 0, outSb.toString(), errSb.toString(), false)

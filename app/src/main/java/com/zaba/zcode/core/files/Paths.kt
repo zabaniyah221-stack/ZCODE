@@ -23,6 +23,13 @@ object Paths {
     fun keysFile(context: Context): File = File(appDir(context), ".zabacode_keys_encrypted.json")
     fun tokenFile(context: Context): File = File(appDir(context), ".zabacode_auth_token")
 
+    /**
+     * App-private transactional trash for destructive workspace operations.
+     * Hidden from FileManager.listFiles and kept on the same filesystem as the
+     * workspace so clear/rollback can require an atomic directory move.
+     */
+    fun workspaceTrash(context: Context): File = File(appDir(context), ".zcode-trash")
+
     // ------------------------------------------------------------------
     // python-env — environment package ZCODE (SPEC-001 §2)
     //   python-env/

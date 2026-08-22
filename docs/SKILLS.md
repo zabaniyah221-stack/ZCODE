@@ -2085,3 +2085,56 @@ Sumber:
   https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
 - GitHub CLI release creation:
   https://cli.github.com/manual/gh_release_create
+
+
+---
+
+## SKILL 27 — workflow permission dan branch-agnostic compile gate (2026-08-22)
+
+**Trigger:** `compile-production-source` pernah skipped karena gate mengunci
+nama branch v1.0.20. Pada sesi lain, push workflow melalui GitHub App ditolak
+karena permission `workflows` tidak tersedia. PR #28 kemudian memakai branch
+Jules tanpa prefix `arena/`, membuktikan bahwa prefix gate pun masih dapat basi.
+
+### Aturan
+
+1. Gate compile evidence untuk PR memakai event identity, bukan nama/prefix
+   branch: `if: github.event_name == 'pull_request'`.
+2. `.github/workflows/<name>` dan `ci/workflows/<name>` harus identik dan dijaga
+   test. `ci/pending` hanya workaround sementara; hapus setelah live source
+   diterapkan agar tidak menjadi source of truth ketiga.
+3. Agent boleh menyiapkan/mengedit workflow lokal setelah user menyetujui
+   perubahan signing/workflow. Push tetap memerlukan authorization dan token/App
+   permission yang benar; jangan menganggap credential sesi lama tersedia.
+4. Jika push ditolak karena workflow permission, catat pesan exact dan berikan
+   diff/file final kepada user. Jangan menyamarkan job skipped sebagai success.
+5. Full-SHA action pins, wrapper checksum, workflow mirror, secret scope, dan
+   cleanup keystore adalah bagian dari contract, bukan kosmetik CI.
+
+### Status v1.0.21
+
+Live build workflow dan mirror lokal sekarang memakai every-PR compile gate;
+`ci/pending` sudah dipensiunkan. Statusnya **IMPLEMENTED LOCALLY**, belum
+`CI VERIFIED` sampai exact repair head dipush dan job berakhir SUCCESS.
+
+### v1.0.20 proof that the model works
+
+```text
+production workflow runs : 1
+private draft            : built from commit 55860ff
+user draft SHA check     : OK
+production device UAT    : PASS, crash none
+public asset re-download : exact SHA match
+rebuild during promotion : none
+release                  : v1.0.20
+```
+
+Exact APK SHA-256:
+
+```text
+b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed
+```
+
+This is **PRODUCTION DEVICE VERIFIED + RELEASED**, but update continuity remains
+unverified until a later production version with higher versionCode is installed
+in place over v1.0.20.

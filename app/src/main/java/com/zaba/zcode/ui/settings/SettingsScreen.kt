@@ -15,12 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -52,8 +55,10 @@ import com.zaba.zcode.ui.theme.ZcodeThemeType
 fun SettingsScreen(
     vm: WorkspaceViewModel,
     onBack: () -> Unit,
-    onClearAll: () -> Unit
 ) {
+    val context = LocalContext.current
+    var confirmClearAll by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             Surface(color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -207,8 +212,19 @@ fun SettingsScreen(
             if ("privasi" in openSections) item {
                 SettingsDestructiveRow(
                     label = "Clear All Drafts & Files",
-                    description = "Hapus semua file .py di workspace",
-                    onClick = onClearAll
+                    description = "Pindahkan semua file .py ke pemulihan privat",
+                    onClick = { confirmClearAll = true }
+                )
+            }
+
+            if ("privasi" in openSections && vm.canRestoreLastClear) item {
+                SettingsActionRow(
+                    label = "Restore Last Deletion",
+                    description = "Pulihkan file tanpa menimpa file baru yang namanya sama",
+                    onClick = {
+                        val (_, message) = vm.restoreLastClear()
+                        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                    }
                 )
             }
 
@@ -243,6 +259,32 @@ fun SettingsScreen(
             // Spacer bawah supaya tidak tertutup FAB/keyboard
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
+    }
+
+    if (confirmClearAll) {
+        val count = vm.workspaceFileCount()
+        AlertDialog(
+            onDismissRequest = { confirmClearAll = false },
+            title = { Text("Clear All Drafts & Files?", fontSize = 16.sp) },
+            text = {
+                Text(
+                    "$count file .py, termasuk tab yang sudah ditutup, akan dipindahkan. " +
+                        "Preferences dan package environment tidak ikut dihapus."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearAll = false
+                    val (_, message) = vm.clearAllDrafts()
+                    android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+                }) {
+                    Text("Clear $count File", color = Color(0xFFFFB4AB))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearAll = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -339,6 +381,23 @@ private fun SettingsDestructiveRow(
             fontSize = 11.sp,
             color = Color.Gray
         )
+    }
+}
+
+@Composable
+private fun SettingsActionRow(
+    label: String,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp)
+    ) {
+        Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+        Text(description, fontSize = 11.sp, color = Color.Gray)
     }
 }
 

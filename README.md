@@ -6,7 +6,7 @@
 
   <p>
     <a href="https://github.com/muzape28-blip/ZCODE/actions/workflows/build.yml"><img src="https://github.com/muzape28-blip/ZCODE/actions/workflows/build.yml/badge.svg" alt="CI Build" /></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-2ea44f.svg" alt="MIT License" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-2ea44f.svg" alt="GNU GPLv3" /></a>
     <img src="https://img.shields.io/badge/Python-3.11%20%7C%20Chaquopy-3776AB?logo=python&logoColor=white" alt="Python 3.11 Chaquopy" />
     <img src="https://img.shields.io/badge/Android-minSdk%2026-3DDC84?logo=android&logoColor=white" alt="Android minSdk 26" />
     <img src="https://img.shields.io/badge/Editor-CodeMirror%206-1B4D2E" alt="CodeMirror 6" />
@@ -180,35 +180,27 @@ WebView editor lokal.
 
 ---
 
-## Status verifikasi v1.0.19
+## Status verifikasi produksi
 
 ZCODE menggunakan label bukti, bukan satu kata “done”.
 
 | Lapisan | Status |
 |---|---|
-| Unit/structural/mutation tests | 594 lulus pada snapshot dokumentasi ini |
-| Kotlin lexical sanity | 61 file |
-| GitHub Actions check + APK build | CI VERIFIED — run `32348956505`, artifact `9399175936` |
-| Editor security, focus topology, glyph, traceback, Undo/Redo | DEVICE VERIFIED di Infinix ARMv7 |
-| Package Engine core dan ratusan package | DEVICE VERIFIED bertahap; 231 kartu TESTED |
-| Semantic package logs + uninstall hardening | DEVICE VERIFIED, termasuk copy/STOP/`Batal`/uninstall |
-| Native-runtime rebirth + Binary Rain | DEVICE VERIFIED di INFINIX X6532C/API34/ARMv7 |
-| Bokeh 3.3.4 + ContourPy 1.0.5 | DEVICE VERIFIED; contour HTML 646.935 byte |
-| Release v1.0.19 | RELEASE CANDIDATE — branch belum di-merge ke `main` |
+| Editor, package engine, semantic logs, uninstall, dan native rebirth | DEVICE VERIFIED bertahap di INFINIX X6532C/API34/ARMv7 |
+| ZCODE v1.0.20 production | RELEASED + DEVICE VERIFIED |
+| Production workflow run | SUCCESS — `32472551816`, satu build |
+| Public APK SHA-256 | `b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed` |
+| Public re-download | exact SHA-256 match |
+| ZCODE v1.0.21 | CANDIDATE — belum production signed, device verified, atau released |
+| Update-in-place v1.0.20 → v1.0.21 | NOT YET DEVICE VERIFIED |
 
-Artifact exact yang melewati UAT relaunch/native/package final:
+Release publik yang telah diuji:
+https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.20
 
-```text
-GitHub Actions run : 32348956505
-Commit SHA        : efa56ad3370e2f69da4f069d614a0a466f0de1be
-Artifact ID       : 9399175936
-Archive SHA-256   : 448af10bbfb0c3e7e8a833e2452dd08ae62852d4f6194deec6596135fff4a37b
-Device            : INFINIX X6532C · Android 14/API34 · armeabi-v7a
-```
-
-Laporan eksekusi lengkap:
-[`docs/RENCANA_V1019.md`](docs/RENCANA_V1019.md). Ringkasan kandidat rilis:
-[`docs/RELEASE_NOTES_V1.0.19.md`](docs/RELEASE_NOTES_V1.0.19.md).
+Evidence v1.0.19 tetap di [`docs/RENCANA_V1019.md`](docs/RENCANA_V1019.md)
+dan [`docs/RELEASE_NOTES_V1.0.19.md`](docs/RELEASE_NOTES_V1.0.19.md). Evidence
+production v1.0.20 ada di
+[`docs/RELEASE_NOTES_V1.0.20.md`](docs/RELEASE_NOTES_V1.0.20.md).
 
 ---
 
@@ -291,7 +283,7 @@ Bundle hasil build harus di-commit karena editor APK tetap offline-first.
 
 ---
 
-## Roadmap setelah v1.0.19
+## Roadmap setelah v1.0.20
 
 Roadmap mengikuti kebutuhan karya nyata, bukan perlombaan jumlah fitur.
 
@@ -332,14 +324,18 @@ Target terminal/interpreter:
 ## Kontribusi dan feedback
 
 - Bug/saran: [GitHub Issues](https://github.com/muzape28-blip/ZCODE/issues)
-- Source dan fork dipersilakan sesuai lisensi MIT.
+- Source dan fork dipersilakan sesuai GPLv3; lihat `LICENSE`, `NOTICE`, dan `LICENSES/MIT.txt`.
 - Jangan memasukkan secret, token, atau data pribadi ke issue/log.
 - Kontribusi package wajib menyebut versi, Python, Android/ABI, sumber wheel, dan
   tingkat verifikasinya.
 
 ## Lisensi
 
-ZCODE dirilis di bawah [MIT License](LICENSE).
+ZCODE sebagai aplikasi gabungan didistribusikan di bawah
+[GNU GPLv3](LICENSE). Provenance ZABACODE dan perubahan ZCODE dijelaskan dalam
+[NOTICE](NOTICE). Bagian yang ditulis independen di bawah MIT mempertahankan teks
+lisensinya di [`LICENSES/MIT.txt`](LICENSES/MIT.txt); distribusi gabungan tetap
+GPLv3.
 
 Font JetBrains Mono, Fira Code, dan Source Code Pro memakai SIL Open Font License
 1.1; teks lisensi tersedia bersama asset font.

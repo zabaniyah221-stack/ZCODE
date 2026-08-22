@@ -323,6 +323,13 @@ class TestResolve:
         req_pkg = next(p for p in plan["packages"] if p["name"] == "requests")
         assert req_pkg["source"] == "local"
 
+    @pytest.mark.parametrize("requested", ["python-dateutil", "python_dateutil", "python.dateutil"])
+    def test_local_wheel_uses_pep503_canonical_name(self, tmp_path, requested):
+        wheel = tmp_path / "python_dateutil-2.9.0-py3-none-any.whl"
+        wheel.write_bytes(b"cached")
+        candidates = resolve_mod._local_wheel_candidates(str(tmp_path), requested)
+        assert [candidate["filename"] for candidate in candidates] == [wheel.name]
+
     def test_marker_extra(self, mock_net):
         # extras=[] dan marker menuntut extra → dependency tidak ikut
         plan = resolve_mod.resolve(
@@ -582,6 +589,40 @@ class TestResolverReliability:
         monkeypatch.setattr(resolve_mod, "_retry_wait", lambda *a, **k: None)
         assert resolve_mod._http_get("https://pypi.org/pypi/demo/json") == b"ok"
         assert len(calls) == 2
+
+    def test_dependency_package_limit_is_enforced(self, monkeypatch):
+        def package_json(name):
+            index = int(name.removeprefix("limitpkg"))
+            deps = [f"limitpkg{index + 1}==1.0"] if index < 3 else []
+            return {
+                "info": {"name": name, "version": "1.0", "requires_dist": deps},
+                "releases": {
+                    "1.0": [{
+                        "filename": f"{name}-1.0-py3-none-any.whl",
+                        "packagetype": "bdist_wheel",
+                        "url": f"https://files.pythonhosted.org/{name}.whl",
+                        "digests": {"sha256": "aa" * 32},
+                        "size": 10,
+                        "yanked": False,
+                    }]
+                },
+            }
+
+        def fake_get(url):
+            if "pypi-13.1" in url:
+                return b"<html><body></body></html>"
+            name = url.split("/pypi/", 1)[1].split("/", 1)[0]
+            return json.dumps(package_json(name)).encode()
+
+        monkeypatch.setattr(resolve_mod, "_http_get", fake_get)
+        with pytest.raises(resolve_mod.ResolveError) as exc:
+            resolve_mod.resolve(
+                "limitpkg0==1.0",
+                supported_tags=[Tag("py3", "none", "any")],
+                max_packages=2,
+            )
+        assert exc.value.code == "DEPENDENCY_LIMIT"
+        assert "limitpkg2" in exc.value.technical
 
     def test_cancel_sebelum_request_tidak_menyentuh_network(self, monkeypatch):
         bridge = _FakeResolveBridge()

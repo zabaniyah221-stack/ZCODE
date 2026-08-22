@@ -74,7 +74,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class PipTab { LIBRARY, MANUAL }
+enum class PipTab { LIBRARY, MANUAL }
 
 /**
  * PipScreen — INSTALL MODULES (SPEC-001).
@@ -88,13 +88,14 @@ private enum class PipTab { LIBRARY, MANUAL }
 @Composable
 fun PipScreen(
     context: android.content.Context,
+    operations: PackageOperationViewModel,
     onBack: () -> Unit,
     onOpenSample: (SampleEntry) -> Unit = {},
     onRestartRuntime: () -> Boolean = { false },
 ) {
     val scope = rememberCoroutineScope()
     val repository = remember { PackageRepository(context) }
-    val engine = remember { PackageEngineV2(context) }
+    val engine = operations.engine
     val compat = remember { CompatibilityEngine(context) }
     var runtimeStale by remember { mutableStateOf(NativeRuntimeState.isRequired(context)) }
     var showRestartDialog by remember { mutableStateOf(false) }
@@ -103,7 +104,7 @@ fun PipScreen(
     // v1.0.19 final: tab tap-only adalah topology stabil yang sudah melewati
     // UAT sebelum Pager diperkenalkan. State screen tetap di owner agar
     // Library/Manual tidak kehilangan input atau posisi scroll saat berganti.
-    var activeTab by remember { mutableStateOf(PipTab.LIBRARY) }
+    var activeTab by operations.activeTab
     val libraryListState = rememberLazyListState()
     val manualPageScroll = rememberScrollState()
 
@@ -133,25 +134,18 @@ fun PipScreen(
     // Manual install. Draft tetap milik field; activeRequirement adalah
     // snapshot immutable milik operasi agar Cancel/diagnostics tidak membaca
     // ulang teks yang mungkin berubah di UI.
-    var packageName by remember { mutableStateOf("") }
-    var activeRequirement by remember { mutableStateOf<String?>(null) }
-    var isInstalling by remember { mutableStateOf(false) }
-    // Analyze punya cooperative Cancel. Download/install belum boleh mengklaim
-    // bisa dibatalkan karena transaction stage-nya berbeda.
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var isCancelling by remember { mutableStateOf(false) }
-    // v1.0.18: Console dan Log DIGABUNG jadi satu terminal (keputusan user,
-    // 2026-08-15). Panel Log lama 80% menceritakan hal yang sama dengan
-    // Console dalam kotak kedua yang merebut setengah layar; jejak forensik
-    // permanen sudah menjadi tugas Diagnostics (breadcrumb PKG_*).
-    var consoleLines by remember { mutableStateOf(initialConsole()) }
-    // v1.0.18: antrian requirements.txt multi-baris. Paste beberapa baris
-    // tidak lagi dibuang ke baris pertama saja — sisanya mengantre dan
-    // diproses berurutan begitu engine idle (pop-on-dispatch, anti-loop).
-    var installQueue by remember { mutableStateOf(listOf<String>()) }
-    var pendingRiskyReq by remember { mutableStateOf<String?>(null) }
-    var pendingRiskyReason by remember { mutableStateOf("") }
-    var pendingRiskyPlan by remember { mutableStateOf<DependencyResolver.ResolvePlan?>(null) }
+    // Operation state belongs to the Activity-scoped owner, not this transient
+    // composition. Leaving/reopening PipScreen observes the same worker.
+    var packageName by operations.packageName
+    var activeRequirement by operations.activeRequirement
+    var isInstalling by operations.isInstalling
+    var isAnalyzing by operations.isAnalyzing
+    var isCancelling by operations.isCancelling
+    var consoleLines by operations.consoleLines
+    var installQueue by operations.installQueue
+    var pendingRiskyReq by operations.pendingRiskyReq
+    var pendingRiskyReason by operations.pendingRiskyReason
+    var pendingRiskyPlan by operations.pendingRiskyPlan
 
     val consoleScroll = rememberScrollState()
 
@@ -228,10 +222,10 @@ fun PipScreen(
         // installer yang sedang bermasalah, dan user tidak punya logcat.
         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_INSTALL_BEGIN", trimmed)
         appendMessage("install $trimmed", SemanticLogKind.STEP)
-        scope.launch(Dispatchers.Default) {
+        operations.launchOperation { ownedEngine ->
             val result = try {
-                engine.install(trimmed, plan) { step ->
-                    scope.launch { handleEngineStep(step) }
+                ownedEngine.install(trimmed, plan) { step ->
+                    operations.postToMain { handleEngineStep(step) }
                 }
             } catch (e: Exception) {
                 PackageEngineV2.InstallResult(
@@ -254,6 +248,7 @@ fun PipScreen(
                         "PKG_INSTALL_OK", "$trimmed -> ${result.installed.joinToString(",")}"
                     )
                     appendMessage("Install selesai: ${result.installed.joinToString(", ")}", SemanticLogKind.OK)
+                    operations.markEnvironmentChanged()
                     refreshInstalled()
                 } else {
                     val cancelled = result.code == "CANCELLED"
@@ -273,7 +268,7 @@ fun PipScreen(
                     )
                     if (result.rollbackPerformed) {
                         appendMessage(
-                            "Rollback dilakukan — environment lama utuh",
+                            "Transaksi dibatalkan — tidak ada perubahan environment aktif yang di-commit",
                             SemanticLogKind.INFO
                         )
                     }
@@ -296,7 +291,7 @@ fun PipScreen(
         // Activate tetap tidak bisa dibatalkan (atomic).
         when {
             isAnalyzing && engine.cancelCurrentOperation() -> {
-                isCancelling = true
+                operations.markCancelling()
                 appendMessage("Membatalkan analisis setelah operasi jaringan aktif selesai…", SemanticLogKind.WAIT)
                 com.zaba.zcode.core.diagnostics.Breadcrumb.log(
                     "PKG_ANALYZE_CANCEL_REQUEST",
@@ -304,7 +299,7 @@ fun PipScreen(
                 )
             }
             isInstalling && engine.requestInstallCancel() -> {
-                isCancelling = true
+                operations.markCancelling()
                 appendMessage("Membatalkan instalasi di checkpoint berikutnya…", SemanticLogKind.WAIT)
             }
             else -> appendMessage("Operasi sudah selesai atau di tahap yang tidak bisa dibatalkan.", SemanticLogKind.INFO)
@@ -334,10 +329,10 @@ fun PipScreen(
         consoleLines = emptyList()
         com.zaba.zcode.core.diagnostics.Breadcrumb.log("PKG_ANALYZE_BEGIN", trimmed)
         appendMessage("analyze $trimmed", SemanticLogKind.STEP)
-        scope.launch(Dispatchers.Default) {
+        operations.launchOperation { ownedEngine ->
             val plan = try {
-                engine.analyze(trimmed) { step ->
-                    scope.launch { handleEngineStep(step) }
+                ownedEngine.analyze(trimmed) { step ->
+                    operations.postToMain { handleEngineStep(step) }
                 }
             } catch (e: Exception) {
                 // KEGAGALAN INI PERNAH SENYAP TOTAL (v1.0.13, log perangkat).
@@ -357,9 +352,9 @@ fun PipScreen(
                     activeRequirement = null
                     appendMessage(e.message ?: "Analisis gagal", SemanticLogKind.FAIL)
                 }
-                return@launch
+                return@launchOperation
             }
-            val risk = engine.riskDescription(plan, trimmed)
+            val risk = ownedEngine.riskDescription(plan, trimmed)
             withContext(Dispatchers.Main) {
                 // Python sudah kembali: baru sekarang operasi resolve terminal
                 // dan tombol Start boleh tersedia lagi.
@@ -470,9 +465,9 @@ fun PipScreen(
         com.zaba.zcode.core.diagnostics.Breadcrumb.log(
             "PKG_UNINSTALL_REQUEST", canonical
         )
-        scope.launch(Dispatchers.Default) {
-            val (ok, msg) = engine.uninstall(canonical) { event ->
-                scope.launch { appendMessage(event.text, event.kind) }
+        operations.launchOperation { ownedEngine ->
+            val (ok, msg) = ownedEngine.uninstall(canonical) { event ->
+                operations.postToMain { appendMessage(event.text, event.kind) }
             }
             withContext(Dispatchers.Main) {
                 com.zaba.zcode.core.diagnostics.Breadcrumb.log(
@@ -487,6 +482,7 @@ fun PipScreen(
                     runtimeStale = true
                     showRestartDialog = true
                 }
+                if (ok) operations.markEnvironmentChanged()
                 refreshInstalled()
             }
         }
@@ -524,7 +520,7 @@ fun PipScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(operations.packageEnvironmentRevision.value) {
         TelemetryStore.init(context)
         refreshInstalled()
         withContext(Dispatchers.Default) {
@@ -1551,13 +1547,6 @@ private fun ManualTab(
     }
     } // BoxWithConstraints (A0 rotate resilience)
 }
-
-private fun initialConsole(): List<ConsoleLine> = listOf(
-    ConsoleLine("ZCODE Package Engine V2 — Chaquopy 3.11", SemanticLogKind.STEP),
-    ConsoleLine("Masukkan requirement (bukan perintah shell), lalu tap Install.", SemanticLogKind.INFO),
-    ConsoleLine("Instalasi transaksional: verifikasi + smoke test + rollback otomatis.", SemanticLogKind.INFO),
-    ConsoleLine("Flow: Parse → Resolve → Download → Verify → Extract → Smoke → Activate", SemanticLogKind.INFO),
-)
 
 // Gerbong D v1.0.19: deskripsi 11 kategori Library — satu kalimat orientasi
 // "buat apa kategori ini" saat dibuka. Bahasa santai-jelas, jujur soal batas

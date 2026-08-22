@@ -980,6 +980,41 @@ def canonical(name: str) -> str:
     return name.lower().replace("_", "-").replace(".", "-")
 
 
+def _read_json(path: Path, fallback):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return fallback
+
+
+def _regression_errors(candidate_packages=None) -> list[str]:
+    """Refuse to make the generated source a downgrade of shipped knowledge."""
+    errors = []
+    shipped_packages = _read_json(OUT / "packages.json", [])
+    source_names = {canonical(row[0]) for row in CATALOG}
+    if candidate_packages is not None:
+        source_names = {canonical(row["name"]) for row in candidate_packages}
+    shipped_names = {
+        canonical(row.get("name", "")) for row in shipped_packages
+        if isinstance(row, dict) and row.get("name")
+    }
+    missing_packages = sorted(shipped_names - source_names)
+    if missing_packages:
+        errors.append(
+            "generator kehilangan %d package shipped (contoh: %s)" %
+            (len(missing_packages), ", ".join(missing_packages[:8]))
+        )
+
+    shipped_tested = _read_json(OUT / "tested-manifest.json", {})
+    missing_tested = sorted(set(shipped_tested) - set(TESTED_MANIFEST))
+    if missing_tested:
+        errors.append(
+            "generator kehilangan %d entri tested-manifest (contoh: %s)" %
+            (len(missing_tested), ", ".join(missing_tested[:8]))
+        )
+    return errors
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="hanya verifikasi jumlah kategori")
@@ -1007,7 +1042,10 @@ def main():
         print(f"  [{mark}] {cat}: {n} (target {target})")
 
     if args.check:
-        sys.exit(0 if (len(CATALOG) == TOTAL_TARGET and ok_all) else 1)
+        regression_errors = _regression_errors()
+        for error in regression_errors:
+            print("!! DATA REGRESSION:", error)
+        sys.exit(0 if (len(CATALOG) == TOTAL_TARGET and ok_all and not regression_errors) else 1)
 
     # ---- packages.json ----
     packages = []
@@ -1038,20 +1076,41 @@ def main():
             "sampleId": SAMPLE_LINKS.get(c),
         })
     packages.sort(key=lambda p: (p["category"], p["name"].lower()))
-    (OUT / "packages.json").write_text(json.dumps(packages, indent=1, ensure_ascii=False), encoding="utf-8")
-    print("✓ packages.json:", len(packages), "package")
 
     # ---- stdlib.json (Python 3.11 = runtime Chaquopy) ----
     stdlib = sorted(sys.stdlib_module_names)
-    (OUT / "stdlib.json").write_text(json.dumps(stdlib, indent=1), encoding="utf-8")
+
+    # Fail before writing ANY asset. The old generator silently wrote 300/11
+    # over production assets containing 342 packages and hundreds of tested
+    # entries; partial output is worse than an explicit stale-source failure.
+    regression_errors = _regression_errors(packages)
+    if regression_errors:
+        for error in regression_errors:
+            print("!! REFUSING TO OVERWRITE:", error)
+        print("Sinkronkan CATALOG dan TESTED_MANIFEST dari evidence production terlebih dahulu.")
+        sys.exit(2)
+
+    outputs = {
+        OUT / "packages.json": json.dumps(packages, indent=1, ensure_ascii=False),
+        OUT / "stdlib.json": json.dumps(stdlib, indent=1),
+        OUT / "smoke-tests.json": json.dumps(SMOKE_TESTS, indent=1, ensure_ascii=False),
+        OUT / "tested-manifest.json": json.dumps(TESTED_MANIFEST, indent=1),
+    }
+    staged = []
+    try:
+        for path, content in outputs.items():
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text(content, encoding="utf-8")
+            staged.append((tmp, path))
+        for tmp, path in staged:
+            tmp.replace(path)
+    finally:
+        for tmp, _ in staged:
+            tmp.unlink(missing_ok=True)
+
+    print("✓ packages.json:", len(packages), "package")
     print("✓ stdlib.json:", len(stdlib), "modul stdlib")
-
-    # ---- smoke-tests.json ----
-    (OUT / "smoke-tests.json").write_text(json.dumps(SMOKE_TESTS, indent=1, ensure_ascii=False), encoding="utf-8")
     print("✓ smoke-tests.json:", len(SMOKE_TESTS), "manifest")
-
-    # ---- tested-manifest.json ----
-    (OUT / "tested-manifest.json").write_text(json.dumps(TESTED_MANIFEST, indent=1), encoding="utf-8")
     print("✓ tested-manifest.json:", sum(len(v) for v in TESTED_MANIFEST.values()), "versi tested")
 
 

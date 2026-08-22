@@ -26,7 +26,7 @@
 2. **Toggle Zabacode punya 3 arti campur-aduk** (termasuk "aktivasi = eksekusi diam-diam" untuk transform) → ZCODE pakai S2.
 3. **Lesson RUN-mati**: `confirm()` tak pernah render di WebView → guard wajib *warn-only, never block* + pesan selalu terlihat.
 4. **Transform Zabacode = pure function** `code → (kode_baru, report)` → pola dipertahankan; report jadi toast.
-5. **⚠️ Lisensi (JUJUR):** ZABACODE = GPLv3, ZCODE = MIT. Penulis keduanya sama (muzape28-blip) sehingga port sah secara hak cipta, tapi **wajib** header provenance di file hasil port: `Ported from ZABACODE (GPLv3), same author`.
+5. **⚠️ Lisensi (DIKOREKSI v1.0.21):** ZABACODE-derived portions tetap GPLv3 dengan attribution contributor. ZCODE sebagai distribusi gabungan memakai GPLv3; bagian independen mempertahankan notice MIT yang kompatibel. Klaim lama bahwa satu penulis dapat otomatis memindahkan seluruh port ke MIT tidak cukup karena upstream juga mengatribusikan contributors. Lihat root `LICENSE`, `NOTICE`, dan `LICENSES/MIT.txt`.
 
 ---
 
@@ -98,7 +98,7 @@
 | Chaquopy call lambat di ARMv7 (transform AST) | 🟡 | In-process (bukan spawn), guard timeout, progress toast; file ≤512KB sudah dibatasi |
 | Kompile Kotlin (LazyColumn/animation imports, annotation experimental) | 🟡 | CI `assembleDebug` sebagai wasit; fix cepat tanpa stub (pelajaran PR #3) |
 | False-positive Checker → FAB merah padahal kode benar | 🟢 | Dampak hanya kosmetik (S6 sengaja dipilih karena ini); sumber warna bisa di-upgrade ke `compile()` di fase Problems Panel tanpa ubah UX |
-| Lisensi GPLv3 → MIT | 🟢 | Satu author; header provenance wajib (§2.5) |
+| Lisensi GPLv3 provenance | 🟢 | Option B: derived portions + combined distribution GPLv3; MIT notices independen dipertahankan (§2.5) |
 
 ## 5. Backlog (bukan batch ini — tercatat biar tidak hilang)
 Kasta 3 autocomplete (jedi via Chaquopy), Problems Panel + `@codemirror/lint`, Humanizer traceback (L1), Saran-fix ber-diff (L2), Provider AI ala Colab (L3, keputusan strategis), Tier B tools (JSON Formatter, Regex Tester, Timer, ASCII Art), 10 tema + CRT, Keystore UI.

@@ -1,0 +1,51 @@
+ZCODE — licensing, provenance, and modification notice
+Copyright (C) 2026 ZCODE contributors
+
+Combined distribution
+---------------------
+ZCODE as a combined application is distributed under the GNU General Public
+License version 3 only (GPL-3.0-only). The unmodified official license text is
+in LICENSE and is packaged in the APK at assets/licenses/GPL-3.0.txt.
+
+ZABACODE-derived portions
+-------------------------
+ZCODE contains portions adapted from ZABACODE:
+
+  Project: ZABACODE
+  Upstream copyright:
+    Copyright (C) 2026 Zaqi (muzape28-blip) and ZABACODE Contributors
+  Upstream license: GNU General Public License version 3
+  Repository: https://github.com/muzape28-blip/ZABACODE
+  Source revision used for the identified ports:
+    1e334ff07e83938e9b9b5c038649736bb758ed5a
+
+Known derived areas include:
+
+  - app/src/main/python/zcode_plugins.py
+    adapted from zabacode/plugins/implementations.py;
+  - app/src/main/java/com/zaba/zcode/core/plugins/SnippetLibrary.kt and the
+    synchronized snippet definitions in editor-src/src/editor.js
+    adapted from SNIPPET_TEMPLATES in zabacode/plugins/registry.py.
+
+ZCODE changes include adapting the upstream transforms and templates to the
+Chaquopy/Kotlin/CodeMirror bridge, adding JSON/CLI entry points, document
+identity checks, Android integration, tests, diagnostics, and subsequent bug
+fixes. Git history preserves contributor-level authorship and later changes.
+
+Independently MIT-authored portions
+-----------------------------------
+Portions independently authored for ZCODE retain their historical MIT notice.
+The full MIT text is in LICENSES/MIT.txt and is packaged in the APK at
+assets/licenses/MIT.txt. MIT is GPL-compatible; distribution of the combined
+ZCODE application remains governed by GPL-3.0-only.
+
+Corresponding source and modifications
+--------------------------------------
+The preferred source form, build scripts, license notices, and modification
+history are available at:
+
+  https://github.com/muzape28-blip/ZCODE
+
+Release-specific source and exact tested artifacts are identified in each
+ZCODE GitHub Release and its release notes. This software is provided without warranty;
+see GPLv3 sections 15 and 16.

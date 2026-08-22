@@ -1,7 +1,14 @@
 # Roadmap v1.0.20 — One Optimized APK Performance Gate
 
 Tanggal audit: 2026-08-20
-Status: **OPTIMIZED BUILD CI + DEVICE VERIFIED; terminal keyboard fix LOCALLY VERIFIED**
+Status: **HISTORICAL PLAN — v1.0.20 PRODUCTION CI VERIFIED AND RELEASED**
+
+> Evidence correction 2026-08-21: production run `32472551816` succeeded and
+> public release `v1.0.20` was published at `2026-08-21T11:07:48Z`. The repo
+> still does not contain the final physical-device production UAT report or an
+> independent re-download signer/hash verification. “Released” must not be read
+> as those missing evidence levels.
+
 Basis: `main` merge commit `cd982da` (v1.0.19 correctness/stability)
 Target branch saat implementasi: `arena/v1020-performance`
 
@@ -1577,12 +1584,12 @@ Mutation proof                   : 21 RED→GREEN
 Full local gate                  : 620 PASSED
 Kotlin lexical sanity            : 61 files
 npm/editor supply-chain          : PASSED
-Production compiler CI           : PENDING
-Production signed CI             : PENDING
-GitHub environment secrets       : NOT CONFIGURED
-Production APK signed            : NO
-Production device UAT            : NO
-Public release                   : NO
+Production compiler CI           : VERIFIED — PR run 32466566588
+Production signed CI             : VERIFIED — run 32472551816
+GitHub environment secrets       : USER VERIFIED — 4 names
+Production APK signed            : YES — expected signer matched
+Production device UAT            : PASS — crash none
+Public release                   : YES — v1.0.20
 ```
 
 ## 9.6 Production UAT
@@ -1599,4 +1606,53 @@ pure Python run + terminal input/^C
 native package/rebirth sanity
 close/reopen workspace persistence
 Diagnostics/Crash final check
+```
+
+## 9.7 FINAL v1.0.20 release evidence
+
+```text
+Release           : https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.20
+Release ID        : 374327958
+Tag/target/main   : 55860ff8059fd1b26e268a53dd3178126e80fbb3
+Published at      : 2026-08-21T11:07:48Z
+Draft             : false
+Prerelease        : false
+Production runs   : 1
+Production run    : 32472551816 — SUCCESS
+User artifact ID  : 9443261439
+Artifact archive  : sha256:ddb9af70a4fab1c7ae206b885b69da6becc1ba6e781ebee9db57ab7ae576f201
+Technical ID      : 9443262157
+Technical archive : sha256:9e2011a85804dc1667f8ada904b86a76b00dd9e9b96199a4e2f960a6a203436f
+Public APK asset  : 523592433 — 34,682,027 bytes
+Public APK SHA-256:
+b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed
+Signer SHA-256:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+```
+
+Verification:
+
+- all production workflow steps succeeded, including signer comparison, draft
+  creation, and `shred -u` cleanup;
+- exactly three public assets exist: APK, APK checksum, signer report;
+- user `sha256sum -c` returned `ZCODE-v1.0.20.apk: OK` on the draft bytes;
+- user reported Production UAT PASS and Crash NONE;
+- public APK downloaded independently after publication produced the exact same
+  SHA-256 as the UAT APK and GitHub asset digest;
+- public signer report matches the recorded production certificate;
+- APK includes CodeMirror and Chaquopy assets for `armeabi-v7a`, `arm64-v8a`,
+  and `x86_64`;
+- no second production workflow/rebuild occurred;
+- post-release evidence guard was mutation-proven: removing the RELEASED claim
+  turned the intended test red, then restore returned green.
+
+Final status:
+
+```text
+v1.0.20 optimized foundation : MERGED
+Production signer             : VERIFIED
+Production exact-byte UAT     : DEVICE VERIFIED
+Public release                : RELEASED
+Update continuity             : NOT YET DEVICE VERIFIED
+Workbench v1.0.25             : PARKED
 ```

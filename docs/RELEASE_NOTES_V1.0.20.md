@@ -1,8 +1,10 @@
 # ZCODE v1.0.20
 
-The production workflow attaches one signed APK to a private draft release.
-That draft is published only after the exact APK bytes pass device UAT; no
-rebuild occurs between testing and publication.
+v1.0.20 was published on 2026-08-21 from production workflow commit
+`55860ff8059fd1b26e268a53dd3178126e80fbb3`. The workflow and public release are
+evidenced; this repository does not contain a final physical-device UAT report
+or an independent post-publication re-download signer/hash verification. The
+one-build contract attached the signed draft bytes without a promotion rebuild.
 
 ```text
 Package      : com.zaba.zcode
@@ -15,6 +17,15 @@ Chaquopy     : 17.0.0
 R8           : enabled, compatibility mode
 Obfuscation  : disabled
 Resource trim: disabled
+```
+
+```text
+Production CI run : 32472551816 — SUCCESS
+Public release    : v1.0.20 — RELEASED
+Published at      : 2026-08-21T11:07:48Z
+APK asset         : ZCODE-v1.0.20.apk (34,682,027 bytes)
+Device UAT log    : NOT EVIDENCED IN REPO
+Independent hash : NOT VERIFIED BY REPO AUDIT
 ```
 
 ## Highlights

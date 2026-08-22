@@ -346,7 +346,11 @@ class PackageEngineV2(private val context: Context) {
                 val staging = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
                 val res = Verifier.extractWheel(wheelFile, staging) { n -> onStep(Step.Message("${p.canonicalName}: $n files...", SemanticLogKind.WAIT)) }
                 if (!res.ok) return fail("EXTRACT", "extract", res.error ?: "Ekstraksi gagal.", null)
-                val (metaRes, meta) = Verifier.validateWheelMeta(staging)
+                val (metaRes, meta) = Verifier.validateWheelMeta(
+                    staging,
+                    expectedName = p.canonicalName,
+                    expectedVersion = p.version,
+                )
                 if (!metaRes.ok) return fail("VERIFY", "extract", metaRes.error ?: "Metadata invalid.", null)
                 onStep(Step.Message("${p.canonicalName}: metadata OK (${meta?.name} ${meta?.version})", SemanticLogKind.OK))
             }
@@ -435,8 +439,16 @@ class PackageEngineV2(private val context: Context) {
                                 onStep(Step.Message("${sp.canonicalName}: $m", SemanticLogKind.WAIT))
                             }
                             if (!dl.first) {
-                                return fail("DOWNLOAD", "download",
-                                    "Gagal mengunduh pustaka pendukung ${sp.canonicalName}: ${dl.second}", null)
+                                // Cancellation must stay a first-class outcome,
+                                // not a generic download failure (mirrors the
+                                // main package loop above).
+                                return if (dl.second == "CANCELLED") {
+                                    fail("CANCELLED", "download",
+                                        "Instalasi dibatalkan. Tidak ada package yang diubah.", null)
+                                } else {
+                                    fail("DOWNLOAD", "download",
+                                        "Gagal mengunduh pustaka pendukung ${sp.canonicalName}: ${dl.second}", null)
+                                }
                             }
                             sha = sha ?: dl.second
                         }
@@ -445,6 +457,19 @@ class PackageEngineV2(private val context: Context) {
                         if (!res.ok) {
                             return fail("EXTRACT", "extract",
                                 "Gagal mengekstrak ${sp.canonicalName}: ${res.error}", null)
+                        }
+                        val (supportMeta, _) = Verifier.validateWheelMeta(
+                            staging,
+                            expectedName = sp.canonicalName,
+                            expectedVersion = sp.version,
+                        )
+                        if (!supportMeta.ok) {
+                            return fail(
+                                "VERIFY",
+                                "extract",
+                                "Metadata ${sp.canonicalName} invalid: ${supportMeta.error}",
+                                null,
+                            )
                         }
                         planPackages.add(
                             TransactionManager.PlanPackage(
@@ -613,10 +638,17 @@ class PackageEngineV2(private val context: Context) {
 
             // 8. Activate (atomic-ish + rollback)
             onStep(Step.Begin("Activate"))
-            val (actOk, actMsg) = txManager.activate(tx, planPackages) { m -> onStep(Step.Message(m)) }
-            if (!actOk) {
-                // activate() sudah melakukan rollback + journal ROLLED_BACK
-                return fail("ACTIVATION", "activation", "Aktivasi gagal: $actMsg", null, alreadyRolledBack = true)
+            val activation = txManager.activate(tx, planPackages) { m -> onStep(Step.Message(m)) }
+            if (!activation.ok) {
+                // activate() deletes only unreferenced new generations; old state
+                // and old active directories remain authoritative.
+                return fail(
+                    "ACTIVATION",
+                    "activation",
+                    activation.message,
+                    null,
+                    alreadyRolledBack = activation.oldEnvironmentPreserved,
+                )
             }
             onStep(Step.Finish("Activate", FinishResult.OK))
 
@@ -628,7 +660,17 @@ class PackageEngineV2(private val context: Context) {
 
             // 9. Sync SQLite + telemetri sukses
             for (p in planPackages) {
-                db.upsertInstalled(p.canonicalName, p.version, "site-packages/${p.canonicalName}/${p.version}", p.source, p.sha256)
+                val activePath = activation.activatedPaths.getValue(p.canonicalName)
+                runCatching {
+                    db.upsertInstalled(p.canonicalName, p.version, activePath, p.source, p.sha256)
+                }.onFailure { error ->
+                    // installed.json is the source of truth. A secondary SQLite
+                    // cache failure after commit must not report a false rollback.
+                    onStep(Step.Message(
+                        "cache SQLite ${p.canonicalName} belum sinkron: ${error.message}",
+                        SemanticLogKind.WARN,
+                    ))
+                }
             }
             TelemetryStore.increment("install_success")
             TelemetryStore.increment("packages_installed", planPackages.size.toLong())
@@ -851,21 +893,26 @@ class PackageEngineV2(private val context: Context) {
         canonicalName: String,
         onLog: (SemanticLog) -> Unit
     ): Pair<Boolean, String> {
-        val canonical = canonicalName.lowercase().replace("_", "-")
-        val installed = repository.installedSnapshot()[canonical]
-        val installedDir = installed?.path?.let { File(Paths.pythonEnvDir(context), it) }
-        val hadNative = installedDir?.takeIf { it.isDirectory }
-            ?.walkTopDown()?.any { it.isFile && it.name.contains(".so") } == true
-        val tx = TransactionManager(context)
-        val result = tx.uninstall(canonical, onLog)
-        if (result.first) {
-            db.deleteInstalled(canonical)
-            TelemetryStore.increment("uninstall_count")
-            if (hadNative) {
-                NativeRuntimeState.markRequired(context, listOf(canonical), "native-uninstall")
+        if (!tryAcquire()) return false to "Operasi package lain masih berjalan."
+        try {
+            val canonical = canonicalName.lowercase().replace("_", "-")
+            val installed = repository.installedSnapshot()[canonical]
+            val installedDir = installed?.path?.let { File(Paths.pythonEnvDir(context), it) }
+            val hadNative = installedDir?.takeIf { it.isDirectory }
+                ?.walkTopDown()?.any { it.isFile && it.name.contains(".so") } == true
+            val tx = TransactionManager(context)
+            val result = tx.uninstall(canonical, onLog)
+            if (result.first) {
+                runCatching { db.deleteInstalled(canonical) }
+                TelemetryStore.increment("uninstall_count")
+                if (hadNative) {
+                    NativeRuntimeState.markRequired(context, listOf(canonical), "native-uninstall")
+                }
             }
+            return result
+        } finally {
+            release()
         }
-        return result
     }
 
     /**

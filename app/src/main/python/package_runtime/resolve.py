@@ -680,7 +680,7 @@ def _local_wheel_candidates(wheels_dir: str, name: str) -> list[dict]:
     """Sumber 1: cache wheel lokal (offline reuse)."""
     import os
     out = []
-    cname = canonicalize_name(name).replace("-", "_")
+    requested_name = canonicalize_name(name)
     if not wheels_dir or not os.path.isdir(wheels_dir):
         return out
     for fn in sorted(os.listdir(wheels_dir)):
@@ -690,10 +690,10 @@ def _local_wheel_candidates(wheels_dir: str, name: str) -> list[dict]:
             info = parse_wheel(fn)
         except Exception:
             continue
-        if info["name"].lower().replace("_", "-") != name.lower().replace("-", "_"):
-            # cocok via canonical name dari filename
-            if canonicalize_name(info["name"]) != cname:
-                continue
+        # PEP 503 normalization treats runs of '-', '_' and '.' identically.
+        # Never mix a hyphen canonical name with an underscore-normalized side.
+        if canonicalize_name(info["name"]) != requested_name:
+            continue
         out.append({
             "filename": fn,
             "url": "file://" + os.path.join(wheels_dir, fn),
@@ -716,6 +716,7 @@ def _resolve_unlocked(
     marker_env: dict | None = None,
     tested_versions: dict | None = None,
     max_depth: int = _MAX_DEPTH,
+    max_packages: int = _MAX_PACKAGES,
 ):
     """
     Resolve requirement + seluruh dependensinya → plan install (wheel-only).
@@ -796,6 +797,13 @@ def _resolve_unlocked(
     # mendapat daftar versi yang sudah basi.
     clear_metadata_cache()
     seen: set[str] = set()
+    queued_names: set[str] = set()
+    if max_packages < 1:
+        raise ResolveError(
+            "DEPENDENCY_LIMIT", "resolve",
+            "Batas jumlah package resolver tidak valid.",
+            "max_packages=%s" % max_packages,
+        )
     env = dict(marker_env) if marker_env else {}
     if "python_version" not in env:
         import sys
@@ -812,6 +820,14 @@ def _resolve_unlocked(
         key = (cname, specifier or "*", tuple(sorted(extras)))
         if key in seen or depth > max_depth:
             return
+        if cname not in queued_names:
+            if len(queued_names) >= max_packages:
+                raise ResolveError(
+                    "DEPENDENCY_LIMIT", "resolve",
+                    "Dependency graph melebihi batas aman %d package." % max_packages,
+                    "next=%s parent=%s depth=%d" % (cname, parent, depth),
+                )
+            queued_names.add(cname)
         seen.add(key)
 
         _check_cancelled()

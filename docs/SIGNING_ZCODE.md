@@ -2,9 +2,9 @@
 
 **Tanggal identitas dibuat:** 2026-08-21
 **Production package yang dicadangkan:** `com.zaba.zcode`
-**Status:** key dibuat dan entry diverifikasi; production workflow source sudah
-dirancang fail-closed, tetapi GitHub Environment secrets dan CI signing belum
-dikonfigurasi/diverifikasi; belum pernah dipakai menandatangani release publik.
+**Status:** production identity aktif. Workflow fail-closed telah menandatangani
+satu APK v1.0.20, fingerprint cocok, exact bytes lulus device UAT, dan release
+publik diterbitkan dari draft yang sama tanpa rebuild.
 
 ## 1. Public certificate metadata
 
@@ -62,17 +62,18 @@ PRIVATE KEY ENTRY           : USER VERIFIED
 PUBLIC FINGERPRINT          : RECORDED
 OFF-DEVICE COPIES           : USER REPORTED (2 accounts)
 BYTE-FOR-BYTE RECOVERY DRILL: NOT EVIDENCED IN REPO
-PRODUCTION WORKFLOW SOURCE  : IMPLEMENTED LOCALLY
-GITHUB ENVIRONMENT SECRETS  : NOT CONFIGURED
-CI PRODUCTION SIGNING       : NOT CONFIGURED
-PRODUCTION APK SIGNED       : NO
-PUBLIC RELEASE              : NO
+PRODUCTION WORKFLOW SOURCE  : MERGED
+GITHUB ENVIRONMENT SECRETS  : USER VERIFIED (4 names)
+CI PRODUCTION SIGNING       : VERIFIED — run 32472551816
+PRODUCTION APK SIGNED       : YES
+PRODUCTION DEVICE UAT       : PASS — user report, crash none
+PUBLIC RELEASE              : YES — v1.0.20
 ```
 
-Sebelum release publik pertama, recovery drill wajib membuktikan bahwa satu
-backup dapat diekstrak, dibaca sebagai `PrivateKeyEntry`, dan menghasilkan
-fingerprint SHA-256 yang sama. Jangan menyimpan hasil ekstrak lebih lama dari
-keperluan drill.
+Recovery drill tetap wajib meskipun release pertama sudah terbit: satu backup
+harus dibuktikan dapat diekstrak, dibaca sebagai `PrivateKeyEntry`, dan
+menghasilkan fingerprint SHA-256 yang sama. Bukti drill tersebut belum tersimpan
+di repo. Jangan menyimpan hasil ekstrak lebih lama dari keperluan drill.
 
 ## 4. RC signing tidak memakai production key
 
@@ -87,11 +88,12 @@ identity belum tersentuh dan mencegah secret production tersedia pada workflow
 branch/PR. Signature RC dapat berubah antar-run sehingga update mungkin meminta
 uninstall; RC bukan tempat satu-satunya menyimpan project penting.
 
-## 5. Production workflow contract — source implemented, CI pending
+## 5. Production workflow contract
 
-Workflow source menerapkan kontrak berikut, tetapi belum boleh disebut berhasil
-sebelum berada di default branch, environment secrets dipasang langsung oleh
-user, dan signed artifact lulus verifikasi:
+Pola ini **CI VERIFIED untuk v1.0.20**. Revisi hardening v1.0.21 masih berstatus
+IMPLEMENTED pada branch sampai canonical CI dan signed draft menjalankannya.
+Setiap versi baru harus diverifikasi ulang; keberhasilan v1.0.20 bukan bukti
+otomatis bagi v1.0.21:
 
 1. hanya berjalan dari tag/version yang disetujui;
 2. memakai GitHub Environment terproteksi + approval;
@@ -99,12 +101,13 @@ user, dan signed artifact lulus verifikasi:
 4. membatasi setiap secret ke step minimum—jangan job-level `env`;
 5. mendekode keystore hanya ke `$RUNNER_TEMP`;
 6. tidak mencetak password, base64, atau keystore path sensitif;
-7. build satu optimized production APK/AAB;
+7. build satu optimized production APK dan menjalankan JVM tests;
 8. menjalankan `apksigner verify --verbose --print-certs`;
 9. membandingkan fingerprint signer dengan nilai publik di dokumen ini;
 10. menghasilkan SHA-256 artifact;
-11. menghapus keystore sementara pada `always()` cleanup;
-12. baru membuat GitHub Release setelah seluruh verifikasi hijau.
+11. menghapus keystore dalam shell step yang sama **sebelum** upload/release action;
+12. memverifikasi key tetap tidak ada pada cleanup akhir;
+13. baru membuat draft GitHub Release setelah seluruh verifikasi hijau.
 
 Nama secret yang direncanakan, tanpa nilai:
 
@@ -138,3 +141,34 @@ fingerprint tetap sama, lalu pertahankan backup asli sampai recovery terbukti.
   https://support.google.com/googleplay/android-developer/answer/9842756
 - GitHub deployment environments:
   https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
+
+## 8. v1.0.20 production evidence
+
+```text
+Workflow run       : 32472551816 — SUCCESS
+Source commit/tag  : 55860ff8059fd1b26e268a53dd3178126e80fbb3
+Release URL        : https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.20
+Published          : 2026-08-21T11:07:48Z
+APK asset ID       : 523592433
+APK bytes          : 34,682,027
+APK SHA-256        :
+b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed
+Certificate SHA-256:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+Signature scheme   : APK Signature Scheme v2 verified
+```
+
+Evidence chain:
+
+1. workflow verified exactly one release APK, package/version/assets, and signer;
+2. user downloaded the draft APK and `sha256sum -c` returned `OK`;
+3. user reported production UAT PASS and no crash;
+4. the existing draft was published without another production workflow run;
+5. unauthenticated public download was hashed independently and matched the
+   user's UAT hash exactly;
+6. GitHub release asset digest also reports the same APK SHA-256;
+7. temporary CI keystore cleanup step succeeded.
+
+Production workflow run count at publication: **1**. This proves the one-build
+contract for v1.0.20. It does not yet prove update continuity; that requires a
+future `com.zaba.zcode` version with a higher versionCode and the same signer.

@@ -3,8 +3,9 @@ package com.zaba.zcode.core.plugins
 /**
  * SnippetLibrary — Snippet Pack (batch anti-sepi, S5).
  *
- * Template di-port dari SNIPPET_TEMPLATES ZABACODE (GPLv3, same author —
- * lihat docs/PLAN_BATCH_ANTI_SEPI.md §2.5).
+ * Template diturunkan dari SNIPPET_TEMPLATES ZABACODE (GPLv3), copyright
+ * Zaqi (muzape28-blip) and ZABACODE Contributors. Lihat root NOTICE untuk
+ * source revision dan perubahan ZCODE.
  *
  * CATATAN SINKRONISASI: konten di sini IDENTIK dengan array SNIPPETS di
  * editor-src/src/editor.js (item autocomplete). Bila diedit, ubah keduanya

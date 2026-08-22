@@ -1,12 +1,16 @@
 package com.zaba.zcode.core.packageengine
 
 import android.content.Context
+import android.util.AtomicFile
+import com.zaba.zcode.core.diagnostics.Breadcrumb
 import com.zaba.zcode.core.files.Paths
 import com.zaba.zcode.core.logging.SemanticLog
 import com.zaba.zcode.core.logging.SemanticLogKind
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -41,6 +45,15 @@ class TransactionManager(private val context: Context) {
         val filename: String? = null,
         /** Pustaka pendukung native (.so saja) — bukan modul Python. */
         val supportLibrary: Boolean = false
+    )
+
+    data class ActivationResult(
+        val ok: Boolean,
+        val message: String,
+        /** canonical package name -> path relative to python-env. */
+        val activatedPaths: Map<String, String> = emptyMap(),
+        /** True only when the old state and directories remain authoritative. */
+        val oldEnvironmentPreserved: Boolean = true,
     )
 
     private val counter = AtomicLong(0)
@@ -89,82 +102,145 @@ class TransactionManager(private val context: Context) {
     }
 
     /**
-     * Aktivasi staging → environment aktif.
-     * Backup installed.json dulu; setiap kegagalan pertengahan → rollback otomatis.
+     * Activate verified staging with generation directories.
+     *
+     * Old active directories are never touched before the atomic installed.json
+     * commit. Every install, including same-version reinstall, receives a unique
+     * final generation path. Therefore a copy/move/state failure can delete only
+     * unreferenced new data while the old state remains executable.
      */
     fun activate(
         tx: Transaction,
         packages: List<PlanPackage>,
         onLog: (String) -> Unit
-    ): Pair<Boolean, String> {
-        val sitePkgs = Paths.pythonSitePackages(context)
-        val stateDir = Paths.pythonState(context)
-        val installedFile = File(stateDir, "installed.json")
-        val backupFile = File(stateDir, "installed.json.bak")
-
-        // 1. backup state
-        try {
-            if (installedFile.exists()) {
-                installedFile.copyTo(backupFile, overwrite = true)
-            } else {
-                backupFile.delete()
-            }
-        } catch (e: Exception) {
-            return false to "Backup installed.json gagal: ${e.message}"
+    ): ActivationResult {
+        if (packages.isEmpty()) return ActivationResult(false, "Rencana aktivasi kosong.")
+        if (packages.map { it.canonicalName }.distinct().size != packages.size) {
+            return ActivationResult(false, "Rencana aktivasi memuat package duplikat.")
         }
 
-        // 2. baca state lama
+        val sitePkgs = Paths.pythonSitePackages(context)
+        val installedFile = File(Paths.pythonState(context), "installed.json")
         val current = try {
+            recoverAtomicFile(installedFile)
             if (installedFile.exists()) JSONObject(installedFile.readText()) else JSONObject()
         } catch (e: Exception) {
-            JSONObject()
+            return ActivationResult(false, "State installed.json lama tidak valid: ${e.message}")
         }
 
-        // 3. pindahkan staging per package (track yang sudah dipindah utk rollback)
-        val moved = mutableListOf<File>()
+        data class Prepared(
+            val plan: PlanPackage,
+            val source: File,
+            val incoming: File,
+            val finalDir: File,
+            val relativePath: String,
+        )
+
+        val prepared = mutableListOf<Prepared>()
+        val generation = tx.id.filter { it.isLetterOrDigit() || it == '_' }.takeLast(48)
+
+        // Phase A: prepare complete incoming trees while every currently active
+        // generation remains untouched.
         try {
             for (p in packages) {
-                val versionDir = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
-                if (!versionDir.exists()) {
-                    return rollbackActivate(tx, moved, backupFile, installedFile, "Staging tidak lengkap untuk ${p.canonicalName}@${p.version}")
+                requireSafePackageName(p.canonicalName)
+                requireSafePathSegment(p.version, "version")
+                val source = File(tx.stagingSitePackages, "${p.canonicalName}/${p.version}")
+                if (!source.isDirectory) {
+                    throw IllegalStateException("Staging tidak lengkap untuk ${p.canonicalName}@${p.version}")
                 }
-                val target = File(sitePkgs, p.canonicalName)
-                if (target.exists()) target.deleteRecursively()
-                // BUG U (2026-08-16): zipfile Python TIDAK memulihkan permission
-                // saat ekstraksi (keterbatasan zipfile.extractall yang berumur
-                // 10+ tahun; pip menulis workaround serupa). Wheel pulp membundel
-                // binary solver `solverdir/cbc/linux/i32/cbc` yang keluar tanpa
-                // bit read → copyRecursively gagal `open failed: EACCES` dan
-                // SELURUH transaksi rollback. Normalisasi: semua file readable;
-                // file ber-magic ELF (\x7fELF) juga executable — memperbaiki
-                // kelas masalah untuk semua paket pembundel binary.
-                normalizePermissions(versionDir)
-                versionDir.copyRecursively(File(target, p.version), overwrite = true)
-                moved.add(target)
-                current.put(p.canonicalName, installedEntry(p, "site-packages/${p.canonicalName}/${p.version}"))
-                onLog("    activate: ${p.canonicalName}@${p.version}")
+                normalizePermissions(source)
+                val packageRoot = File(sitePkgs, p.canonicalName)
+                if (!packageRoot.exists() && !packageRoot.mkdirs()) {
+                    throw IllegalStateException("Folder package tidak dapat dibuat: ${p.canonicalName}")
+                }
+                val finalName = "${p.version}__zcode_$generation"
+                val incoming = File(packageRoot, ".incoming-$finalName")
+                val finalDir = File(packageRoot, finalName)
+                if (incoming.exists() || finalDir.exists()) {
+                    throw IllegalStateException("Generation target sudah ada untuk ${p.canonicalName}@${p.version}")
+                }
+                source.copyRecursively(incoming, overwrite = false)
+                verifyCopiedTree(source, incoming)
+                prepared += Prepared(
+                    p,
+                    source,
+                    incoming,
+                    finalDir,
+                    "site-packages/${p.canonicalName}/$finalName",
+                )
             }
-        } catch (e: Exception) {
-            return rollbackActivate(tx, moved, backupFile, installedFile, "Aktivasi gagal: ${e.message}")
+        } catch (error: Exception) {
+            prepared.forEach { runCatching { it.incoming.deleteRecursively() } }
+            runCatching { tx.dir.deleteRecursively() }
+            val reason = "Aktivasi dibatalkan; environment lama dipertahankan: " +
+                (error.message ?: error.javaClass.simpleName)
+            journal(tx.id, "install", "ROLLED_BACK", "ACTIVATION", reason)
+            return ActivationResult(false, reason, oldEnvironmentPreserved = true)
         }
 
-        // 4. tulis state baru (temp + rename)
-        try {
-            val tmp = File(stateDir, "installed.json.tmp")
-            tmp.writeText(current.toString())
-            if (!tmp.renameTo(installedFile)) {
-                installedFile.writeText(current.toString())
-                tmp.delete()
-            }
-            backupFile.delete()
-        } catch (e: Exception) {
-            return rollbackActivate(tx, moved, backupFile, installedFile, "Tulis state gagal: ${e.message}")
+        val next = JSONObject(current.toString())
+        for (item in prepared) {
+            next.put(item.plan.canonicalName, installedEntry(item.plan, item.relativePath))
         }
 
-        // 5. bersihkan staging + jurnal sukses
-        tx.dir.deleteRecursively()
-        journal(tx.id, "install", "SUCCESS", null, null)
-        return true to "OK"
+        // Phase B + COMMIT BOUNDARY. The helper may roll back only before the
+        // AtomicFile state commit returns. No post-commit callback lives here.
+        val committed = ActivationCommitBoundary.promoteAndCommit(
+            prepared.map { ActivationCommitBoundary.Generation(it.incoming, it.finalDir) }
+        ) {
+            writeAtomicFile(installedFile, next.toString().toByteArray(Charsets.UTF_8))
+        }
+        if (committed.isFailure) {
+            runCatching { tx.dir.deleteRecursively() }
+            val error = committed.exceptionOrNull()
+            val reason = "Aktivasi dibatalkan; environment lama dipertahankan: " +
+                (error?.message ?: error?.javaClass?.simpleName ?: "commit gagal")
+            journal(tx.id, "install", "ROLLED_BACK", "ACTIVATION", reason)
+            return ActivationResult(false, reason, oldEnvironmentPreserved = true)
+        }
+
+        // COMMITTED: installed.json now authoritatively points at finalDir.
+        // Cleanup/log/journal failures may leave stale storage or missing logs,
+        // but must never enter pre-commit rollback or delete active finalDir.
+        val postCommitSteps = mutableListOf<Pair<String, () -> Unit>>()
+        for (item in prepared) {
+            postCommitSteps.add("cleanup ${item.plan.canonicalName}" to {
+                val packageRoot = item.finalDir.parentFile
+                    ?: throw IllegalStateException("Package root hilang")
+                packageRoot.listFiles()?.forEach { candidate ->
+                    if (candidate != item.finalDir && !candidate.name.startsWith(".incoming-")) {
+                        if (!candidate.deleteRecursively() && candidate.exists()) {
+                            throw IllegalStateException("Generation lama gagal dibersihkan: ${candidate.name}")
+                        }
+                    }
+                }
+            })
+            postCommitSteps.add("log ${item.plan.canonicalName}" to {
+                onLog("    activate: ${item.plan.canonicalName}@${item.plan.version}")
+            })
+        }
+        postCommitSteps.add("transaction cleanup" to {
+            if (!tx.dir.deleteRecursively() && tx.dir.exists()) {
+                throw IllegalStateException("Transaction staging gagal dibersihkan")
+            }
+        })
+        postCommitSteps.add("journal success" to {
+            journal(tx.id, "install", "SUCCESS", null, null)
+        })
+        val warnings = ActivationCommitBoundary.runBestEffort(postCommitSteps)
+        if (warnings.isNotEmpty()) {
+            runCatching {
+                Breadcrumb.log("PKG_ACTIVATION_POST_COMMIT_WARN", warnings.joinToString(" | "))
+            }
+        }
+
+        return ActivationResult(
+            ok = true,
+            message = if (warnings.isEmpty()) "OK" else "OK; post-commit warning: ${warnings.joinToString(" | ")}",
+            activatedPaths = prepared.associate { it.plan.canonicalName to it.relativePath },
+            oldEnvironmentPreserved = false,
+        )
     }
 
     /**
@@ -201,29 +277,71 @@ class TransactionManager(private val context: Context) {
         return o
     }
 
-    private fun rollbackActivate(
-        tx: Transaction,
-        moved: List<File>,
-        backupFile: File,
-        installedFile: File,
-        reason: String
-    ): Pair<Boolean, String> {
-        // hapus yang baru dipindah
-        moved.forEach { it.deleteRecursively() }
-        // pulihkan state lama
-        try {
-            if (backupFile.exists()) {
-                backupFile.copyTo(installedFile, overwrite = true)
-                backupFile.delete()
-            } else {
-                installedFile.delete()
-            }
-        } catch (e: Exception) {
-            // state bisa rusak — catat via journal
+    private fun requireSafePackageName(name: String) {
+        if (!Regex("^[a-z0-9]+(?:-[a-z0-9]+)*$").matches(name)) {
+            throw IllegalArgumentException("Nama package tidak aman: $name")
         }
-        tx.dir.deleteRecursively()
-        journal(tx.id, "install", "ROLLED_BACK", "ACTIVATION", reason)
-        return false to reason
+    }
+
+    private fun requireSafePathSegment(value: String, label: String) {
+        if (value.isBlank() || value == "." || value == ".." ||
+            '/' in value || '\\' in value || value.indexOf(0.toChar()) >= 0
+        ) {
+            throw IllegalArgumentException("$label path tidak aman")
+        }
+    }
+
+    /** Compare directories by relative path, type, size, and SHA-256. */
+    private fun verifyCopiedTree(source: File, copied: File) {
+        fun snapshot(root: File): Map<String, String> = root.walkTopDown()
+            .filter { it != root }
+            .associate { item ->
+                val relative = item.relativeTo(root).invariantSeparatorsPath
+                val value = if (item.isDirectory) {
+                    "dir"
+                } else {
+                    "file:${item.length()}:${sha256(item)}"
+                }
+                relative to value
+            }
+        if (snapshot(source) != snapshot(copied)) {
+            throw IllegalStateException("Verifikasi tree hasil copy gagal")
+        }
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = input.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun writeAtomicFile(file: File, bytes: ByteArray) {
+        file.parentFile?.mkdirs()
+        val atomic = AtomicFile(file)
+        var output: FileOutputStream? = null
+        try {
+            output = atomic.startWrite()
+            output.write(bytes)
+            output.fd.sync()
+            atomic.finishWrite(output)
+            output = null
+        } catch (e: Exception) {
+            output?.let { atomic.failWrite(it) }
+            throw e
+        }
+    }
+
+    private fun recoverAtomicFile(file: File) {
+        val backup = File(file.path + ".bak")
+        if (!file.exists() && !backup.exists()) return
+        AtomicFile(file).openRead().use { /* opening restores an interrupted backup */ }
     }
 
     /** Abort sebelum aktivasi: hapus staging, environment tidak tersentuh. */
@@ -240,26 +358,52 @@ class TransactionManager(private val context: Context) {
         val stateDir = Paths.pythonState(context)
         val installedFile = File(stateDir, "installed.json")
         return try {
+            recoverAtomicFile(installedFile)
             if (!installedFile.exists()) return false to "installed.json tidak ada"
             val root = JSONObject(installedFile.readText())
             val meta = root.optJSONObject(canonicalName) ?: return false to "Package '$canonicalName' tidak terpasang"
             val relPath = meta.optString("path")
-            val dir = if (relPath.isNotBlank()) File(sitePkgs, relPath.removePrefix("site-packages/")) else File(sitePkgs, canonicalName)
-            if (dir.exists()) dir.deleteRecursively()
-            root.remove(canonicalName)
-            val tmp = File(stateDir, "installed.json.tmp")
-            tmp.writeText(root.toString())
-            if (!tmp.renameTo(installedFile)) {
-                installedFile.writeText(root.toString())
-                tmp.delete()
+            val expectedPrefix = "site-packages/$canonicalName/"
+            if (!relPath.startsWith(expectedPrefix)) {
+                return false to "Path package aktif tidak aman; uninstall dibatalkan"
             }
+            val dir = File(Paths.pythonEnvDir(context), relPath).canonicalFile
+            val safeRoot = sitePkgs.canonicalFile
+            if (dir.parentFile?.parentFile != safeRoot) {
+                return false to "Path package aktif keluar dari site-packages; uninstall dibatalkan"
+            }
+
+            // Commit removal from the active pointer first. If state write fails,
+            // the executable directory remains untouched and uninstall is false.
+            root.remove(canonicalName)
+            writeAtomicFile(installedFile, root.toString().toByteArray(Charsets.UTF_8))
+            val deleted = !dir.exists() || dir.deleteRecursively()
+            dir.parentFile?.takeIf { it != sitePkgs && it.listFiles().isNullOrEmpty() }?.delete()
             onLog(SemanticLog(
-                "uninstall: $canonicalName dihapus",
-                SemanticLogKind.INFO
+                if (deleted) "uninstall: $canonicalName dihapus"
+                else "uninstall: $canonicalName nonaktif; sisa direktori gagal dibersihkan",
+                if (deleted) SemanticLogKind.INFO else SemanticLogKind.WARN
             ))
-            true to "OK"
+            true to if (deleted) "OK" else "OK; package nonaktif tetapi cleanup direktori tertunda"
         } catch (e: Exception) {
             false to "Uninstall gagal: ${e.message}"
+        }
+    }
+
+    companion object {
+        /**
+         * Complete AtomicFile recovery before Python or UI reads installed.json
+         * directly. Returns false only when recovery itself fails.
+         */
+        fun recoverInstalledState(context: Context): Boolean = try {
+            val file = File(Paths.pythonState(context), "installed.json")
+            val backup = File(file.path + ".bak")
+            if (file.exists() || backup.exists()) {
+                AtomicFile(file).openRead().use { /* restore backup if needed */ }
+            }
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 }

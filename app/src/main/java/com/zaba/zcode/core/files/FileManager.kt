@@ -24,7 +24,11 @@ object FileManager {
     }
 
     fun listFiles(filesDir: File): List<Map<String, Any>> =
-        filesDir.listFiles { f -> f.name.endsWith(".py") && !f.name.startsWith(".") && !f.name.startsWith("_") }
+        filesDir.listFiles { f ->
+            f.isFile && f.name.endsWith(".py") &&
+                !f.name.startsWith(".") && !f.name.startsWith("_")
+        }
+            ?.sortedBy { it.name }
             ?.map { mapOf("name" to it.name, "size" to it.length()) } ?: emptyList()
 
     fun readFile(filesDir: File, filename: String): Result<String> {

@@ -260,8 +260,11 @@ fun WorkbenchScreen(
                 pushCode()
             }
             "optimize_imports" -> {
-                vm.optimizeActiveImports()
-                pushCode()
+                toast("Memeriksa imports…")
+                vm.optimizeActiveImports { ok, report ->
+                    if (ok) pushCode()
+                    toast(if (ok) report else "Gagal: $report")
+                }
             }
             "duplicate_line" -> {
                 webViewRef.value?.evaluateJavascript("duplicateRows();", null)
@@ -604,7 +607,14 @@ fun WorkbenchScreen(
                         com.zaba.zcode.core.diagnostics.Breadcrumb.log("FAB_TAP", vm.activeFile ?: "-")
                         // BEHAVIOR auto_trim_on_run berjalan di sini (F5)
                         vm.applyAutoTrimIfEnabled()
-                        vm.flushSaveSync()
+                        if (!vm.flushSaveSync()) {
+                            com.zaba.zcode.core.diagnostics.Breadcrumb.log(
+                                "RUN_SAVE_FAIL",
+                                vm.activeFile ?: "-",
+                            )
+                            toast("Run dibatalkan: file terbaru gagal disimpan. Coba Save lalu lihat Diagnostics.")
+                            return@FloatingActionButton
+                        }
                         com.zaba.zcode.core.diagnostics.Breadcrumb.log("SAVE_OK")
                         showTerminalOverlay = true
                     },
@@ -888,13 +898,21 @@ fun WorkbenchScreen(
         AlertDialog(
             onDismissRequest = { confirmClearAll = false },
             title = { Text("Clear All Drafts & Files?", fontSize = 16.sp) },
-            text = { Text("Semua file .py di workspace akan dihapus. Tindakan ini tidak bisa dibatalkan.") },
+            text = {
+                Text(
+                    "${vm.workspaceFileCount()} file .py, termasuk tab yang sudah ditutup, " +
+                        "akan dipindahkan ke pemulihan privat. Pemulihan terakhir tersedia di Settings."
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClearAll = false
-                    webViewRef.value?.evaluateJavascript("clearDocumentStates();", null)
-                    vm.clearAllDrafts()
-                    pushCode()
+                    val (ok, message) = vm.clearAllDrafts()
+                    toast(message)
+                    if (ok) {
+                        webViewRef.value?.evaluateJavascript("clearDocumentStates();", null)
+                        pushCode()
+                    }
                 }) { Text("Clear All", color = Color(0xFFFFB4AB)) }
             },
             dismissButton = {

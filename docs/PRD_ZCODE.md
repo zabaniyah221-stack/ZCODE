@@ -12,11 +12,13 @@ dihadapi, bukti, kemampuan mengoperasikan solusi, biaya belajar/migrasi, risiko,
 acceptance criteria, dan jalan mundur. Tidak boleh berubah diam-diam hanya
 karena teknologi baru terlihat lebih menarik.
 
-Versi saat ini: `1.0.19` (`gradle.properties` = sumber tunggal)
-Terakhir diperbarui: 2026-08-20
-Revisi: 2026-08-20 — native-runtime auto-relaunch, semantic logs, dan uninstall
-final DEVICE VERIFIED; prinsip kemampuan tanpa paywall dan tanpa jalan buntu
-tetap berlaku. (PRD = pegangan, bukan acuan terkunci.)
+Versi produksi saat ini: `1.0.20` (`RELEASED + DEVICE VERIFIED`).
+Kandidat branch saat ini: `1.0.21` / versionCode 24 (`NOT RELEASED`).
+`gradle.properties` tetap sumber tunggal versi build.
+Terakhir diperbarui: 2026-08-22
+Revisi: v1.0.21 memprioritaskan data safety, update continuity, dan GPLv3
+Option B; updater sidebar/intelligence provider tetap di luar hotfix. PRD adalah
+pegangan yang mengikuti evidence, bukan klaim keberhasilan sebelum CI/device.
 
 ---
 
