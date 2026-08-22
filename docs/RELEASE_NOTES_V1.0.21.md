@@ -101,15 +101,27 @@ Saat notes ini ditulis:
 
 ```text
 Source implementation       : IMPLEMENTED
-Local Python/static gate     : LOCALLY VERIFIED
-Previous-branch debug CI     : CI VERIFIED — run 32542213874 on c84d48e
-compile-production-source    : SKIPPED on that run
-  reason                     : job if only matches arena/v1020-production PRs
-  compiler evidence          : already present via debug job
-                               ./gradlew testDebugUnitTest assembleDebug
-  live unskip                : BLOCKED — Arena GitHub App lacks workflows
-                               permission to update .github/workflows/build.yml
-  ready-to-upload source     : ci/pending/build.yml
+Local Python/static gate     : LOCALLY VERIFIED — 655 passed
+                               (re-verified 2026-08-22 on arena/01a02739-zcode
+                               at 0a0d471; mutation spot-checks red→green)
+Debug CI (compile+JVM test)  : CI VERIFIED
+                               run 32542213874 (c84d48e push)    build SUCCESS
+                               run 32545142292 (c84d48e push)    build SUCCESS
+                               run 32545286515 (0a0d471 push)    build SUCCESS
+                               run 32545291756 (0a0d471 PR)      build SUCCESS
+compile-production-source    : SKIPPED on all runs above
+  reason                     : v1.0.20 job gate matches only
+                               arena/v1020-production PRs — stale by design
+  compiler evidence          : not lost — the debug build job runs the
+                               stronger ./gradlew testDebugUnitTest assembleDebug
+  live unskip                : BLOCKED — GitHub rejected the agent push:
+                               "refusing to allow a GitHub App to create or
+                               update workflow `.github/workflows/build.yml`
+                               without `workflows` permission"
+                               (re-proven 2026-08-22 on this session branch)
+  ready-to-upload source     : ci/pending/build.yml — gate is now
+                               branch-agnostic: every arena/* PR, so it
+                               cannot go stale per release/session again
 Physical ARMv7 update        : NOT DEVICE VERIFIED
 Production signed draft      : NOT CREATED
 Public v1.0.21 release       : NOT RELEASED

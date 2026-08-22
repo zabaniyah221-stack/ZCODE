@@ -120,19 +120,13 @@ jobs:
           ls -lh app/build/outputs/apk/debug/ >> $GITHUB_STEP_SUMMARY || true
 
   compile-production-source:
-    # Compiler evidence for production-path source without assembling/uploading
-    # an APK. Release Kotlin still needs signing secrets, so this uses the
-    # official wrapper against the same tree. v1.0.20 only matched
-    # arena/v1020-production pull requests, which skipped this job on the
-    # v1.0.21 session push (run 32542213874).
-    if: >-
-      (github.event_name == 'pull_request' &&
-       (github.head_ref == 'arena/v1020-production' ||
-        github.head_ref == 'arena/v1021-production' ||
-        github.head_ref == 'arena/01a0272f-zcode')) ||
-      (github.event_name == 'push' &&
-       (github.ref == 'refs/heads/arena/v1021-production' ||
-        github.ref == 'refs/heads/arena/01a0272f-zcode'))
+    # Compiler evidence for arena PRs without assembling/uploading a Debug APK.
+    # v1.0.20 pinned this gate to one branch name and it silently skipped every
+    # later PR (runs 32542213874/32545142292). Gate on the arena/ prefix
+    # instead: rc/production PRs — whose Debug build job is suppressed — always
+    # keep compile evidence, and ordinary session PRs get the same labeled
+    # evidence in parallel with the Debug build.
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'arena/')
     runs-on: ubuntu-22.04
     needs: check
     permissions:

@@ -2085,3 +2085,49 @@ Sumber:
   https://docs.github.com/actions/deployment/targeting-different-environments/using-environments-for-deployment
 - GitHub CLI release creation:
   https://cli.github.com/manual/gh_release_create
+
+
+---
+
+## SKILL 27 — `.github/workflows/*` tidak bisa di-push bot Arena: staging `ci/pending` (2026-08-22)
+
+**Trigger:** job `compile-production-source` skipped diam-diam pada PR/patch
+v1.0.21 karena gate `if:` masih mencocokkan nama branch era v1.0.20
+(`arena/v1020-production`). Saat agent mencoba memperbaiki workflow langsung,
+GitHub menolak push dengan pesan persis:
+
+```text
+refusing to allow a GitHub App to create or update workflow
+`.github/workflows/build.yml` without `workflows` permission
+```
+
+Terverifikasi dua sesi berturut-turut (2026-08-21 dan 2026-08-22, branch
+`arena/01a0272f-zcode` lalu `arena/01a02739-zcode`). Commit workflow yang
+selama ini masuk ke repo (SHA pinning, gradlew) semuanya committer
+`GitHub <noreply@github.com>` — artinya di-upload **user lewat web UI**,
+bukan di-push agent.
+
+### Aturan
+
+1. Agent TIDAK menulis/mengubah file di `.github/workflows/**`. Semua
+   perubahan workflow agent hanya lewat `ci/workflows/**` (mirror) atau
+   `ci/pending/**` (staging upload manual).
+2. Perubahan workflow yang menunggu upload manual hidup di
+   `ci/pending/<nama>.yml` + `ci/pending/README.md` berisi instruksi upload
+   dan bukti penolakan permission. README harus menyebut bahwa mirror
+   `ci/workflows/<nama>.yml` wajib di-update bersamaan agar guard mirror
+   tetap hijau.
+3. Gate job CI dilarang men-HARDCODE nama branch sesi/rilis
+   (`arena/01xxxxxx-zcode`, `arena/vNNNN-...`). Pakai pola
+   (`startsWith(github.head_ref, 'arena/')`) supaya gate tidak basi lagi di
+   sesi berikutnya. Guard test menolak nama branch di dalam gate.
+4. Sebelum menyebut "workflow tidak bisa diubah", BUKTIKAN dengan mencoba
+   push sekali dan mencatat pesan penolakannya (aturan SKILL 5: klaim
+   "tidak bisa" harus dibuktikan dengan mencoba).
+5. Job yang compile-evidence-nya sudah tercakup job lain (mis. debug build
+   menjalankan `testDebugUnitTest assembleDebug`) tidak boleh disebut
+   "hilang bukti compile" hanya karena job label-nya skipped — sebut run
+   mana yang menjadi bukti.
+6. Alternatif permanen (keputusan user): beri GitHub App Arena permission
+   `workflows: read & write` di repo Settings → GitHub Apps; setelah itu
+   agent bisa push workflow sendiri dan pola `ci/pending` dipensiunkan.
