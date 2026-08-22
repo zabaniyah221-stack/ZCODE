@@ -171,7 +171,9 @@ A result is discarded if the active file, revision, or source changed.
 - Per PEP 427, exact `<dist-info>/RECORD.jws` and `RECORD.p7s` signature files
   may exist without RECORD rows. They are the only unlisted-file exceptions;
   listed signatures, arbitrary unlisted files, phantom rows, weak hashes,
-  malformed sizes, duplicate rows, and CSV corruption fail closed.
+  malformed sizes, duplicate rows, and CSV corruption fail closed. ZCODE does
+  not cryptographically validate those optional signatures or treat presence as
+  trust; the already-verified wheel download SHA-256 remains the integrity anchor.
 
 ### 7.1 Explicit package commit boundary
 

@@ -210,7 +210,9 @@ class TransactionManager(private val context: Context) {
                     ?: throw IllegalStateException("Package root hilang")
                 packageRoot.listFiles()?.forEach { candidate ->
                     if (candidate != item.finalDir && !candidate.name.startsWith(".incoming-")) {
-                        candidate.deleteRecursively()
+                        if (!candidate.deleteRecursively() && candidate.exists()) {
+                            throw IllegalStateException("Generation lama gagal dibersihkan: ${candidate.name}")
+                        }
                     }
                 }
             })
@@ -218,7 +220,11 @@ class TransactionManager(private val context: Context) {
                 onLog("    activate: ${item.plan.canonicalName}@${item.plan.version}")
             })
         }
-        postCommitSteps.add("transaction cleanup" to { tx.dir.deleteRecursively() })
+        postCommitSteps.add("transaction cleanup" to {
+            if (!tx.dir.deleteRecursively() && tx.dir.exists()) {
+                throw IllegalStateException("Transaction staging gagal dibersihkan")
+            }
+        })
         postCommitSteps.add("journal success" to {
             journal(tx.id, "install", "SUCCESS", null, null)
         })

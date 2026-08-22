@@ -53,6 +53,9 @@ langsung dari production v1.0.20 tanpa uninstall.
   entry, panjang nama, duplicate entry, dan path traversal.
 - METADATA Name/Version harus cocok dengan plan.
 - WHEEL/Wheel-Version dan seluruh RECORD path, size, serta hash diverifikasi.
+- Signed-wheel `RECORD.jws`/`RECORD.p7s` diterima sesuai PEP 427 walau tidak
+  tercatat di RECORD. Kehadirannya bukan trust verdict dan tidak diverifikasi
+  sebagai tanda tangan; SHA-256 download wheel tetap integrity anchor.
 
 ## Plugin source safety
 

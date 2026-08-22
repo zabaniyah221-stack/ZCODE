@@ -201,6 +201,9 @@ object Verifier {
             .toSet()
         val distInfoPath = record.parentFile.relativeTo(extractedDir).invariantSeparatorsPath
         val recordPath = "$distInfoPath/RECORD"
+        // PEP 427 requires these signature files to be absent from RECORD rows.
+        // ZCODE does not treat their presence as a trust verdict: wheel download
+        // SHA-256 remains the trust/integrity anchor verified before extraction.
         val signaturePaths = setOf(
             "$distInfoPath/RECORD.jws",
             "$distInfoPath/RECORD.p7s",
