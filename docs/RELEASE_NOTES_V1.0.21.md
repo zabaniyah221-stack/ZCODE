@@ -64,8 +64,10 @@ langsung dari production v1.0.20 tanpa uninstall.
 - Organize Imports masuk safe read-only mode sampai preview + transactional
   change-set tersedia; import Python dapat memiliki side effect dan tidak aman
   dihapus/diurutkan diam-diam.
-- Header plugin memuat pernyataan relicensing eksplisit oleh pemegang hak cipta
-  (port ZABACODE GPLv3 juga dilisensikan MIT ke ZCODE).
+- Option B menjaga bagian turunan ZABACODE dan distribusi gabungan ZCODE di
+  bawah GPLv3, tanpa klaim `sole copyright holder` atau relicensing MIT.
+- Root `LICENSE`, `NOTICE`, About, dan asset APK memuat GPLv3/provenance;
+  bagian independen mempertahankan teks MIT di `LICENSES/MIT.txt`.
 
 ## Runtime dan toolchain
 
@@ -101,33 +103,24 @@ jika APK yang diuji adalah byte yang sama dengan asset draft.
 
 ## Status evidence
 
-Saat notes ini ditulis:
+Saat notes ini diperbarui pada branch repair lokal:
 
 ```text
-Source implementation       : IMPLEMENTED
-Local Python/static gate     : LOCALLY VERIFIED — 657 passed
-                               (re-verified 2026-08-22 on arena/01a02753-zcode;
-                               support-library cancel guard mutation-verified
-                               red→green)
-Debug CI (compile+JVM test)  : CI VERIFIED
-                               run 32542213874 (c84d48e push)    build SUCCESS
-                               run 32545142292 (c84d48e push)    build SUCCESS
-                               run 32545286515 (0a0d471 push)    build SUCCESS
-                               run 32545291756 (0a0d471 PR)      build SUCCESS
-compile-production-source    : SKIPPED on all runs above
-  reason                     : v1.0.20 job gate matches only
-                               arena/v1020-production PRs — stale by design
-  compiler evidence          : not lost — the debug build job runs the
-                               stronger ./gradlew testDebugUnitTest assembleDebug
-  live unskip                : BLOCKED — GitHub rejected the agent push:
-                               "refusing to allow a GitHub App to create or
-                               update workflow `.github/workflows/build.yml`
-                               without `workflows` permission"
-                               (re-proven 2026-08-22 on this session branch)
-  ready-to-upload source     : ci/pending/build.yml — gate is now
-                               branch-agnostic: every arena/* PR, so it
-                               cannot go stale per release/session again
-Physical ARMv7 update        : NOT DEVICE VERIFIED
-Production signed draft      : NOT CREATED
-Public v1.0.21 release       : NOT RELEASED
+Source implementation       : IMPLEMENTED LOCALLY
+Local Python/static gate     : LOCALLY VERIFIED — 668 passed
+Kotlin lexical sanity       : LOCALLY VERIFIED — 65 files
+npm/editor supply-chain     : LOCALLY VERIFIED — PASS
+Focused source mutations    : 4 RED→GREEN
+  covered                   : commit ordering, stale-save gate,
+                              signed-wheel exception, MIT-only README regression
+New JVM behavioral tests    : IMPLEMENTED — CI execution pending
+Canonical Debug CI          : NOT YET RUN FOR THIS REPAIR HEAD
+compile-production-source   : WORKFLOW IMPLEMENTED FOR EVERY PR;
+                              CI execution pending
+Physical ARMv7 update       : NOT DEVICE VERIFIED
+Production signed draft     : NOT CREATED
+Public v1.0.21 release      : NOT RELEASED
 ```
+
+CI successes on earlier PR #27/#28 heads remain useful historical compile
+evidence, tetapi tidak dipakai untuk mengklaim repair head ini `CI VERIFIED`.

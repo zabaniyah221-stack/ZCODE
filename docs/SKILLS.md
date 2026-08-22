@@ -2089,48 +2089,34 @@ Sumber:
 
 ---
 
-## SKILL 27 — `.github/workflows/*` tidak bisa di-push bot Arena: staging `ci/pending` (2026-08-22)
+## SKILL 27 — workflow permission dan branch-agnostic compile gate (2026-08-22)
 
-**Trigger:** job `compile-production-source` skipped diam-diam pada PR/patch
-v1.0.21 karena gate `if:` masih mencocokkan nama branch era v1.0.20
-(`arena/v1020-production`). Saat agent mencoba memperbaiki workflow langsung,
-GitHub menolak push dengan pesan persis:
-
-```text
-refusing to allow a GitHub App to create or update workflow
-`.github/workflows/build.yml` without `workflows` permission
-```
-
-Terverifikasi dua sesi berturut-turut (2026-08-21 dan 2026-08-22, branch
-`arena/01a0272f-zcode` lalu `arena/01a02739-zcode`). Commit workflow yang
-selama ini masuk ke repo (SHA pinning, gradlew) semuanya committer
-`GitHub <noreply@github.com>` — artinya di-upload **user lewat web UI**,
-bukan di-push agent.
+**Trigger:** `compile-production-source` pernah skipped karena gate mengunci
+nama branch v1.0.20. Pada sesi lain, push workflow melalui GitHub App ditolak
+karena permission `workflows` tidak tersedia. PR #28 kemudian memakai branch
+Jules tanpa prefix `arena/`, membuktikan bahwa prefix gate pun masih dapat basi.
 
 ### Aturan
 
-1. Agent TIDAK menulis/mengubah file di `.github/workflows/**`. Semua
-   perubahan workflow agent hanya lewat `ci/workflows/**` (mirror) atau
-   `ci/pending/**` (staging upload manual).
-2. Perubahan workflow yang menunggu upload manual hidup di
-   `ci/pending/<nama>.yml` + `ci/pending/README.md` berisi instruksi upload
-   dan bukti penolakan permission. README harus menyebut bahwa mirror
-   `ci/workflows/<nama>.yml` wajib di-update bersamaan agar guard mirror
-   tetap hijau.
-3. Gate job CI dilarang men-HARDCODE nama branch sesi/rilis
-   (`arena/01xxxxxx-zcode`, `arena/vNNNN-...`). Pakai pola
-   (`startsWith(github.head_ref, 'arena/')`) supaya gate tidak basi lagi di
-   sesi berikutnya. Guard test menolak nama branch di dalam gate.
-4. Sebelum menyebut "workflow tidak bisa diubah", BUKTIKAN dengan mencoba
-   push sekali dan mencatat pesan penolakannya (aturan SKILL 5: klaim
-   "tidak bisa" harus dibuktikan dengan mencoba).
-5. Job yang compile-evidence-nya sudah tercakup job lain (mis. debug build
-   menjalankan `testDebugUnitTest assembleDebug`) tidak boleh disebut
-   "hilang bukti compile" hanya karena job label-nya skipped — sebut run
-   mana yang menjadi bukti.
-6. Alternatif permanen (keputusan user): beri GitHub App Arena permission
-   `workflows: read & write` di repo Settings → GitHub Apps; setelah itu
-   agent bisa push workflow sendiri dan pola `ci/pending` dipensiunkan.
+1. Gate compile evidence untuk PR memakai event identity, bukan nama/prefix
+   branch: `if: github.event_name == 'pull_request'`.
+2. `.github/workflows/<name>` dan `ci/workflows/<name>` harus identik dan dijaga
+   test. `ci/pending` hanya workaround sementara; hapus setelah live source
+   diterapkan agar tidak menjadi source of truth ketiga.
+3. Agent boleh menyiapkan/mengedit workflow lokal setelah user menyetujui
+   perubahan signing/workflow. Push tetap memerlukan authorization dan token/App
+   permission yang benar; jangan menganggap credential sesi lama tersedia.
+4. Jika push ditolak karena workflow permission, catat pesan exact dan berikan
+   diff/file final kepada user. Jangan menyamarkan job skipped sebagai success.
+5. Full-SHA action pins, wrapper checksum, workflow mirror, secret scope, dan
+   cleanup keystore adalah bagian dari contract, bukan kosmetik CI.
+
+### Status v1.0.21
+
+Live build workflow dan mirror lokal sekarang memakai every-PR compile gate;
+`ci/pending` sudah dipensiunkan. Statusnya **IMPLEMENTED LOCALLY**, belum
+`CI VERIFIED` sampai exact repair head dipush dan job berakhir SUCCESS.
+
 ### v1.0.20 proof that the model works
 
 ```text

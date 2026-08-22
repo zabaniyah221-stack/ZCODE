@@ -4,7 +4,7 @@
 **Target:** proposed `versionName 1.0.21`, `versionCode 24`
 **Production base:** `v1.0.20`, `versionCode 23`, commit `55860ff8059fd1b26e268a53dd3178126e80fbb3`
 **Target device:** INFINIX X6532C, Android 14/API 34, `armeabi-v7a` userspace
-**Status:** IMPLEMENTED IN BRANCH; local Python/static gates in progress; Android compile, CI, device, signer, update, and release are not yet verified.
+**Status:** IMPLEMENTED LOCALLY on repair branch; 667 Python/static guards pass and focused source mutations are RED→GREEN. New JVM fault tests are written but still require canonical CI. Android device update, production signing, and release are not yet verified.
 
 ## 1. Goal
 
@@ -168,6 +168,42 @@ A result is discarded if the active file, revision, or source changed.
 - Wheel verification requires exactly one dist-info, METADATA identity matching
   the resolved plan, supported Wheel-Version, complete RECORD coverage, sizes,
   and SHA-256/SHA-384/SHA-512 URL-safe hashes.
+- Per PEP 427, exact `<dist-info>/RECORD.jws` and `RECORD.p7s` signature files
+  may exist without RECORD rows. They are the only unlisted-file exceptions;
+  listed signatures, arbitrary unlisted files, phantom rows, weak hashes,
+  malformed sizes, duplicate rows, and CSV corruption fail closed.
+
+### 7.1 Explicit package commit boundary
+
+`ActivationCommitBoundary` owns promotion plus the atomic state commit. Before
+that commit returns, rollback may remove only new unreferenced generations.
+After it returns, cleanup, callbacks, transaction deletion, and journal updates
+run independently as best-effort operations; failure is recorded as
+`PKG_ACTIVATION_POST_COMMIT_WARN` and cannot delete the active generation.
+
+### 7.2 One workspace gate across check and disk write
+
+Inactive editor callbacks capture document ID, revision, and code. The same
+`WorkspaceMutationGate` holds both the stale check and actual `saveFile` call.
+Clear/Delete/Rename/Close acquire that gate too. Therefore either the save
+commits before the mutation (and the mutation wins last), or the mutation
+invalidates it before the check (and the save is a no-op); there is no unlocked
+check-to-write window.
+
+### 7.3 GPLv3 Option B
+
+ZABACODE-derived portions retain GPLv3 provenance and contributor attribution.
+The combined application is GPL-3.0-only. Independent MIT-authored portions
+retain the actual MIT grant in `LICENSES/MIT.txt`; compatibility does not turn
+GPL-derived code into MIT. Root `LICENSE`, `NOTICE`, README, About, and exact APK
+license assets are guarded together.
+
+References:
+
+- https://peps.python.org/pep-0427/
+- https://www.gnu.org/licenses/gpl-3.0.txt
+- https://www.gnu.org/licenses/gpl-faq.html#WhatDoesCompatMean
+- https://github.com/muzape28-blip/ZABACODE/blob/main/LICENSE
 
 ## 8. Generator and toolchain
 

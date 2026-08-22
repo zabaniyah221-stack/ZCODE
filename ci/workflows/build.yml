@@ -120,8 +120,10 @@ jobs:
           ls -lh app/build/outputs/apk/debug/ >> $GITHUB_STEP_SUMMARY || true
 
   compile-production-source:
-    # Compiler evidence for production PR without creating/uploading a Debug APK.
-    if: github.event_name == 'pull_request' && github.head_ref == 'arena/v1020-production'
+    # Compiler evidence for every PR without assembling/uploading a second APK.
+    # Do not gate on a session/release prefix: PR #28 used a Jules branch without
+    # `arena/`, proving that even a prefix gate can silently skip future agents.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-22.04
     needs: check
     permissions:

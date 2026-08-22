@@ -306,42 +306,25 @@ class TestSingleProductionWorkflow:
         assert "assembleDebug" not in compile_only
         assert "upload-artifact" not in compile_only
 
-    def test_pending_unskip_is_branch_agnostic_and_compile_only(self):
-        pending = ROOT / "ci/pending/build.yml"
-        src = read(pending)
+    def test_live_compile_gate_is_every_pr_and_compile_only(self):
+        src = read(CANONICAL_WORKFLOW)
         start = src.index("compile-production-source:")
         compile_only = src[start:]
-        assert (
-            "github.event_name == 'pull_request' && "
-            "startsWith(github.head_ref, 'arena/')" in compile_only
-        )
+        gate = compile_only.split("runs-on:", 1)[0]
+        assert "if: github.event_name == 'pull_request'" in gate
+        assert "github.head_ref" not in gate
+        assert "startsWith(" not in gate
         assert ":app:compileDebugKotlin" in compile_only
         assert "testDebugUnitTest" in compile_only
         assert "assembleDebug" not in compile_only
         assert "upload-artifact" not in compile_only
-        # Class fix, not instance fix: a per-branch name list went stale one
-        # release after v1.0.20 (run 32542213874 skipped the job), so the
-        # replacement gate must not name any specific branch.
-        gate = compile_only.split("runs-on:", 1)[0]
-        for stale_name in ("01a0272f", "01a02739", "v1021-production", "v1020-production"):
-            assert stale_name not in gate, f"gate masih men-HARDCODE nama branch: {stale_name}"
 
-    def test_live_workflow_is_old_gate_or_exact_pending_upload(self):
+    def test_live_build_workflow_and_mirror_are_exact_without_pending_staging(self):
         live = read(CANONICAL_WORKFLOW)
-        pending = read(ROOT / "ci/pending/build.yml")
-        old_gate = (
-            "github.event_name == 'pull_request' && "
-            "github.head_ref == 'arena/v1020-production'" in live
-        )
-        # Green before the manual upload (live still on the v1.0.20 gate) and
-        # after it (live is an exact copy of the pending file). Anything else
-        # means a drifted or partial upload.
-        assert old_gate or live == pending, (
-            "live build.yml harus salah satu dari: gate v1.0.20 lama "
-            "(sebelum upload manual ci/pending) atau salinan persis "
-            "ci/pending/build.yml"
-        )
-        assert "ci/pending/build.yml" in read(RELEASE_NOTES)
+        mirror = read(ROOT / "ci/workflows/build.yml")
+        assert live == mirror
+        assert not (ROOT / "ci/pending/build.yml").exists()
+        assert not (ROOT / "ci/pending/README.md").exists()
 
 
 class TestProductionSigningPolicy:
