@@ -439,8 +439,16 @@ class PackageEngineV2(private val context: Context) {
                                 onStep(Step.Message("${sp.canonicalName}: $m", SemanticLogKind.WAIT))
                             }
                             if (!dl.first) {
-                                return fail("DOWNLOAD", "download",
-                                    "Gagal mengunduh pustaka pendukung ${sp.canonicalName}: ${dl.second}", null)
+                                // Cancellation must stay a first-class outcome,
+                                // not a generic download failure (mirrors the
+                                // main package loop above).
+                                return if (dl.second == "CANCELLED") {
+                                    fail("CANCELLED", "download",
+                                        "Instalasi dibatalkan. Tidak ada package yang diubah.", null)
+                                } else {
+                                    fail("DOWNLOAD", "download",
+                                        "Gagal mengunduh pustaka pendukung ${sp.canonicalName}: ${dl.second}", null)
+                                }
                             }
                             sha = sha ?: dl.second
                         }

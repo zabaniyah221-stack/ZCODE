@@ -5039,3 +5039,24 @@ class TestVerifierJvmTestCompileRegression:
         src = read(ROOT / "app/src/test/java/com/zaba/zcode/core/packageengine/VerifierTest.kt")
         assert "mutateRecord = { record: String ->" in src
         assert 'wheel { record ->' not in src
+
+
+class TestV1021SupportLibraryCancellation:
+    """Support-library download cancel must stay CANCELLED, not generic DOWNLOAD."""
+
+    def test_support_library_download_cancellation_is_classified_not_generic(self):
+        src = strip_kt_comments(read(PKGENG / "PackageEngineV2.kt"))
+        anchor = "Gagal mengunduh pustaka pendukung"
+        assert anchor in src, "anchor support-library download hilang"
+        idx = src.index(anchor)
+        # Window di sekitar satu-satunya site download support-library. Cek
+        # klasifikasi CANCELLED di dalam branch yang sama, bukan di loop utama.
+        block = src[idx - 500:idx + 120]
+        assert 'dl.second == "CANCELLED"' in block
+        assert 'fail("CANCELLED", "download"' in block
+        assert 'fail("DOWNLOAD", "download"' in block
+        # CANCELLED diputuskan SEBELUM fallback DOWNLOAD generik.
+        assert block.index('fail("CANCELLED", "download"') < block.index('fail("DOWNLOAD", "download"')
+        # Kelas bug: kedua site download (loop utama + support-library)
+        # mengklasifikasikan cancel sebagai first-class outcome.
+        assert src.count('dl.second == "CANCELLED"') >= 2
