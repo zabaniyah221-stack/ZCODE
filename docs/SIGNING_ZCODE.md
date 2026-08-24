@@ -3,8 +3,9 @@
 **Tanggal identitas dibuat:** 2026-08-21
 **Production package yang dicadangkan:** `com.zaba.zcode`
 **Status:** production identity aktif. Workflow fail-closed telah menandatangani
-satu APK v1.0.20, fingerprint cocok, exact bytes lulus device UAT, dan release
-publik diterbitkan dari draft yang sama tanpa rebuild.
+satu APK per rilis (v1.0.20 dan v1.0.21), fingerprint cocok, exact bytes lulus
+device UAT, dan release publik diterbitkan dari draft yang sama tanpa rebuild.
+Update continuity v1.0.20→v1.0.21 DEVICE VERIFIED (user report).
 
 ## 1. Public certificate metadata
 
@@ -68,6 +69,11 @@ CI PRODUCTION SIGNING       : VERIFIED — run 32472551816
 PRODUCTION APK SIGNED       : YES
 PRODUCTION DEVICE UAT       : PASS — user report, crash none
 PUBLIC RELEASE              : YES — v1.0.20
+CI PRODUCTION SIGNING       : VERIFIED — run 32570675883 (v1.0.21)
+PRODUCTION APK SIGNED       : YES (v1.0.21)
+PRODUCTION DEVICE UAT       : PASS — user report, crash none (v1.0.21)
+PUBLIC RELEASE              : YES — v1.0.21
+UPDATE CONTINUITY           : DEVICE VERIFIED — v1.0.20→v1.0.21 in-place (user report)
 ```
 
 Recovery drill tetap wajib meskipun release pertama sudah terbit: satu backup
@@ -170,5 +176,36 @@ Evidence chain:
 7. temporary CI keystore cleanup step succeeded.
 
 Production workflow run count at publication: **1**. This proves the one-build
-contract for v1.0.20. It does not yet prove update continuity; that requires a
-future `com.zaba.zcode` version with a higher versionCode and the same signer.
+contract for v1.0.20. The open update-continuity item was subsequently closed
+by the v1.0.21 in-place update — see §9.
+
+## 9. v1.0.21 production evidence
+
+```text
+Workflow run       : 32570675883 — SUCCESS
+Source commit/tag  : 2793c198aafaa25aab93b4310ee94f91ffa0f448 (tag v1.0.21)
+Release URL        : https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.21
+Published          : 2026-08-23T01:40:05Z
+APK bytes          : 34,719,925
+APK SHA-256        :
+1d84c60c6d1574610b25464ee8dfae7101e2c63669bfd94473ebe52e4379b4e3
+Certificate SHA-256:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+Signature scheme   : APK Signature Scheme v2 verified
+```
+
+Evidence chain:
+
+1. workflow verified exactly one release APK, package/version/assets, and signer;
+2. user installed the v1.0.21 draft APK in place over v1.0.20 (no uninstall, no
+   clear app data) and reported the UAT verdict: workspace/settings/package
+   continuity PASS, crash none — user report;
+3. the existing draft was published without another production workflow run;
+4. the GitHub release asset digest (API) reports the same APK SHA-256 (checked
+   by the agent via the releases API);
+5. temporary CI keystore cleanup step succeeded.
+
+Not claimed: an independent agent re-download of the public asset (network
+from the agent sandbox to release assets was blocked at check time). The
+v1.0.21 in-place update is the first device evidence of update continuity for
+`com.zaba.zcode`; it closes the open item recorded in §8.

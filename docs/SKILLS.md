@@ -2135,6 +2135,6 @@ Exact APK SHA-256:
 b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed
 ```
 
-This is **PRODUCTION DEVICE VERIFIED + RELEASED**, but update continuity remains
-unverified until a later production version with higher versionCode is installed
-in place over v1.0.20.
+This is **PRODUCTION DEVICE VERIFIED + RELEASED**. Update continuity was
+subsequently DEVICE VERIFIED (user report): v1.0.21 (versionCode 24) installed
+in place over v1.0.20 on 2026-08-23 (run 32570675883).

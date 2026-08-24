@@ -1,7 +1,9 @@
 # ZCODE v1.0.21 — Data Safety & Reliability Hotfix
 
-> Candidate notes. This version is **not released** until the exact production
-> draft passes update-in-place UAT on the target ARMv7 device.
+> Released notes. ZCODE v1.0.21 was published on 2026-08-23T01:40:05Z from
+> production workflow run 32570675883 (source `2793c19` = tag `v1.0.21`). The
+> exact draft bytes passed update-in-place UAT on the target ARMv7 device and
+> were published without a rebuild.
 
 ## Fokus
 
@@ -106,24 +108,33 @@ jika APK yang diuji adalah byte yang sama dengan asset draft.
 
 ## Status evidence
 
-Saat notes ini diperbarui pada branch repair lokal:
+Rilis publik — diperbarui 2026-08-25 setelah konfirmasi UAT user verbatim:
 
 ```text
-Source implementation       : IMPLEMENTED LOCALLY
-Local Python/static gate     : LOCALLY VERIFIED — 668 passed
-Kotlin lexical sanity       : LOCALLY VERIFIED — 65 files
-npm/editor supply-chain     : LOCALLY VERIFIED — PASS
-Focused source mutations    : 4 RED→GREEN
-  covered                   : commit ordering, stale-save gate,
-                              signed-wheel exception, MIT-only README regression
-New JVM behavioral tests    : IMPLEMENTED — CI execution pending
-Canonical Debug CI          : NOT YET RUN FOR THIS REPAIR HEAD
-compile-production-source   : WORKFLOW IMPLEMENTED FOR EVERY PR;
-                              CI execution pending
-Physical ARMv7 update       : NOT DEVICE VERIFIED
-Production signed draft     : NOT CREATED
-Public v1.0.21 release      : NOT RELEASED
+Public v1.0.21 release      : RELEASED — 2026-08-23T01:40:05Z
+Release URL                 : https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.21
+Source implementation       : MERGED — PR #29, main @ 2793c19 = tag v1.0.21
+Production workflow run     : 32570675883 — SUCCESS (workflow_dispatch dari main, 7m24s)
+Production run count        : 1 (kontrak one-build terpenuhi)
+APK asset                   : ZCODE-v1.0.21.apk (34,719,925 bytes)
+APK SHA-256                 :
+1d84c60c6d1574610b25464ee8dfae7101e2c63669bfd94473ebe52e4379b4e3
+GitHub asset digest (API)   : sha256:1d84c60c…e3 — cocok (dicek agent via API)
+Production signer SHA-256   :
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+  (apksigner verify di dalam production workflow)
+Physical ARMv7 update       : DEVICE VERIFIED (user report) — update in-place
+                              v1.0.20→v1.0.21 tanpa uninstall/clear-data;
+                              workspace/settings/package continuity PASS;
+                              crash NONE
+Independent agent re-download : NOT VERIFIED — network sandbox ke
+                              release-assets diblok saat dicek; tidak ada
+                              klaim byte-check independen baru
 ```
 
-CI successes on earlier PR #27/#28 heads remain useful historical compile
-evidence, tetapi tidak dipakai untuk mengklaim repair head ini `CI VERIFIED`.
+Sejarah fase kandidat (dicatat di dokumen ini saat fase kandidat): 668 passed
+lokal, mutasi fokus 4 RED→GREEN (commit ordering, stale-save gate,
+signed-wheel exception, MIT-only README regression), JVM behavioral tests
+dijalankan production workflow. Catatan lama bahwa CI PR #27/#28 hanya
+evidence historis compile tetap berlaku; verifikasi repair head adalah
+production run 32570675883 di atas.

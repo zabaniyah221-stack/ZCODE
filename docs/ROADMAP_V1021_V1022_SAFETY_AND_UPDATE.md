@@ -2,10 +2,13 @@
 
 ## Data Safety, GPL Compliance, dan Verified One-Tap Update
 
-**Status dokumen:** `APPROVED / IMPLEMENTATION IN PROGRESS LOCALLY`
+**Status dokumen:** `APPROVED / v1.0.21 RELEASED, v1.0.22 DESIGNED`
 **Tanggal:** 2026-08-22
 **Branch repair lokal:** `arena/v1021-pr28-repair`
-**Belum ada push, perubahan PR remote, merge, production signing, atau release.**
+**Pemutakhiran 2026-08-25:** v1.0.21 sudah merge (PR #29), signed, dan
+RELEASED 2026-08-23T01:40:05Z (run 32570675883); update in-place
+v1.0.20→v1.0.21 DEVICE VERIFIED (user report). Baris header lama ("Belum ada
+push...") benar pada saat dokumen ditulis 2026-08-22.
 
 Dokumen ini adalah note pengambilan keputusan sebelum agent mengambil kendali.
 Urutannya sengaja memisahkan hotfix keselamatan data dari fitur updater agar
@@ -38,7 +41,8 @@ Kenyataan saat note ini ditulis:
 
 - ZCODE v1.0.20: `RELEASED + DEVICE VERIFIED` untuk artifact production yang
   diuji, dengan SHA-256 dan signer publik yang telah dicocokkan.
-- Update-in-place v1.0.20 → v1.0.21: **belum DEVICE VERIFIED**.
+- Update-in-place v1.0.20 → v1.0.21: **DEVICE VERIFIED (user report)** —
+  v1.0.21 RELEASED 2026-08-23T01:40:05Z (run 32570675883).
 - PR #27: kandidat draft, **belum aman di-merge**.
 - Tombol update sidebar: **baru DESIGNED**, belum IMPLEMENTED.
 - Silent update tanpa kemungkinan campur tangan Android: **tidak dijanjikan**.
@@ -146,7 +150,9 @@ cek latest published GitHub release
 
 ## Fase 0 — Approval dan custody
 
-**Status:** APPROVED oleh user; implementasi lokal dimulai dengan boundary push/merge/signing tetap tertutup.
+**Status:** APPROVED oleh user dan SELESAI — v1.0.21 di-merge (PR #29),
+signed, RELEASED 2026-08-23T01:40:05Z (run 32570675883). Custody rule di atas
+tetap berlaku untuk versi berikutnya.
 
 Sebelum approval, agent hanya boleh:
 
@@ -324,7 +330,8 @@ Acuan:
 
 ```text
 v1.0.20 = RELEASED + DEVICE VERIFIED + exact-byte public audit
-v1.0.21 = candidate; belum signed/device/released
+v1.0.21 = RELEASED + DEVICE VERIFIED (user report; in-place dari v1.0.20,
+          2026-08-23T01:40:05Z, run 32570675883)
 ```
 
 5. Perbarui README/PRD yang masih menyebut snapshot versi lama tanpa mengubah
