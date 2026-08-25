@@ -8,6 +8,8 @@ import com.zaba.zcode.core.runtime.NativeRuntimeState
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
@@ -32,6 +34,14 @@ class MainActivity : ComponentActivity() {
 
     private val vm: WorkspaceViewModel by viewModels()
     private val packageOperations: PackageOperationViewModel by viewModels()
+    // v1.0.22 one-tap update (RFC D7): Activity-scoped, butuh WorkspaceViewModel
+    // untuk langkah FLUSH fail-closed sebelum instalasi (pola owner tunggal,
+    // sama seperti PackageOperationViewModel).
+    private val update: UpdateViewModel by viewModels {
+        viewModelFactory {
+            initializer { UpdateViewModel(application, vm) }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +58,7 @@ class MainActivity : ComponentActivity() {
                     AppNavHost(
                         vm = vm,
                         packageOperations = packageOperations,
+                        update = update,
                         onRestartRuntime = ::requestRuntimeRestart,
                     )
                 }
@@ -92,6 +103,13 @@ class MainActivity : ComponentActivity() {
         vm.flushSaveSync()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // v1.0.22: user kembali dari halaman pengaturan "Install unknown apps"
+        // → cek ulang izin agar dialog READY/PENDING tidak menagih lagi.
+        update.onResumed()
+    }
+
     companion object {
         const val EXTRA_REBIRTH_FROM_PID = "zcode.rebirth.from_pid"
     }
@@ -101,6 +119,7 @@ class MainActivity : ComponentActivity() {
 private fun AppNavHost(
     vm: WorkspaceViewModel,
     packageOperations: PackageOperationViewModel,
+    update: UpdateViewModel,
     onRestartRuntime: () -> Boolean,
 ) {
     val nav = rememberNavController()
@@ -124,6 +143,7 @@ private fun AppNavHost(
         composable("editor") {
             WorkbenchScreen(
                 vm = vm,
+                update = update,
                 onRun = { filename ->
                     // ▶ Run → pindah layer ke Terminal PTY full-screen (bukan panel)
                     nav.navigate("output/$filename")

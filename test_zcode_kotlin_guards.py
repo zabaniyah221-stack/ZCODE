@@ -5071,3 +5071,239 @@ class TestV1021SupportLibraryCancellation:
         # Kelas bug: kedua site download (loop utama + support-library)
         # mengklasifikasikan cancel sebagai first-class outcome.
         assert src.count('dl.second == "CANCELLED"') >= 2
+
+
+# =====================================================================
+# v1.0.22 — Verified One-Tap Update (RFC docs/RFC_V1022_ONE_TAP_UPDATE.md)
+# Guard lexikal untuk keluarga update (D9): integritas, urutan fail-closed,
+# anti-credential, perbandingan versi numerik, breadcrumb, dan kontrak
+# foreground-service di manifest. Kotlin TIDAK bisa dikompilasi di sandbox —
+# CI adalah hakim kompilasi; guard ini menangkap KLAS error sebelum itu.
+# =====================================================================
+
+UPDATE = APP / "core/update"
+MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
+FILE_PATHS = ROOT / "app/src/main/res/xml/file_paths.xml"
+VM_UPDATE = APP / "UpdateViewModel.kt"
+WORKBENCH = APP / "ui/workbench/WorkbenchScreen.kt"
+
+
+def _update_sources() -> dict[str, str]:
+    return {p.name: strip_kt_comments(read(p)) for p in sorted(UPDATE.glob("*.kt"))}
+
+
+class TestV1022UpdateIntegrity:
+    """D1/D4/D5: integritas paket dijaga dengan jujur, tanpa teater."""
+
+    def test_no_credential_or_pat_in_update_path(self):
+        # D10: tanpa PAT/credential di aplikasi. Pencocokan lexikal atas
+        # sumber (komentar dibuang) agar docstring yang menyebut "PAT" tidak
+        # false-positive. Literal dipecah ("gh" + "p_") supaya file guard ini
+        # sendiri tidak memuat token utuh — konvensi test_no_credential_like_
+        # material_is_tracked (pemindai memindai file ini juga).
+        bad = re.compile(
+            r"(" + "gh" + "p_[A-Za-z0-9]{16,}|github" + "_pat_[A-Za-z0-9_]{16,}"
+            r"|\bAuthorization\b|Bearer\s+[A-Za-z0-9]|api[_-]?key\s*=\s*\"[^\"]+\""
+            r"|\bpassword\s*=\s*\"[^\"]+\")",
+            re.IGNORECASE,
+        )
+        for name, src in _update_sources().items():
+            m = bad.search(src)
+            assert m is None, f"credential-like di {name}: {m.group(0) if m else ''}"
+
+    def test_checker_uses_unauthenticated_public_endpoint(self):
+        src = read(UPDATE / "UpdateChecker.kt")
+        assert "releases/latest" in src
+        # Unauthenticated: tidak ada header Authorization/bearer apa pun.
+        assert "Authorization" not in src
+        assert "Bearer" not in src
+
+    def test_sha256_compared_while_streaming_and_mismatch_deletes_file(self):
+        src = read(UPDATE / "UpdateDownloader.kt")
+        assert 'MessageDigest.getInstance("SHA-256")' in src
+        # Mismatch / gagal / batal -> file parsial DIHAPUS (jangan meracuni cache).
+        assert "dest.delete()" in src
+
+    def test_fileprovider_mime_is_package_archive(self):
+        # D5.5: MIME .apk eksplisit pada intent install (bukan */*).
+        src = read(UPDATE / "UpdateInstaller.kt")
+        assert "application/vnd.android.package-archive" in src
+        assert "FLAG_GRANT_READ_URI_PERMISSION" in src
+        assert "FLAG_ACTIVITY_NEW_TASK" in src
+
+    def test_canrequestpackageinstalls_is_the_gate(self):
+        # D5.4: izin install dicek via API resmi, bukan asumsi.
+        src = read(UPDATE / "UpdateInstaller.kt")
+        assert "canRequestPackageInstalls()" in src
+        assert "ACTION_MANAGE_UNKNOWN_APP_SOURCES" in src
+
+
+class TestV1022UpdateFailClosedOrder:
+    """D5: flush HANYA boleh didahului sebelum receipt; flush gagal = STOP."""
+
+    def test_receipt_write_requires_flush_ok_flag(self):
+        src = read(UPDATE / "UpdateReceipt.kt")
+        # write() menolakan flushOk=false (mesinnya, bukan kebiasaan).
+        assert "flushOk: Boolean" in src
+        assert "check(flushOk)" in src
+
+    def test_viewmodel_flushes_before_writing_receipt(self):
+        # Urutan di kode: flushSaveSync ... UpdateReceipt.write di fungsi
+        # yang sama, flush SEBELUM write.
+        src = read(VM_UPDATE)
+        fn_start = src.index("private fun runPrepare")
+        fn = src[fn_start: src.index("}", src.index("uiState.value = UiState.READY", fn_start))]
+        assert "flushSaveSync(verifyAllDrafts = true)" in fn
+        assert "UpdateReceipt.write" in fn
+        assert fn.index("flushSaveSync(verifyAllDrafts = true)") < fn.index("UpdateReceipt.write")
+        # Fail-closed: flush gagal = STOP, tidak lanjut write.
+        assert "if (!flushOk)" in fn
+
+    def test_verify_mismatch_hard_stops_before_prepare(self):
+        # D1: sha tidak cocok -> file dibuang + STOP (tidak runPrepare).
+        src = read(VM_UPDATE)
+        fn_start = src.index("private fun verifyWithOffer")
+        fn = src[fn_start: src.index("private fun runPrepare")]
+        assert "if (!sha256.equals(n.sha256, ignoreCase = true))" in fn
+        assert "apk.delete()" in fn
+        assert "fail(\"download\", \"Verification failed\")" in fn
+        # runPrepare (lanjut ke flush) TIDAK boleh ada di dalam verify bila mismatch.
+        assert "runPrepare" not in fn.split("if (!sha256.equals")[1].split("return")[0]
+
+
+class TestV1022UpdateVersionCompare:
+    """D3: perbandingan versi NUMERIK per-segmen, bukan string."""
+
+    def test_checker_parses_segments_and_compares_numerically(self):
+        src = read(UPDATE / "UpdateChecker.kt")
+        assert "parseSemVer" in src
+        assert "compareVersions" in src
+        # Numerik: segmen di-convert ke Int lalu dibandingkan, bukan
+        # String.compareTo.
+        assert ".toInt()" in src
+        # Jangan membandingkan tag/versi sebagai string mentah.
+        assert '.compareTo(' not in src
+
+    def test_viewmodel_offers_only_strictly_newer(self):
+        # D3/D6: tampilkan hanya bila remote > lokal (worst case up to date,
+        # never downgrade).
+        src = read(UPDATE / "UpdateChecker.kt")
+        assert "compareVersions(newer.version, local) == 1" in src
+
+
+class TestV1022UpdateBreadcrumb:
+    """D8: jejak breadcrumb UPDATE_* lengkap & tetap bisa disalin user."""
+
+    def test_lifecycle_events_are_logged(self):
+        blob = "\n".join(_update_sources().values()) + "\n" + read(VM_UPDATE)
+        for event in (
+            "UPDATE_CHECK_BEGIN",
+            "UPDATE_CHECK_OK",
+            "UPDATE_CHECK_NEWER",
+            "UPDATE_CHECK_FAIL",
+            "UPDATE_DOWNLOAD_BEGIN",
+            "UPDATE_DOWNLOAD_OK",
+            "UPDATE_DOWNLOAD_FAIL",
+            "UPDATE_DOWNLOAD_CANCELLED",
+            "UPDATE_VERIFY_OK",
+            "UPDATE_VERIFY_FAIL",
+            "UPDATE_FLUSH_OK",
+            "UPDATE_FLUSH_FAIL",
+            "UPDATE_RECEIPT_WRITTEN",
+            "UPDATE_INSTALL_LAUNCH",
+            "UPDATE_INSTALLED",
+            "UPDATE_PENDING",
+            "UPDATE_RECEIPT_STALE",
+            "UPDATE_FGS_START",
+            "UPDATE_FGS_STOP",
+        ):
+            assert event in blob, f"breadcrumb {event} hilang"
+
+
+class TestV1022UpdateForegroundService:
+    """D11: kontrak foreground service dataSync di manifest + kode."""
+
+    def test_manifest_declares_service_type_and_permissions(self):
+        src = read(MANIFEST)
+        assert 'android:name=".core.update.UpdateDownloadService"' in src
+        assert 'android:foregroundServiceType="dataSync"' in src
+        # Service TIDAK boleh exported (hanya proses app sendiri).
+        # Elemen <service .../> self-closing: ambil dari <service sebelum
+        # nama sampai penutup > pertama.
+        name_pos = src.index(".core.update.UpdateDownloadService")
+        svc_start = src.rindex("<service", 0, name_pos)
+        svc = src[svc_start: src.index(">", name_pos) + 1]
+        assert 'android:exported="false"' in svc
+        assert 'android:foregroundServiceType="dataSync"' in svc
+        for perm in (
+            "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_DATA_SYNC",
+            "android.permission.REQUEST_INSTALL_PACKAGES",
+            "android.permission.POST_NOTIFICATIONS",
+        ):
+            assert f'<uses-permission android:name="{perm}" />' in src, perm
+
+    def test_service_promotes_with_explicit_datasync_type(self):
+        # Helper androidx + type di-pass eksplisit (bukan andalkan default
+        # manifest) — pola docs resmi A14.
+        src = read(UPDATE / "UpdateDownloadService.kt")
+        assert "ServiceCompat.startForeground" in src
+        assert "FOREGROUND_SERVICE_TYPE_DATA_SYNC" in src
+        # Tangkap exception bg-start (API 31+) dengan gagal jujur.
+        assert "ForegroundServiceStartNotAllowedException" in src
+
+    def test_single_owner_and_clean_stop(self):
+        # Owner tunggal = service: StateFlow in-process + stopSelf saat
+        # selesai/gagal. Batal = requestCancel (flag per chunk di downloader).
+        src = read(UPDATE / "UpdateDownloadService.kt")
+        assert "MutableStateFlow" in src
+        assert "stopSelf()" in src
+        assert "requestCancel" in src
+
+    def test_fileprovider_paths_use_cache_path(self):
+        # <cache-path> = tag resmi utk getCacheDir(); APK update di update/.
+        src = read(FILE_PATHS)
+        assert "<cache-path" in src
+        assert 'path="update/"' in src
+
+
+class TestV1022UpdateUiWiring:
+    """D7: item drawer + dialog situasional terpasang & tidak bocor state."""
+
+    def test_drawer_item_present_below_about(self):
+        src = read(WORKBENCH)
+        assert '"Cek Update"' in src
+        # Posisi: SETELAH About & Contribute (keputusan user).
+        assert src.index("About & Contribute") < src.index('"Cek Update"')
+
+    def test_update_viewmodel_is_activity_scoped_owner(self):
+        src = read(VM_UPDATE)
+        assert "class UpdateViewModel" in src
+        assert "AndroidViewModel" in src
+        # Download TIDAK boleh di-owner VM: VM hanya start/observe service.
+        assert "UpdateDownloadService.start" in src
+        # VM JANGAN menjalankan HTTP sendiri (pemilik unduhan = service).
+        assert "HttpURLConnection" not in src
+
+
+class TestCITestListCompleteness:
+    """Bug sistemik PR #31/#32 (REVIEW_PR30_31_32 §1 temuan #1): file test
+    baru yang tidak terdaftar di daftar pytest eksplisit TIDAK PERNAH
+    dijalankan CI → false green. Guard ini gagal bila ada test_*.py root
+    yang tidak dijalankan tools/check.sh ATAU job check build.yml."""
+
+    def test_every_root_test_file_is_executed_by_ci(self):
+        import re as _re
+
+        listed = set()
+        for line in read(ROOT / "tools/check.sh").splitlines():
+            if line.startswith("pytest "):
+                listed |= set(_re.findall(r"test_[\w]+\.py", line))
+        yml = read(ROOT / ".github/workflows/build.yml")
+        check_job = yml[yml.index("jobs:"):yml.index("\n  build:")]
+        listed |= set(_re.findall(r"test_[\w]+\.py", check_job))
+        missing = sorted({p.name for p in ROOT.glob("test_*.py")} - listed)
+        assert not missing, (
+            "test_*.py root tidak dijalankan CI (false green PR #31/#32): "
+            f"{missing} — daftarkan di tools/check.sh (baris pytest eksplisit)"
+        )

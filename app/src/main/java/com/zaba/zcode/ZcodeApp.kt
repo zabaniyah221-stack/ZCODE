@@ -56,5 +56,16 @@ class ZcodeApp : Application() {
         } catch (e: Throwable) {
             Breadcrumb.log("TELEMETRY_INIT_FAIL", e.message ?: e.javaClass.simpleName)
         }
+
+        // v1.0.22 one-tap update (RFC D5.6/D11): channel notifikasi (idempotent)
+        // + proses receipt antar-restart (UPDATE_INSTALLED/_PENDING/_RECEIPT_
+        // STALE ke Diagnostics). Satu consumer: UpdateSession. Dibungkus
+        // try/catch: fitur update TIDAK boleh menggagalkan startup.
+        try {
+            com.zaba.zcode.core.update.UpdateDownloadService.ensureChannel(this)
+            com.zaba.zcode.core.update.UpdateSession.onStartup(this)
+        } catch (e: Throwable) {
+            Breadcrumb.log("UPDATE_STARTUP_FAIL", e.message ?: e.javaClass.simpleName)
+        }
     }
 }

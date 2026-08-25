@@ -158,7 +158,9 @@ Common false guards:
 - asserting a function name exists without checking wiring/direction;
 - pinning incidental version strings instead of semantic consistency;
 - tests that pass on both broken and fixed implementations;
-- checking generated source but not the shipped artifact.
+- checking generated source but not the shipped artifact;
+- a test file the CI command list never runs — a green build says nothing
+  about it; register new test files where CI invokes them.
 
 Strip comments before lexical source-pattern guards unless comments are the
 actual contract.
@@ -366,6 +368,10 @@ when evidence changes.
 - Preserve a rollback path for risky UX/lifecycle/data changes.
 - Do not open, merge, publish, or release before agreed gates pass.
 - A green CI build is not a release.
+- Follow the project's documented release flow (branch, review, merge,
+  dispatch from the release branch) exactly; dispatching from a working
+  branch or skipping the merge is a deviation that requires an explicit
+  user decision.
 
 ---
 

@@ -45,6 +45,7 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -65,11 +66,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -80,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.zaba.zcode.R
+import com.zaba.zcode.UpdateViewModel
 import com.zaba.zcode.WorkspaceViewModel
 import com.zaba.zcode.core.plugins.PluginInfo
 import com.zaba.zcode.core.plugins.PluginRegistry
@@ -128,6 +136,7 @@ private val OledBlack = Color(0xFF050806)
 @Composable
 fun WorkbenchScreen(
     vm: WorkspaceViewModel,
+    update: UpdateViewModel,
     onRun: (String) -> Unit,
     onNavigateToPip: () -> Unit,
     onNavigateToAbout: () -> Unit,
@@ -569,6 +578,20 @@ fun WorkbenchScreen(
                 DrawerItem("About & Contribute") {
                     closeDrawerThen { onNavigateToAbout() }
                 }
+
+                // v1.0.22 one-tap update (RFC D7 — keputusan user "Sesuai D7"):
+                // label "Cek Update" di bawah About, ikon vektor ZIcons (bukan
+                // emoji), suffix status 12sp (preseden baris THEME). Tap =
+                // drawer ditutup lalu dialog situasional (UpdateDialog).
+                DrawerItem(
+                    label = "Cek Update",
+                    icon = ZIcons.Update,
+                    suffix = update.suffixText().takeIf { it.isNotEmpty() },
+                    suffixColor = updateSuffixColor(update.uiState.value),
+                    onClick = {
+                        closeDrawerThen { update.openDialog() }
+                    }
+                )
                 } // penutup Column scrollable A0 (rotate resilience)
             }
         }
@@ -1070,6 +1093,9 @@ fun WorkbenchScreen(
             }
         )
     }
+
+    // ---------- v1.0.22: dialog situasional update (satu dialog, RFC §3) ----------
+    UpdateDialog(update)
 }
 
 // =====================================================================
@@ -1563,16 +1589,221 @@ private fun SnippetsDialog(
 }
 
 // =====================================================================
+// v1.0.22 — dialog update situasional (RFC §3): SATU dialog, isi + tombol
+// mengikuti state sekarang. Copy = English (keputusan user — konsisten
+// dgn label app). Landscape-safe (Infinix ~360dp): judul 1 baris + teks
+// ≤2 baris + maks 2 tombol. Tutup dialog ≠ batalkan: unduhan FGS tetap
+// jalan (D11), progress tetap di suffix drawer + notifikasi.
+// =====================================================================
+
+@Composable
+private fun UpdateDialog(update: UpdateViewModel) {
+    if (!update.showDialog.value) return
+    val context = LocalContext.current
+
+    // POST_NOTIFICATIONS kontekstual (RFC D11): prompt sekali, saat user
+    // pertama kali tap "Download & Update" (target ≥33 app memegang kendali
+    // timing). Ditolak TIDAK memblokir: FGS tetap jalan, notifikasi tetap di
+    // Task Manager (verified docs) → lanjut download apa pun hasilnya.
+    val notifPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { update.startDownload() }
+
+    fun tapDownload() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            update.startDownload()
+        }
+    }
+
+    // Dialog izin install (satu panduan; RFC D5.4) menimpa dialog utama
+    // selama izin belum ada.
+    if (update.needsInstallPermission.value) {
+        AlertDialog(
+            onDismissRequest = { update.closeDialog() },
+            title = { Text("Permission needed", fontSize = 16.sp) },
+            text = { Text("Allow 'Install unknown apps' for ZCODE?") },
+            confirmButton = {
+                TextButton(onClick = { update.openInstallSettings() }) { Text("Open settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { update.closeDialog() }) { Text("Cancel") }
+            }
+        )
+        return
+    }
+
+    val state = update.uiState.value
+    val (w, t) = update.progress.value
+    val pendingVersion = update.pendingVersion.value
+        .ifEmpty { update.offer.value?.version ?: "" }
+
+    val title: String
+    val confirmLabel: String?
+    val dismissLabel: String
+    val onConfirm: (() -> Unit)?
+
+    when (state) {
+        UpdateViewModel.UiState.IDLE,
+        UpdateViewModel.UiState.CHECKING -> {
+            title = "Checking…"
+            confirmLabel = null
+            dismissLabel = "Close"
+            onConfirm = null
+        }
+        UpdateViewModel.UiState.UPTODATE -> {
+            title = "Up to date"
+            confirmLabel = "Check again"
+            dismissLabel = "Close"
+            onConfirm = { update.checkNow(fresh = true) }
+        }
+        UpdateViewModel.UiState.AVAILABLE -> {
+            title = "Update available"
+            confirmLabel = "Download & Update"
+            dismissLabel = "Later"
+            onConfirm = ::tapDownload
+        }
+        UpdateViewModel.UiState.DOWNLOADING -> {
+            title = "Downloading update"
+            confirmLabel = "Cancel"
+            dismissLabel = ""
+            onConfirm = {
+                update.cancelDownload()
+                update.closeDialog()
+            }
+        }
+        UpdateViewModel.UiState.VERIFYING -> {
+            title = "Verifying…"
+            confirmLabel = null
+            dismissLabel = "Close"
+            onConfirm = null
+        }
+        UpdateViewModel.UiState.FLUSHING -> {
+            title = "Saving…"
+            confirmLabel = null
+            dismissLabel = "Close"
+            onConfirm = null
+        }
+        UpdateViewModel.UiState.READY -> {
+            title = "Ready to install"
+            confirmLabel = "Install now"
+            dismissLabel = "Later"
+            onConfirm = { update.installNow() }
+        }
+        UpdateViewModel.UiState.PENDING -> {
+            title = "Install pending"
+            confirmLabel = "Install now"
+            dismissLabel = "Later"
+            onConfirm = { update.installNow() }
+        }
+        UpdateViewModel.UiState.FAILED -> {
+            title = "Update failed"
+            confirmLabel = "Retry"
+            dismissLabel = "Close"
+            onConfirm = { update.retry() }
+        }
+    }
+
+    val body: @Composable () -> Unit = {
+        when (state) {
+            UpdateViewModel.UiState.UPTODATE ->
+                Text("You're up to date — v${update.localVersion.value}")
+            UpdateViewModel.UiState.AVAILABLE -> {
+                val n = update.offer.value
+                if (n != null) {
+                    Text("Update available — v${n.version}, " +
+                        String.format("%.1f MB", n.sizeBytes / 1048576.0))
+                    Text(
+                        "SHA-256 ${n.sha256.take(12)}…  (tap to copy)",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.clickable {
+                            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                as? ClipboardManager
+                            cm?.setPrimaryClip(ClipData.newPlainText("zcode-sha256", n.sha256))
+                        }
+                    )
+                }
+            }
+            UpdateViewModel.UiState.DOWNLOADING -> {
+                Column {
+                    LinearProgressIndicator(
+                        progress = { if (t > 0) (w.toFloat() / t) else -1f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        if (t > 0) String.format(
+                            "%.1f / %.1f MB (%d%%)", w / 1048576.0, t / 1048576.0, (w * 100 / t).toInt()
+                        ) else String.format("%.1f MB", w / 1048576.0),
+                        fontSize = 13.sp
+                    )
+                }
+            }
+            UpdateViewModel.UiState.VERIFYING -> Text("Verifying package (SHA-256)…")
+            UpdateViewModel.UiState.FLUSHING -> Text("Saving your workspace…")
+            UpdateViewModel.UiState.READY ->
+                Text("Downloaded & verified. Workspace saved. Android will complete the install.")
+            UpdateViewModel.UiState.PENDING ->
+                Text("v$pendingVersion is ready but not installed yet.")
+            UpdateViewModel.UiState.FAILED ->
+                Text("Update failed — ${update.failReason.value}")
+            else -> Text("Contacting release service…")
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = { update.closeDialog() },
+        title = { Text(title, fontSize = 16.sp) },
+        text = { body() },
+        confirmButton = {
+            if (confirmLabel != null) {
+                TextButton(onClick = { onConfirm?.invoke() }) {
+                    Text(
+                        confirmLabel,
+                        // "Cancel" download = tindakan destruktif (hapus
+                        // parsial) → warna error (preseden ProblemsBanner).
+                        color = if (state == UpdateViewModel.UiState.DOWNLOADING) {
+                            Color(0xFFFFB4AB)
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
+            }
+        },
+        dismissButton = {
+            if (dismissLabel.isNotEmpty()) {
+                TextButton(onClick = { update.closeDialog() }) { Text(dismissLabel) }
+            }
+        }
+    )
+}
+
+// =====================================================================
 // Komponen kecil drawer (label seksi era lama dihapus — redesign 2026-08:
 // drawer hanya berisi item + kotak TOOLS)
 // =====================================================================
 
 @Composable
-private fun DrawerItem(label: String, onClick: () -> Unit) {
-    Text(
-        label,
-        fontSize = 14.sp,
-        color = MaterialTheme.colorScheme.onSurface,
+private fun DrawerItem(
+    label: String,
+    icon: ImageVector? = null,
+    suffix: String? = null,
+    suffixColor: Color? = null,
+    // onClick TERAKHIR (idiom aksi Kotlin): trailing lambda di call lama
+    // `DrawerItem("X") { ... }` terikat parameter paling akhir — meletakkannya
+    // di tengah memutus semua baris drawer lama (wave error CI run #335).
+    onClick: () -> Unit
+) {
+    // v1.0.22: parameter opsional untuk baris "Cek Update" (ikon + suffix
+    // status 12sp — preseden baris THEME di dalam kotak TOOLS). Baris lama
+    // memanggil tanpa icon/suffix → perilakunya tak berubah (NAV log +
+    // onClick di titik yang sama, tipografi yang sama).
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             // Satu titik catat untuk SELURUH navigasi sidebar. Menaruhnya di
@@ -1582,8 +1813,45 @@ private fun DrawerItem(label: String, onClick: () -> Unit) {
                 com.zaba.zcode.core.diagnostics.Breadcrumb.log("NAV", label)
                 onClick()
             }
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .size(18.dp)
+                    .padding(end = 8.dp)
+            )
+        }
+        Text(
+            label,
+            fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (suffix != null) {
+            Text(
+                suffix,
+                fontSize = 12.sp,
+                color = suffixColor ?: MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+/** Warna suffix baris "Cek Update" (RFC §3): primary utk versi baru/ready,
+ *  merah utk failed (preseden ProblemsBanner), sisanya netral. */
+@Composable
+private fun updateSuffixColor(state: UpdateViewModel.UiState): Color = when (state) {
+    UpdateViewModel.UiState.AVAILABLE,
+    UpdateViewModel.UiState.READY,
+    UpdateViewModel.UiState.PENDING -> MaterialTheme.colorScheme.primary
+    UpdateViewModel.UiState.FAILED -> Color(0xFFFFB4AB)
+    else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
 }
 
 @Composable

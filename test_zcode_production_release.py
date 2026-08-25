@@ -1,9 +1,14 @@
-"""Permanent guards for the single-build ZCODE v1.0.21 production candidate.
+"""Permanent guards for the single-build ZCODE production releases (v1.0.20, v1.0.21, v1.0.22).
 
 Production signing is fail-closed: source may be reviewed without secrets, but
 assembleRelease must never fall back to a debug key. One manually approved build
 creates one APK, verifies its public signer fingerprint, and attaches those exact
 bytes to a draft GitHub Release for device UAT before publication.
+
+Post-release evidence (added when v1.0.21 was published on 2026-08-23):
+every status-bearing document must carry the same verified constants, and the
+anti-overclaim assertions from the candidate phase are replaced by the verified
+facts (update continuity is now DEVICE VERIFIED, user report).
 """
 from pathlib import Path
 import re
@@ -123,9 +128,14 @@ class TestProductionBuildContract:
         assert "System.getenv" in signing
 
     def test_version_and_main_identity_are_exact(self):
+        # Rilis berjalan: 1.0.22/25 (satu-satunya sumber =
+        # gradle.properties). Production workflow direvisi in-place ke
+        # v1.0.22 (pola rumah, prasyarat 1392cc6); guard pasangan 1.0.22/25
+        # hidup di TestSingleProductionWorkflow (di bawah) yang membaca
+        # production.yml sebagai workflow rilis berjalan.
         props = read(ROOT / "gradle.properties")
-        assert "zcode.versionName=1.0.21" in props
-        assert "zcode.versionCode=24" in props
+        assert "zcode.versionName=1.0.22" in props
+        assert "zcode.versionCode=25" in props
         manifest = read(MAIN_MANIFEST)
         strings = read(MAIN_STRINGS)
         assert 'android:taskAffinity="com.zaba.zcode"' in manifest
@@ -207,7 +217,7 @@ class TestSingleProductionWorkflow:
         assert "push:" not in src and "pull_request:" not in src
         assert "environment: production" in src
         assert "permissions:" in src and "contents: write" in src
-        assert "BUILD-v1.0.21" in src
+        assert "BUILD-v1.0.22" in src
         assert "concurrency:" in src
 
     def test_exactly_one_release_apk_is_built(self):
@@ -218,9 +228,12 @@ class TestSingleProductionWorkflow:
         assert "assemblePerformance" not in src
         assert "find app/build/outputs/apk/release" in src
         assert "app/build/outputs/apk/debug" not in src
-        assert "ZCODE-v1.0.21.apk" in src
+        assert "ZCODE-v1.0.22.apk" in src
         assert "ZCODE-Fase12-APK" not in src
         assert "ZCODE-v1.0.20-rc1" not in src
+        # Pin v1.0.21 harus hilang setelah revisi in-place (pola 1392cc6).
+        assert "1.0.21" not in src, "pin v1.0.21 masih hidup di production.yml"
+        assert "versionCode='24'" not in src
 
     def test_secret_boundary_is_exact_and_cleanup_is_unconditional(self):
         src = self.source()
@@ -266,8 +279,8 @@ class TestSingleProductionWorkflow:
         src = self.source()
         for token in (
             "com.zaba.zcode",
-            "versionCode='24'",
-            "versionName='1.0.21'",
+            "versionCode='25'",
+            "versionName='1.0.22'",
             "application-label:'ZCODE'",
             "application-debuggable",
             "profileable",
@@ -287,12 +300,12 @@ class TestSingleProductionWorkflow:
         assert "gh release create" in src
         assert "--draft" in src
         assert "--target \"$GITHUB_SHA\"" in src
-        assert "docs/RELEASE_NOTES_V1.0.21.md" in src
+        assert "docs/RELEASE_NOTES_V1.0.22.md" in src
         assert "gh release view" in src
         assert "git ls-remote --exit-code --tags" in src
         assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4" in src
         assert "zcode-production-apk" in src
-        assert "ZCODE-v1.0.21.apk.sha256" in src
+        assert "ZCODE-v1.0.22.apk.sha256" in src
         assert "release-promotion" not in src.lower()
 
     def test_canonical_debug_does_not_emit_competing_apk(self):
@@ -371,12 +384,13 @@ class TestProductionSigningPolicy:
         assert "Public release                   : YES — v1.0.20" in roadmap
         assert "https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.20" in roadmap
         assert apk_sha in roadmap
-        assert "Update continuity             : NOT YET DEVICE VERIFIED" in roadmap
+        # Update continuity item closed by the v1.0.21 in-place update.
+        assert "Update continuity             : DEVICE VERIFIED — v1.0.20→v1.0.21 in-place (user report)" in roadmap
         assert "ZCODE v1.0.20" in notes
         assert "draft release" in notes.lower()
         assert "SKILL 26 — Production signing" in skills
         assert apk_sha in skills
-        assert "update continuity remains\nunverified" in skills
+        assert "Update continuity was\nsubsequently DEVICE VERIFIED (user report)" in skills
 
     def test_no_credential_like_material_is_tracked(self):
         patterns = re.compile(("github" + "_pat_") + "|" + ("gh" + "p_") + r"[A-Za-z0-9]{20,}")
@@ -394,6 +408,85 @@ class TestProductionSigningPolicy:
             except (UnicodeDecodeError, OSError):
                 pass
         assert not hits, f"credential-like token ditemukan: {hits}"
+
+
+class TestV1021PostReleaseEvidence:
+    """v1.0.21 is RELEASED (2026-08-23). The same verified constants must
+    appear in every status-bearing document; UAT facts are labeled user
+    report; the honest non-claim (blocked independent re-download) must stay."""
+
+    V21_PUBLISHED = "2026-08-23T01:40:05Z"
+    V21_RUN = "32570675883"
+    V21_COMMIT = "2793c198aafaa25aab93b4310ee94f91ffa0f448"
+    V21_BYTES = "34,719,925"
+    V21_APK_SHA = "1d84c60c6d1574610b25464ee8dfae7101e2c63669bfd94473ebe52e4379b4e3"
+
+    def test_released_facts_are_consistent_across_all_status_documents(self):
+        notes = read(RELEASE_NOTES)
+        policy = read(SIGNING_POLICY)
+        roadmap_next = read(ROOT / "docs/ROADMAP_V1021_V1022_SAFETY_AND_UPDATE.md")
+        roadmap_prev = read(ROADMAP)
+        prd = read(ROOT / "docs/PRD_ZCODE.md")
+        skills = read(SKILLS)
+        # Full evidence block: release record + closing continuity records.
+        for doc, name in (
+            (notes, "RELEASE_NOTES_V1.0.21"),
+            (policy, "SIGNING_ZCODE"),
+            (roadmap_prev, "ROADMAP_V1020"),
+        ):
+            for token in (self.V21_PUBLISHED, self.V21_RUN, self.V21_APK_SHA, EXPECTED_SIGNER):
+                assert token in doc, f"{name} kehilangan bukti v1.0.21: {token}"
+        # Status documents that carry the version status, not the full block.
+        for doc, name in (
+            (roadmap_next, "ROADMAP_V1021_V1022"),
+            (prd, "PRD"),
+        ):
+            for token in (self.V21_PUBLISHED, self.V21_RUN):
+                assert token in doc, f"{name} kehilangan status v1.0.21: {token}"
+        for token in (
+            "RELEASED — 2026-08-23T01:40:05Z",
+            "32570675883 — SUCCESS",
+            self.V21_BYTES,
+            "user report",
+            "NOT VERIFIED",
+        ):
+            assert token in notes, f"RELEASE_NOTES_V1.0.21 kehilangan: {token}"
+        for token in (
+            "PUBLIC RELEASE              : YES — v1.0.21",
+            "CI PRODUCTION SIGNING       : VERIFIED — run 32570675883 (v1.0.21)",
+            "UPDATE CONTINUITY           : DEVICE VERIFIED — v1.0.20→v1.0.21 in-place (user report)",
+            "## 9. v1.0.21 production evidence",
+            f"Workflow run       : {self.V21_RUN} — SUCCESS",
+            f"Source commit/tag  : {self.V21_COMMIT} (tag v1.0.21)",
+        ):
+            assert token in policy, f"SIGNING_ZCODE kehilangan: {token}"
+        assert "v1.0.21 = RELEASED + DEVICE VERIFIED (user report; in-place dari v1.0.20," in roadmap_next
+        assert "DEVICE VERIFIED (user report)" in prd
+        assert "Update continuity was\nsubsequently DEVICE VERIFIED (user report)" in skills
+
+    def test_candidate_status_claims_are_replaced_by_release_facts(self):
+        notes = read(RELEASE_NOTES)
+        for stale in (
+            "not released",
+            "NOT RELEASED",
+            "NOT DEVICE VERIFIED",
+            "NOT CREATED",
+            "IMPLEMENTED LOCALLY",
+        ):
+            assert stale not in notes, f"klaim kandidat lama masih hidup di RELEASE_NOTES_V1.0.21: {stale}"
+
+    def test_review_document_with_addendum_is_on_main(self):
+        review = read(ROOT / "docs/REVIEW_PR30_31_32_2026_08_24.md")
+        for token in (
+            "2793c19",
+            "Vonis: CLOSE (reject)",
+            "Vonis: REQUEST CHANGES",
+            "Vonis: CLOSE, atau rombak total",
+            "Addendum (sesi arena/01a03332-zcode, 2026-08-25)",
+            "rename_symbol",
+            "_safe_replace_symbol",
+        ):
+            assert token in review, f"REVIEW_PR30_31_32 kehilangan: {token}"
 
 
 class TestOfficialGradleWrapper:

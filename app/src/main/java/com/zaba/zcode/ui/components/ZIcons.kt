@@ -63,4 +63,13 @@ object ZIcons {
         "M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8" +
             "c0-1.1-.9-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"
     )
+
+    /** v1.0.22 — panah menyegarkan polos (baris "Cek Update" di drawer).
+     *  Path yang sama dengan res/drawable/ic_update.xml (notifikasi FGS). */
+    val Update: ImageVector = icon(
+        "Update",
+        "M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8" +
+            "c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6" +
+            "s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+    )
 }

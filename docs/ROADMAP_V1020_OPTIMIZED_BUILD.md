@@ -1653,6 +1653,13 @@ v1.0.20 optimized foundation : MERGED
 Production signer             : VERIFIED
 Production exact-byte UAT     : DEVICE VERIFIED
 Public release                : RELEASED
-Update continuity             : NOT YET DEVICE VERIFIED
+Update continuity             : DEVICE VERIFIED — v1.0.20→v1.0.21 in-place (user report)
 Workbench v1.0.25             : PARKED
 ```
+
+Catatan penutup (2026-08-25): item update-continuity di atas ditutup oleh
+v1.0.21 — RELEASED 2026-08-23T01:40:05Z, production run 32570675883, APK
+`ZCODE-v1.0.21.apk` 34,719,925 bytes, SHA-256
+`1d84c60c6d1574610b25464ee8dfae7101e2c63669bfd94473ebe52e4379b4e3`, signer
+`401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2`. Rincian
+lengkap: `docs/RELEASE_NOTES_V1.0.21.md` dan `docs/SIGNING_ZCODE.md` §9.

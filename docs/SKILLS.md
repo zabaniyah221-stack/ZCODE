@@ -2135,6 +2135,147 @@ Exact APK SHA-256:
 b1d36a1d04a97325f325e1576ecfecb6be91308d675a36b41b85576a9a6285ed
 ```
 
-This is **PRODUCTION DEVICE VERIFIED + RELEASED**, but update continuity remains
-unverified until a later production version with higher versionCode is installed
-in place over v1.0.20.
+This is **PRODUCTION DEVICE VERIFIED + RELEASED**. Update continuity was
+subsequently DEVICE VERIFIED (user report): v1.0.21 (versionCode 24) installed
+in place over v1.0.20 on 2026-08-23 (run 32570675883).
+
+---
+
+## SKILL 28 — Protokol memulai pekerjaan di ZCODE (perbaikan, update, fitur) (2026-08-25)
+
+**Trigger:** post-mortem PR #30/31/32 (`docs/REVIEW_PR30_31_32_2026_08_24.md`:
+tiga PR paralel untuk satu fitur, nol yang layak merge) + perjalanan rilis
+v1.0.22 (RFC_V1022) menunjukkan pola kegagalan agent yang berulang: false
+green CI, penghapusan kode device-verified, klaim melebihi bukti, dan
+melompati antrean roadmap. **Skill ini wajib dibaca agent manapun sebelum
+memulai perbaikan, pengembangan, update, atau fitur baru di ZCODE.**
+
+### 28.1 Urutan rilis: merge-first (pola v1.0.20 + v1.0.21)
+
+```text
+arena/<sesi> branch → kerja → gate lokal hijau (tools/check.sh) → CI hijau
+→ PR → review user → MERGE ke main (merge commit, pola PR #29 / 2793c19)
+→ dispatch production DARI MAIN (typed confirm BUILD-vX.Y.Z)
+→ draft release byte-exact → UAT device → publish byte yang sama (no rebuild)
+```
+
+- Production dispatch **dari main, bukan dari branch sesi**. Bukti: tag
+  `v1.0.21` adalah ancestor dari main (run 32570675883); v1.0.20 memakai pola
+  yang sama. Dispatch dari branch = deviasi yang wajib disetujui user
+  eksplisit — jangan dilakukan agent sepihak.
+- **Satu kandidat per fitur** (topologi satu-kandidat), bukan beberapa PR
+  paralel untuk fitur yang sama (PR #30/31/32 = tiga paralel, nol yang layak).
+- **Antrean roadmap = keputusan produk user.** Agent tidak melompati antrean
+  (mis. intelligence engine melompati one-tap update v1.0.22) tanpa
+  persetujuan eksplisit; tawarkan opsi + trade-off + rekomendasi, bukan
+  keputusan diam-diam.
+
+### 28.2 Versi satu sumber, empat titik sinkron (jangan patah di satu titik)
+
+`gradle.properties` (`zcode.versionName`/`zcode.versionCode`) = satu-satunya
+sumber. Setiap bump rilis menyentuh empat titik dalam commit koheren:
+
+1. `production.yml` **revisi in-place** (pola 1392cc6, bukan file baru per
+   versi): name, typed confirm, concurrency group, `RELEASE_TAG`, badging
+   grep (`versionCode`/`versionName`), nama artifact APK, `--notes-file`;
+2. mirror `ci/workflows/production.yml` byte-identical
+   (`test_workflow_and_mirrors_are_identical`);
+3. pasangan guard versi di `test_zcode_production_release.py` —
+   `TestSingleProductionWorkflow` membaca `production.yml` sebagai workflow
+   rilis **berjalan**;
+4. `RELEASE_NOTES_VX.Y.Z.md` + status evidence block di docs
+   (SIGNING_ZCODE, ROADMAP, PRD) memakai label status jujur (ladder SKILL 26).
+
+`versionCode` monoton naik dan tidak pernah dipakai ulang. Perbandingan versi
+numerik per segmen — jebakan perbandingan string (`1.0.10 < 1.0.9`) sudah
+dimakamkan guard v1.0.21; jangan bangunkan lagi.
+
+### 28.3 Gate lokal sebelum push (urutan tetap)
+
+```bash
+python3 -m venv /var/tmp/venv
+/var/tmp/venv/bin/pip install -q pytest packaging pillow jedi rope pyflakes mccabe
+PATH=/var/tmp/venv/bin:$PATH bash tools/check.sh   # semua stage harus hijau
+```
+
+- Sandbox agent **tidak punya JDK/Android SDK** → CI adalah hakim kompilasi
+  Kotlin. Run merah cepat (~1 menit 45 detik) = error compile
+  `:app:compileDebugKotlin`; build sehat = beberapa menit penuh.
+- **File test baru wajib terdaftar** di daftar pytest eksplisit
+  `tools/check.sh` (baris `pytest ...`) dan/atau job `check` di `build.yml`.
+  Daftarnya eksplisit, bukan glob — file yang tidak terdaftar TIDAK PERNAH
+  dijalankan CI (bug sistemik PR #31/#32, temuan #1 review). Sekarang dijaga
+  mesin: `TestCITestListCompleteness` di `test_zcode_kotlin_guards.py`.
+- Verifikasi perilaku Python **dengan dependensi asli** (jedi/parso/
+  pyflakes/mccabe/rope terpasang), bukan hanya mode fallback — fallback hijau
+  bukan bukti path asli (PR #31: bug `mccabe.ASTVisitor.preorder` hanya merah
+  dengan deps asli).
+- `git diff --check`; credential scanner
+  (`test_no_credential_like_material_is_tracked`) memindai SEMUA file yang
+  di-track — literal token/secret tidak boleh masuk repo, bahkan di test.
+
+### 28.4 Lima larangan (post-mortem PR #30/31/32)
+
+1. **JANGAN hapus kode device-verified / shipping / ber-provenance** tanpa
+   persetujuan eksplisit user + bukti. PR #30 menghapus 5 plugin
+   device-verified + header `DERIVED FROM ZABACODE under GPLv3` → CLOSE.
+   Provenance itu load-bearing (kepatuhan lisensi), bukan hiasan.
+2. **Hijau CI bukan buktimu** selama test-mu tidak benar-benar dijalankan CI
+   (lihat 28.3). Jangan menulis "100% pass" untuk mode yang tidak diuji.
+3. **Klaim = bukti.** Status tertinggi yang ditulis = level verifikasi
+   tertinggi yang dibuktikan (ladder §3 AGENTS.md / SKILL 26). Body PR atau
+   summary yang over-claim atau berhalusinasi = kehilangan kepercayaan
+   permanen (PR #32: "deteksi spike via kamera", perbandingan versi string,
+   `os.system`, `adb/reverse_tcp` — tak satu pun ada di aplikasi; audit
+   lengkap di addendum §7.2 dokumen review).
+4. **Satu kandidat, bukan tiga paralel**, untuk satu fitur.
+5. **Jangan habiskan siklus UAT user yang mahal** untuk menjawab pertanyaan
+   yang bisa dijawab test lokal atau eksperimen murah lebih dulu.
+
+### 28.5 Audit kompilasi Kotlin sebelum push (CI = hakim; kelas error ini tak terlihat lokal)
+
+Pola sesi v1.0.22: tiga gelombang error compile, semuanya bug agent (semua
+diakui). Sebelum push Kotlin, audit lintas-file:
+
+- Tipe nested di `companion object` tidak terlihat dari file lain sebagai
+  `Outer.Nested` (shortcut nama kelas hanya bekerja untuk fungsi/properti) →
+  deklarasikan di badan kelas.
+- Trailing lambda terikat parameter **terakhir**: parameter aksi (`onClick`
+  dsb.) harus di posisi terakhir, atau pemanggil lama `Foo("x") { ... }`
+  meledak ("No value passed for parameter" berpasangan "Type mismatch").
+- Fungsi block-body tidak auto-return ekspresi terakhir → `return when` /
+  `return if` eksplisit.
+- `const val` hanya konstanta waktu-kompilasi (`TimeUnit.HOURS.toMillis(24)`
+  bukan konstanta → tulis literal).
+- `when` atas sealed type dengan classifier tak ter-resolve (mis. import
+  hilang) menghasilkan kaskade "non-exhaustive + semua branch unresolved" —
+  perbaiki classifier/import dulu, biarkan compiler membuktikan exhaustiveness.
+
+### 28.6 File workflow & tangan user (pelajaran v1.0.22; aturan dasarnya di SKILL 27)
+
+- Token agent (GitHub App) tersangkut ceiling installation: push
+  `.github/workflows/*` ditolak (`without 'workflows' permission`) meskipun
+  Contents R&W; push file lain tetap aman. **Tes sekali**; jika merah →
+  langsung jalur web, jangan mengulang tes yang sama berulang kali.
+- Pola yang terbukti (v1.0.22, 2026-08-25): agent generate konten dari
+  template versi sebelumnya (substitusi + diff + cek zero-residual) → user
+  membuat/mengedit file `.github/workflows/*` via web GitHub dari raw link →
+  agent commit mirror `ci/workflows/*` + sinkronisasi guard (push file biasa
+  tetap boleh) → full suite hijau → merge ke main → dispatch.
+- `production.yml` direvisi **in-place** per rilis (bukan file baru per
+  versi); v1.0.21 (1392cc6) dan v1.0.22 memakai pola yang sama.
+
+### Status saat skill ini ditulis (2026-08-25, sebelum production dispatch v1.0.22)
+
+v1.0.22 (versionCode 25): implementasi + CI hijau di branch sesi; alur
+merge→dispatch→draft→UAT sedang berjalan. **BELUM** draft created, device
+verified, atau released — status evidence di `RELEASE_NOTES_V1.0.22.md` dan
+`SIGNING_ZCODE` adalah sumber kebenaran, bukan skill ini.
+
+Sumber:
+
+- `docs/REVIEW_PR30_31_32_2026_08_24.md` (vonis + addendum §7)
+- `docs/RFC_V1022_ONE_TAP_UPDATE.md`, `docs/RELEASE_NOTES_V1.0.22.md`
+- Git history: `7b2af90` (production workflow pertama), `1392cc6`
+  (revisi in-place v1.0.21), `2793c19` (merge commit main), `0c90e02`
+  (revisi in-place v1.0.22)

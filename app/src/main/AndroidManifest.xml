@@ -11,6 +11,21 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- No READ/WRITE_EXTERNAL_STORAGE in Fase 0 — use filesDir internal (S-20) -->
 
+    <!-- v1.0.22 one-tap update (RFC D11): FGS dataSync untuk download APK.
+         Install-time permission (tanpa prompt). Aturan target 34: FGS WAJIB
+         declare foregroundServiceType di manifest + permission ini — tanpa
+         itu startForeground() melempar MissingForegroundServiceTypeException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- v1.0.22 one-tap update (RFC D5.4): izin install dari luar Play Store.
+         Dipinta secara kontekstual (sekali, saat "Download & Update") via
+         ACTION_MANAGE_UNKNOWN_APP_SOURCES per-app. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- v1.0.22 one-tap update (RFC D11): diminta KONTEKSTUAL (sekali, saat
+         "Download & Update"). Bila ditolak: FGS tetap jalan; notifikasi FGS
+         tetap di Task Manager, bukan drawer (verified docs). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".ZcodeApp"
         android:allowBackup="false"
@@ -46,6 +61,27 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- v1.0.22 one-tap update (RFC D11): owner tunggal unduhan APK.
+             exported=false (hanya proses app sendiri), type dataSync sesuai
+             definisi resmi "data upload or download" — runtime prerequisite: none. -->
+        <service
+            android:name=".core.update.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- v1.0.22 one-tap update (RFC D5.5): serve APK update via content://
+             (minSdk 26 — file:// = FileUriExposedException). export=false,
+             grantUriPermissions per-URI (FLAG_GRANT_READ di intent). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 
