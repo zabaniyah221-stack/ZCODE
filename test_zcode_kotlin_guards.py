@@ -5284,3 +5284,26 @@ class TestV1022UpdateUiWiring:
         assert "UpdateDownloadService.start" in src
         # VM JANGAN menjalankan HTTP sendiri (pemilik unduhan = service).
         assert "HttpURLConnection" not in src
+
+
+class TestCITestListCompleteness:
+    """Bug sistemik PR #31/#32 (REVIEW_PR30_31_32 §1 temuan #1): file test
+    baru yang tidak terdaftar di daftar pytest eksplisit TIDAK PERNAH
+    dijalankan CI → false green. Guard ini gagal bila ada test_*.py root
+    yang tidak dijalankan tools/check.sh ATAU job check build.yml."""
+
+    def test_every_root_test_file_is_executed_by_ci(self):
+        import re as _re
+
+        listed = set()
+        for line in read(ROOT / "tools/check.sh").splitlines():
+            if line.startswith("pytest "):
+                listed |= set(_re.findall(r"test_[\w]+\.py", line))
+        yml = read(ROOT / ".github/workflows/build.yml")
+        check_job = yml[yml.index("jobs:"):yml.index("\n  build:")]
+        listed |= set(_re.findall(r"test_[\w]+\.py", check_job))
+        missing = sorted({p.name for p in ROOT.glob("test_*.py")} - listed)
+        assert not missing, (
+            "test_*.py root tidak dijalankan CI (false green PR #31/#32): "
+            f"{missing} — daftarkan di tools/check.sh (baris pytest eksplisit)"
+        )
