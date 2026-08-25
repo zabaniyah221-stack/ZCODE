@@ -56,6 +56,21 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class UpdateDownloadService : Service() {
 
+    /**
+     * State unduhan — direct nested di class (BUKAN di companion object):
+     * tipe yang hidup di companion TIDAK bisa diakses dari file lain sebagai
+     * `UpdateDownloadService.DownloadState` (akses via nama class hanya
+     * berlaku untuk fungsi/properti, bukan tipe) → ViewModel tak akan
+     * bisa membaca state.
+     */
+    sealed interface DownloadState {
+        object Idle : DownloadState
+        data class InProgress(val written: Long, val total: Long) : DownloadState
+        data class Done(val file: File, val sha256: String, val bytes: Long) : DownloadState
+        data class Failed(val reasonCode: String, val message: String) : DownloadState
+        object Cancelled : DownloadState
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -192,14 +207,6 @@ class UpdateDownloadService : Service() {
         private const val EXTRA_URL = "url"
         private const val EXTRA_DEST = "dest"
         private const val EXTRA_SIZE = "size"
-
-        sealed interface DownloadState {
-            object Idle : DownloadState
-            data class InProgress(val written: Long, val total: Long) : DownloadState
-            data class Done(val file: File, val sha256: String, val bytes: Long) : DownloadState
-            data class Failed(val reasonCode: String, val message: String) : DownloadState
-            object Cancelled : DownloadState
-        }
 
         private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
         val state: StateFlow<DownloadState> = _state.asStateFlow()

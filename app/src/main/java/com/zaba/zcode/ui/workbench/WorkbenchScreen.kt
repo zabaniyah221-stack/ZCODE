@@ -87,6 +87,7 @@ import androidx.compose.ui.unit.sp
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.zaba.zcode.R
+import com.zaba.zcode.UpdateViewModel
 import com.zaba.zcode.WorkspaceViewModel
 import com.zaba.zcode.core.plugins.PluginInfo
 import com.zaba.zcode.core.plugins.PluginRegistry
