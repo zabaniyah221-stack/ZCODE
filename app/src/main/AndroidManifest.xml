@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- No READ/WRITE_EXTERNAL_STORAGE in Fase 0 — use filesDir internal (S-20) -->
 
+    <!-- v1.0.22 one-tap update (RFC D11): FGS dataSync untuk download APK.
+         Install-time permission (tanpa prompt). Aturan target 34: FGS WAJIB
+         declare foregroundServiceType di manifest + permission ini — tanpa
+         itu startForeground() melempar MissingForegroundServiceTypeException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <application
         android:name=".ZcodeApp"
         android:allowBackup="false"
@@ -46,6 +53,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- v1.0.22 one-tap update (RFC D11): owner tunggal unduhan APK.
+             exported=false (hanya proses app sendiri), type dataSync sesuai
+             definisi resmi "data upload or download" — runtime prerequisite: none. -->
+        <service
+            android:name=".core.update.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 
