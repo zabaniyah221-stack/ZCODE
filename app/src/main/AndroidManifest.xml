@@ -17,6 +17,10 @@
          itu startForeground() melempar MissingForegroundServiceTypeException. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- v1.0.22 one-tap update (RFC D5.4): izin install dari luar Play Store.
+         Dipinta secara kontekstual (sekali, saat "Download & Update") via
+         ACTION_MANAGE_UNKNOWN_APP_SOURCES per-app. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".ZcodeApp"
@@ -61,6 +65,19 @@
             android:name=".core.update.UpdateDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- v1.0.22 one-tap update (RFC D5.5): serve APK update via content://
+             (minSdk 26 — file:// = FileUriExposedException). export=false,
+             grantUriPermissions per-URI (FLAG_GRANT_READ di intent). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

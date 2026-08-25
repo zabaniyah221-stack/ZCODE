@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+ v1.0.22 one-tap update (RFC D5.5): APK di-serve dari getCacheDir()/update
+ via content://. Wajib content:// di minSdk 26 (file:// melempar
+ FileUriExposedException). <cache-path> (TAG_CACHE_PATH) adalah tag resmi
+ untuk file di bawah getCacheDir() — APK update berada di update/.
+ MIME .apk diturunkan otomatis oleh FileProvider
+ (application/vnd.android.package-archive).
+-->
+<paths>
+    <cache-path name="update" path="update/" />
+</paths>
