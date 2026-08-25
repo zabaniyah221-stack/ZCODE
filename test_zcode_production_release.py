@@ -128,9 +128,14 @@ class TestProductionBuildContract:
         assert "System.getenv" in signing
 
     def test_version_and_main_identity_are_exact(self):
+        # Target rilis berikutnya: 1.0.22/25 (satu-satunya sumber =
+        # gradle.properties). Production workflow v1.0.22 dibuat saat
+        # dispatch (pola rumah) membawa guard pasangan 1.0.22/25-nya;
+        # workflow v1.0.21 di atas tetap assert pin v1.0.21 karena file itu
+        # adalah workflow yang benar-benar memproduksi v1.0.21.
         props = read(ROOT / "gradle.properties")
-        assert "zcode.versionName=1.0.21" in props
-        assert "zcode.versionCode=24" in props
+        assert "zcode.versionName=1.0.22" in props
+        assert "zcode.versionCode=25" in props
         manifest = read(MAIN_MANIFEST)
         strings = read(MAIN_STRINGS)
         assert 'android:taskAffinity="com.zaba.zcode"' in manifest
