@@ -21,6 +21,10 @@
          Dipinta secara kontekstual (sekali, saat "Download & Update") via
          ACTION_MANAGE_UNKNOWN_APP_SOURCES per-app. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- v1.0.22 one-tap update (RFC D11): diminta KONTEKSTUAL (sekali, saat
+         "Download & Update"). Bila ditolak: FGS tetap jalan; notifikasi FGS
+         tetap di Task Manager, bukan drawer (verified docs). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".ZcodeApp"
