@@ -85,11 +85,46 @@ object UpdateChecker {
         return a.third - b.third
     }
 
+    /** Satu aset release dari respons API — data murni untuk [selectApkAsset]. */
+    data class AssetRef(
+        val name: String,
+        val sizeBytes: Long,
+        val digest: String,
+        val downloadUrl: String
+    )
+
     /**
-     * Parse respons JSON `releases/latest`. Membalikan null bila: bukan JSON,
-     * tag tak valid, tidak ada aset APK sesuai pola, atau aset tanpa
-     * `digest` `sha256:` (D1 — tanpa checksum publikasi, integritas tidak
-     * bisa diverifikasi; tolak, jangan tebak).
+     * Pilih aset APK + validasi integritas (D1/D2) — FUNGSI MURNI (tanpa
+     * org.json/Android) supaya teruji di JVM: tag harus valid, nama aset
+     * harus cocok pola `ZCODE-vX.Y.Z.apk`, digest WAJIB ber-skema `sha256:`
+     * (tanpa checksum publikasi integritas tak bisa diverifikasi — tolak,
+     * jangan tebak), size/url harus valid.
+     */
+    fun selectApkAsset(tag: String, assets: List<AssetRef>): CheckOutcome.Newer? {
+        if (parseSemVer(tag) == null) return null
+        val version = tag.removePrefix("v")
+        for (asset in assets) {
+            if (!APK_ASSET_PATTERN.matches(asset.name)) continue
+            val rawDigest = asset.digest
+            if (!rawDigest.startsWith("sha256:")) return null
+            if (asset.sizeBytes <= 0 || asset.downloadUrl.isEmpty()) return null
+            return CheckOutcome.Newer(
+                tag = tag,
+                version = version,
+                sha256 = rawDigest.removePrefix("sha256:").lowercase(),
+                sizeBytes = asset.sizeBytes,
+                downloadUrl = asset.downloadUrl
+            )
+        }
+        return null
+    }
+
+    /**
+     * Parse respons JSON `releases/latest` — adapter tipis org.json: ekstrak
+     * tag + daftar aset lalu delegasikan keputusan ke [selectApkAsset]
+     * (logika integritas teruji di JVM, adapter ini diverifikasi device UAT).
+     * Membalikan null bila: bukan JSON, tidak ada kunci `assets`, atau
+     * [selectApkAsset] menolak.
      */
     fun parseLatestResponse(json: String): CheckOutcome.Newer? {
         val root = try {
@@ -98,27 +133,20 @@ object UpdateChecker {
             return null
         }
         val tag = root.optString("tag_name", "").trim()
-        val semver = parseSemVer(tag) ?: return null
-        val version = tag.removePrefix("v")
-        val assets = root.optJSONArray("assets") ?: return null
-        for (i in 0 until assets.length()) {
-            val asset = assets.optJSONObject(i) ?: continue
-            val name = asset.optString("name", "")
-            if (!APK_ASSET_PATTERN.matches(name)) continue
-            val rawDigest = asset.optString("digest", "")
-            if (!rawDigest.startsWith("sha256:")) return null
-            val size = asset.optLong("size", -1L)
-            val url = asset.optString("browser_download_url", "")
-            if (size <= 0 || url.isEmpty()) return null
-            return CheckOutcome.Newer(
-                tag = tag,
-                version = version,
-                sha256 = rawDigest.removePrefix("sha256:").lowercase(),
-                sizeBytes = size,
-                downloadUrl = url
+        val assetsArr = root.optJSONArray("assets") ?: return null
+        val assets = mutableListOf<AssetRef>()
+        for (i in 0 until assetsArr.length()) {
+            val asset = assetsArr.optJSONObject(i) ?: continue
+            assets.add(
+                AssetRef(
+                    name = asset.optString("name", ""),
+                    sizeBytes = asset.optLong("size", -1L),
+                    digest = asset.optString("digest", ""),
+                    downloadUrl = asset.optString("browser_download_url", "")
+                )
             )
         }
-        return null
+        return selectApkAsset(tag, assets)
     }
 
     fun currentVersion(context: Context): String = try {
