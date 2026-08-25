@@ -1791,10 +1791,13 @@ private fun UpdateDialog(update: UpdateViewModel) {
 @Composable
 private fun DrawerItem(
     label: String,
-    onClick: () -> Unit,
     icon: ImageVector? = null,
     suffix: String? = null,
-    suffixColor: Color? = null
+    suffixColor: Color? = null,
+    // onClick TERAKHIR (idiom aksi Kotlin): trailing lambda di call lama
+    // `DrawerItem("X") { ... }` terikat parameter paling akhir — meletakkannya
+    // di tengah memutus semua baris drawer lama (wave error CI run #335).
+    onClick: () -> Unit
 ) {
     // v1.0.22: parameter opsional untuk baris "Cek Update" (ikon + suffix
     // status 12sp — preseden baris THEME di dalam kotak TOOLS). Baris lama

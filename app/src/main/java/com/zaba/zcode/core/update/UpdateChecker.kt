@@ -5,7 +5,6 @@ import com.zaba.zcode.core.diagnostics.Breadcrumb
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.concurrent.TimeUnit
 
 /**
  * UpdateChecker — v1.0.22 one-tap update, langkah "CEK" (RFC D2/D3/D6).
@@ -31,7 +30,7 @@ object UpdateChecker {
     private const val CONNECT_TIMEOUT_MS = 10_000
     private const val READ_TIMEOUT_MS = 10_000
     private const val USER_AGENT = "zcode-update-checker/1.0"
-    private const val CACHE_TTL_MS = TimeUnit.HOURS.toMillis(24)
+    private const val CACHE_TTL_MS = 24L * 60L * 60L * 1000L // 24 jam
     private const val CACHE_FILE = ".zcode_update_cache.json"
     private const val ACCEPT_GITHUB = "application/vnd.github+json"
 

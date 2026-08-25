@@ -153,7 +153,9 @@ object UpdateReceipt {
             return Outcome.ApkGone
         }
         val cur = currentVersionCode(context)
-        when {
+        // `return when` eksplisit: fungsi block body TIDAK otomatis
+        // mengembalikan ekspresi terakhir (berbeda expression body).
+        return when {
             cur >= r.toCode -> {
                 delete(context)
                 UpdateDownloader.cleanupOldApks(apk.parentFile, null)
