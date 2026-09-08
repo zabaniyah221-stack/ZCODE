@@ -5343,3 +5343,43 @@ class TestV1023UpdateCacheCrossProcess:
             'Breadcrumb.log("UPDATE_CHECK_FAIL", "NETWORK $msg")',
         ):
             assert token in src, f"path gagal fetchAndCompare kehilangan telemetri: {token}"
+
+
+class TestV1023AboutLicenseLayout:
+    """v1.0.23 Model B (keputusan user 2026-09-08): teks hukum penuh via baris
+    expandable dari assets ter-package, bisa disalin (SelectionContainer —
+    PRD 'semua teks harus bisa disalin'), tanpa jendela license nested-scroll
+    tetap 150dp versi lama, provenance GPLv3+ZABACODE tetap tampil."""
+
+    ABOUT = APP / "ui" / "settings" / "AboutScreen.kt"
+
+    def _src(self) -> str:
+        return strip_kt_comments(read(self.ABOUT))
+
+    def test_all_three_license_assets_are_loaded_and_expandable(self):
+        src = self._src()
+        for asset in ("GPL-3.0.txt", "NOTICE.txt", "MIT.txt"):
+            assert asset in src, f"About harus memuat teks aset ter-package: {asset}"
+        for label in ("GNU GPL v3", "ZABACODE provenance", "MIT — independent parts"):
+            assert label in src, f"baris lisensi expandable hilang: {label}"
+
+    def test_license_text_is_copyable_and_flows_into_page_scroll(self):
+        src = self._src()
+        assert "SelectionContainer {" in src, (
+            "teks lisensi wajib dibungkus SelectionContainer (bisa disalin)"
+        )
+        assert "height(150.dp)" not in src, (
+            "jendela license tetap 150dp (nested scroll) kembali hidup — "
+            "konten expand harus mengalir ke scroll halaman"
+        )
+        assert "rememberSaveable { mutableStateOf(false) }" in src, (
+            "state expand per baris wajib survive rotasi (SKILL 17)"
+        )
+
+    def test_provenance_summary_stays_gplv3_and_zabacode(self):
+        src = self._src()
+        assert "under GPLv3" in src
+        assert "derived from ZABACODE" in src or "ZABACODE" in src
+        assert "versionCode $versionCodeLabel" in src, (
+            "versionCode harus tampil (QA memastikan APK yang terpasang)"
+        )

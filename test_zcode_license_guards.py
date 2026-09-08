@@ -59,7 +59,9 @@ def test_readme_and_about_do_not_return_to_mit_only_or_sole_holder_claims():
         assert forbidden not in active
     assert "license-gplv3" in readme.lower()
     assert "licenses/GPL-3.0.txt" in about
-    assert "software ini tanpa jaminan" in about.lower()
+    # v1.0.23: copy About berbahasa English (keputusan user 2026-09-08);
+    # invariant yang dijaga tetap: disklaimer jaminan HARUS ada.
+    assert "without warranty" in about.lower()
     assert "ZCODE_SOURCE_URL" in about
 
 
