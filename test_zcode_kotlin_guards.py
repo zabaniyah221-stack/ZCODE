@@ -5307,3 +5307,39 @@ class TestCITestListCompleteness:
             "test_*.py root tidak dijalankan CI (false green PR #31/#32): "
             f"{missing} — daftarkan di tools/check.sh (baris pytest eksplisit)"
         )
+
+
+class TestV1023UpdateCacheCrossProcess:
+    """v1.0.23: bug cache 24 jam (docs/UAT_UPDATER_CHECKPATH_2026_09_08.md §2)
+    — readCache() dulu membaca field statis `cacheFile` yang hanya diisi
+    writeCache(), sehingga process baru selalu melihat null dan auto-check
+    app start selalu menyentuh jaringan (telemetri device: 0 cache-hit
+    dari 15 auto-check). Guard: readCache wajib resolve path dari context,
+    dan telemetri FAIL tepat satu owner (dedupe SKILL 20 #1)."""
+
+    def test_readcache_resolves_path_via_context_not_stale_static_field(self):
+        src = strip_kt_comments(read(UPDATE / "UpdateChecker.kt"))
+        assert "private fun readCache(context: Context)" in src, (
+            "readCache harus menerima Context — tanpa itu, process baru "
+            "tidak bisa menemukan file cache (bug lintas restart)"
+        )
+        assert "readCache()" not in src, "panggilan readCache() tanpa context masih ada"
+        m = re.search(r"private fun readCache\(context: Context\)[^}]*", src)
+        assert m and "cachePath(context)" in m.group(0), (
+            "readCache wajib memanggil cachePath(context) — bukan membaca field statis"
+        )
+        assert "synchronized(lock) { cacheFile } ?: return null" not in src, (
+            "pola bug readCache statis kembali hidup — cache mati lintas process"
+        )
+
+    def test_fail_telemetry_has_single_owner(self):
+        src = strip_kt_comments(read(UPDATE / "UpdateChecker.kt"))
+        assert (
+            'is CheckOutcome.Failed -> Breadcrumb.log("UPDATE_CHECK_FAIL", outcome.reasonCode)' not in src
+        ), "checkLatest tidak boleh log Failed (dobel dengan fetchAndCompare — SKILL 20 #1)"
+        for token in (
+            'Breadcrumb.log("UPDATE_CHECK_FAIL", "rate: $code")',
+            'Breadcrumb.log("UPDATE_CHECK_FAIL", "http: $code")',
+            'Breadcrumb.log("UPDATE_CHECK_FAIL", "NETWORK $msg")',
+        ):
+            assert token in src, f"path gagal fetchAndCompare kehilangan telemetri: {token}"
