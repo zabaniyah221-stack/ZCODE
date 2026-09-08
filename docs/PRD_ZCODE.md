@@ -12,12 +12,16 @@ dihadapi, bukti, kemampuan mengoperasikan solusi, biaya belajar/migrasi, risiko,
 acceptance criteria, dan jalan mundur. Tidak boleh berubah diam-diam hanya
 karena teknologi baru terlihat lebih menarik.
 
-Versi produksi saat ini: `1.0.21` / versionCode 24
-(`RELEASED 2026-08-23T01:40:05Z, run 32570675883, DEVICE VERIFIED (user report)`).
-Kandidat berikutnya: `1.0.22` verified one-tap update (`DESIGNED` — lihat
-`docs/RENCANA_KERJA_POST_V1021_2026_08_24.md`).
+Versi produksi saat ini: `1.0.22` / versionCode 25
+(`RELEASED 2026-08-25T08:19:33Z, run 32822998488, DEVICE VERIFIED (user report)`;
+updater check-path DEVICE VERIFIED — jalur download→install menunggu siklus
+update v1.0.23, lihat `docs/UAT_UPDATER_CHECKPATH_2026_09_08.md`).
+Riwayat: v1.0.21 `RELEASED 2026-08-23T01:40:05Z, run 32570675883` — update
+continuity 1.0.20→1.0.21→1.0.22 in-place DEVICE VERIFIED (user report).
+Kandidat berikutnya: `1.0.23` editor intelligence + housekeeping
+(`APPROVED` — lihat `docs/RENCANA_KERJA_V1023_2026_09_08.md`).
 `gradle.properties` tetap sumber tunggal versi build.
-Terakhir diperbarui: 2026-08-25
+Terakhir diperbarui: 2026-09-08
 Revisi: v1.0.21 memprioritaskan data safety, update continuity, dan GPLv3
 Option B; updater sidebar/intelligence provider tetap di luar hotfix. PRD adalah
 pegangan yang mengikuti evidence, bukan klaim keberhasilan sebelum CI/device.

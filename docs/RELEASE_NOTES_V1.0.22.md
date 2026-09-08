@@ -1,9 +1,10 @@
 # ZCODE v1.0.22 — Verified One-Tap Update
 
-> Candidate notes. This version is **not released** until the exact
-> production draft passes update-in-place UAT on the target ARMv7 device.
-> Desain & keputusan: `docs/RFC_V1022_ONE_TAP_UPDATE.md` (D1–D11 disetujui
-> user 2026-08-24/25).
+> **RELEASED 2026-08-25T08:19:33Z** — run `32822998488` (workflow_dispatch
+> dari main, tepat 1 run), tag `v1.0.22`, commit `26bc8a0`. UAT device:
+> PASS — user report (update in-place dari v1.0.21, berjalan sempurna,
+> crash none). Desain & keputusan: `docs/RFC_V1022_ONE_TAP_UPDATE.md`
+> (D1–D11 disetujui user 2026-08-24/25).
 
 ## Fokus
 
@@ -107,17 +108,29 @@ dipublikasikan jika APK yang diuji adalah byte yang sama dengan asset draft.
 8. Kill app (swipe dari recent) saat unduh → FGS melanjutkan; bila OS/OEM
    membunuh FGS → FAILED jujur + retry (dokumentasikan apa yang terjadi).
 
-## Status evidence
-
-Saat notes ini ditulis (fase implementasi, sebelum production):
+## Status evidence (published 2026-08-25; dirangkum 2026-09-08)
 
 ```text
-Feature implementation      : IMPLEMENTED LOCALLY (9 commit, RFC D1–D11)
-Local Python/static gate    : LOCALLY VERIFIED (tools/check.sh hijau)
-JVM unit tests (update)     : IMPLEMENTED — CI execution pending
-Kotlin lexical guards       : IMPLEMENTED + mutasi merah terbukti (3 kelas)
-Kotlin compile              : CI = hakim kompilasi (tidak ada JDK/SDK di sandbox)
-Production signed draft     : NOT CREATED
-Physical ARMv7 update       : NOT DEVICE VERIFIED
-Public v1.0.22 release      : NOT RELEASED
+Workflow run                : 32822998488 — SUCCESS (workflow_dispatch dari main, tepat 1 run)
+Source commit/tag           : 26bc8a0a21037439daeddb9fa0a0bef6975a22d4 (tag v1.0.22)
+Published                   : 2026-08-25T08:19:33Z
+APK bytes                   : 34,759,201
+APK SHA-256                 : e7384101d31728c99aa0bcc3f90e75ee139fc04d2c29b483c8e049f5a3f9e32b
+Certificate SHA-256         : 401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+Kotlin compile              : CI VERIFIED (job build hijau, PR #33)
+Production signed draft     : YES — dipublikasikan tanpa rebuild
+Physical ARMv7 UAT          : PASS — user report (update in-place 24→25, sentinel utuh, crash none)
+Updater check-path          : DEVICE VERIFIED — user report + telemetri 2026-09-08
+                              (23 check OK/FAIL sesuai kontrak, retry pulih, nol crash Java;
+                              docs/UAT_UPDATER_CHECKPATH_2026_09_08.md)
+Updater download→install    : NOT DEVICE VERIFIED — menunggu siklus update v1.0.23
+Known issue (benign)        : cache 24 jam auto-check tak pernah terbaca lintas process —
+                              fix direncanakan v1.0.23 (RENCANA_KERJA_V1023 §5 commit 1)
+Public v1.0.22 release      : RELEASED
 ```
+
+Not claimed (jujur): independent agent re-download aset publik (egress
+sandbox ke release-assets diblok — pola v1.0.20/21); jalur updater
+download→verify→install belum pernah dieksekusi di device karena fitur
+update baru ada SEJAK v1.0.22 — pengujian nyatanya adalah siklus update
+menuju v1.0.23.

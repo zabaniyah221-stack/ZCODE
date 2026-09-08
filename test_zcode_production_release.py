@@ -26,6 +26,7 @@ CANONICAL_WORKFLOW_MIRROR = ROOT / "ci/workflows/build.yml"
 SIGNING_POLICY = ROOT / "docs/SIGNING_ZCODE.md"
 ROADMAP = ROOT / "docs/ROADMAP_V1020_OPTIMIZED_BUILD.md"
 RELEASE_NOTES = ROOT / "docs/RELEASE_NOTES_V1.0.21.md"
+RELEASE_NOTES_22 = ROOT / "docs/RELEASE_NOTES_V1.0.22.md"
 SKILLS = ROOT / "docs/SKILLS.md"
 EXPECTED_SIGNER = "401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2"
 
@@ -487,6 +488,92 @@ class TestV1021PostReleaseEvidence:
             "_safe_replace_symbol",
         ):
             assert token in review, f"REVIEW_PR30_31_32 kehilangan: {token}"
+
+
+class TestV1022PostReleaseEvidence:
+    """v1.0.22 is RELEASED (2026-08-25). The same verified constants must
+    appear in every status-bearing document; UAT facts are labeled user
+    report; the honest non-claims (blocked re-download; updater full path
+    not exercisable by v1.0.22 itself) must stay. Mutation-proven
+    2026-09-08: removing any asserted token turns this red."""
+
+    V22_PUBLISHED = "2026-08-25T08:19:33Z"
+    V22_RUN = "32822998488"
+    V22_COMMIT = "26bc8a0a21037439daeddb9fa0a0bef6975a22d4"
+    V22_BYTES = "34,759,201"
+    V22_APK_SHA = "e7384101d31728c99aa0bcc3f90e75ee139fc04d2c29b483c8e049f5a3f9e32b"
+
+    def test_released_facts_are_consistent_across_all_status_documents(self):
+        notes = read(RELEASE_NOTES_22)
+        policy = read(SIGNING_POLICY)
+        roadmap = read(ROOT / "docs/ROADMAP_V1021_V1022_SAFETY_AND_UPDATE.md")
+        prd = read(ROOT / "docs/PRD_ZCODE.md")
+        # Full evidence block: release record.
+        for doc, name in (
+            (notes, "RELEASE_NOTES_V1.0.22"),
+            (policy, "SIGNING_ZCODE"),
+        ):
+            for token in (self.V22_PUBLISHED, self.V22_RUN, self.V22_APK_SHA, EXPECTED_SIGNER):
+                assert token in doc, f"{name} kehilangan bukti v1.0.22: {token}"
+        # Status documents that carry the version status, not the full block.
+        for doc, name in (
+            (roadmap, "ROADMAP_V1021_V1022"),
+            (prd, "PRD"),
+        ):
+            for token in (self.V22_PUBLISHED, self.V22_RUN):
+                assert token in doc, f"{name} kehilangan status v1.0.22: {token}"
+        for token in (
+            "2026-08-25T08:19:33Z",
+            "32822998488 — SUCCESS",
+            self.V22_BYTES,
+            "user report",
+        ):
+            assert token in notes, f"RELEASE_NOTES_V1.0.22 kehilangan: {token}"
+        for token in (
+            "PUBLIC RELEASE              : YES — v1.0.22",
+            "CI PRODUCTION SIGNING       : VERIFIED — run 32822998488 (v1.0.22)",
+            "UPDATE CONTINUITY           : DEVICE VERIFIED — v1.0.21→v1.0.22 in-place (user report + telemetri 2026-09-08)",
+            "## 10. v1.0.22 production evidence",
+            f"Workflow run       : {self.V22_RUN} — SUCCESS",
+            f"Source commit/tag  : {self.V22_COMMIT} (tag v1.0.22)",
+        ):
+            assert token in policy, f"SIGNING_ZCODE kehilangan: {token}"
+        assert (
+            "v1.0.22 = RELEASED + DEVICE VERIFIED (user report; in-place dari v1.0.21," in roadmap
+        ), "ROADMAP_V1021_V1022 kehilangan baris status v1.0.22"
+
+    def test_candidate_status_claims_are_replaced_by_release_facts(self):
+        notes = read(RELEASE_NOTES_22)
+        for stale in (
+            "not released",
+            "NOT RELEASED",
+            "NOT CREATED",
+            "IMPLEMENTED LOCALLY",
+        ):
+            assert stale not in notes, f"klaim kandidat lama masih hidup di RELEASE_NOTES_V1.0.22: {stale}"
+        # Satu NOT-claim yang SAH dan wajib tetap ada: jalur updater
+        # download→install tidak dapat diuji oleh v1.0.22 sendiri.
+        assert "NOT DEVICE VERIFIED" in notes, (
+            "RELEASE_NOTES_V1.0.22 wajib menyatakan jalur updater download→install "
+            "belum DEVICE VERIFIED (menunggu siklus v1.0.23)"
+        )
+
+    def test_errata_sections_are_recorded(self):
+        review = read(ROOT / "docs/REVIEW_PR30_31_32_2026_08_24.md")
+        rfc = read(ROOT / "docs/RFC_V1022_ONE_TAP_UPDATE.md")
+        for token in (
+            "Errata (2026-09-08",
+            "LGPL v3+",
+            "https://pypi.org/project/rope/#license",
+        ):
+            assert token in review, f"REVIEW_PR30_31_32 errata kehilangan: {token}"
+        for token in (
+            "Errata implementasi (2026-09-08",
+            "UPDATE_CHECK_SAME",
+            "UPDATE_CHECK_OK",
+            "readCache()",
+        ):
+            assert token in rfc, f"RFC_V1022 errata kehilangan: {token}"
 
 
 class TestOfficialGradleWrapper:
