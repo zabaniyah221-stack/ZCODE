@@ -89,3 +89,67 @@ stabil, (c) user eksplisit memilih arah produk ini.
   percobaan langsung di mesin tersebut (~90%).
 - Dokumen ini belum mengubah kode, workflow, SKILLS, PRD, maupun rilis
   apa pun; seluruh parkir dapat dibuka ulang dengan premis/bukti baru.
+
+
+---
+
+## 7. Visi jembatan & tangga desktop — RECORD (diskusi user 2026-09-09)
+
+**Status: VISION RECORDED — parkir aktif.** Keputusan user: ekspansi
+arm64/desktop menunggu perangkat & resource nyata; fokus perang tetap
+runtime armv7 — "user device ampas harus bisa merakit projectnya tanpa
+embel-embel apa pun".
+
+### 7.1 Reframing posisi
+
+ZCODE untuk siapa punA, tak terkecuali; ARMv7 = titik berangkat perang,
+bukan plafon. Ekspansi bukan "bersaing kemegahan" dengan VS Code/PyCharm,
+melainkan axis **gratis-vs-bayar** (pola LibreOffice) + **kontinuitas**
+("lanjutkan persis pekerjaan dari HP-mu") — moat yang tidak dimiliki
+peserta mana pun di bawah.
+
+### 7.2 Tiga wujud desktop (dipilih: A dulu)
+
+| Wujud | Bentuk | Catatan |
+|---|---|---|
+| **A. ZCODE Web companion** (PILIHAN) | server Python lokal + bundle CM6 sama + browser sebagai renderer | termurah; browser harness SKILL 24 sudah membuktikan bundle jalan byte-exact; workbench web = biaya terbesar, bertahap editor-first |
+| B. App Compose Multiplatform | JVM + WebView via JCEF/KCEF | RAM besar; status WebView desktop = experimental (klibs.io / parkwoocheol/compose-webview); hanya bila A kurang |
+| C. Fork VSCodium/Theia | — | DITOLAK: maintenance harian upstream + Electron berat + moat ZCODE menguap di desktop (pip/ruff/ty tersedia; kurasi tak diperlukan) |
+
+Pesaing nyata di niche ringan: **Thonny** (raja pemula-laptop-kentang),
+Geany (ultringan generik), Spyder (scientific, Qt berat). Positioning
+menang-kalah: kontinuitas + gratis + UI modern CM6; kalah di: ekosistem
+plugin, debugger matang (diakui jujur).
+
+### 7.3 Kunci teknis: Python per-ABI (inferensi — wajib dibuktikan di T2)
+
+Chaquopy men-stack SATU versi Python per APK ⇒ selama armv7 dilayani,
+arm64 ikut terpasung 3.11. Jalur keluar = runtime pada process terpisah
+(T2 `:python` / T3 standalone): versi Python menjadi variabel per ABI —
+armv7 tetap 3.11 (janji jembatan), arm64 bebas naik. **Ini inferensi
+arsitektur dari desain T2/T3, belum dibuktikan eksperimen** — jadikan
+pertanyaan riset pertama saat T2 dieksekusi.
+
+### 7.4 Skema update desktop (reuse logika v1.0.22)
+
+Cek `releases/latest` + compare numerik + never-downgrade = reuse ~90%.
+Yang beda hanya langkah pasang: AppImage/tar.gz = replace file + restart;
+`.deb` = install file baru. Lebih sederhana dari Android (tanpa dialog
+izin sistem). Format artifact menyusul keputusan D4.
+
+### 7.5 Aset naratif
+
+"War history" ARMv7 (SKILLS.md = arsip perang yang jujur) adalah aset
+branding yang sudah dimiliki: user perangkat epic/legend memahami bahwa
+produk yang mereka pakai ditempa di medan tersulit. Kandidat penyajian:
+satu baris di About / halaman riset publik — saat waktunya, bukan janji.
+
+### 7.6 Tangga D0–D4 (urutan saat dibangunkan)
+
+```text
+D0  kontrak & riset user desktop (siapa, apa yang tak tergantikan)
+D1  productize browser harness -> "ZCODE Web" dev mode (dobel fungsi: alat QA + fondasi)
+D2  workbench web bertahap (drawer/terminal/palette versi web)
+D3  app native CMP — hanya bila web terbukti kurang (bayar JCEF + RAM)
+D4  packaging + updater desktop (cek-update logic reuse, §7.4)
+```

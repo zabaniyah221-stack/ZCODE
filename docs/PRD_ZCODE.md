@@ -53,6 +53,19 @@ membuat sesuatu dari ide itu" bagi pengguna Android terbatas tanpa PC. ZCODE
 harus membantu user membuat, menjalankan, memahami, memperbaiki, menyimpan, dan
 membagikan project Python—tanpa paywall dan tanpa berbohong tentang batasnya.
 
+### ZCODE adalah jembatan (reframing 2026-09-09)
+
+ZCODE berguna bagi SIAPA PUNA — "ARMv7 kelas satu" adalah TITIK BERANGKAT
+perang kami, bukan plafon produk. Perangkat ampas adalah medan latihan yang
+paling jujur: apa yang selamat di sana, layak di mana saja. Arah
+perjalanan: runtime per-ABI (armv7 tetap 3.11 sebagai jembatan yang TIDAK
+pernah dipatahkan; arm64 dibuka lewat jalur process terpisah — topik riset
+T2/T3, `TARGET_TERMINAL_ZCODE.md`), lalu desktop ringan sebagai companion
+(bukan kompetitor kemegahan VS Code; keputusan + tangga D0–D4 tercatat di
+`RISET_DESKTOP_LAPTOP_COMPANION_2026_09_08.md` §7). Ekspansi itu menunggu
+perangkat/resource nyata — fokus perang SAAT INI tetap: user device ampas
+harus bisa merakit projectnya, penuh, gratis, tanpa embel-embel.
+
 Ukuran sukses utama bukan jumlah menu/plugin atau kemiripan dengan produk besar,
 melainkan:
 
