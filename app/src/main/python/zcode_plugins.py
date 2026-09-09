@@ -493,3 +493,78 @@ if __name__ == "__main__":
         print(run_json_with_param(sys.argv[1], _code, _param))
     else:
         print(run_json(sys.argv[1], _code))
+
+
+# ==============================================================================
+# Spike Intelligence Engine (v1.0.23) — RFC_V1023_SPIKE_INTELLIGENCE
+# Port PR #31 tanpa rope_layer. Entry Kotlin: run_spike_json(payload_json).
+# ==============================================================================
+
+_SPIKE_ENGINE = None
+
+
+def _get_spike_engine():
+    global _SPIKE_ENGINE
+    if _SPIKE_ENGINE is None:
+        try:
+            from editor.intelligence_engine import SpikeIntelligenceEngine
+            _SPIKE_ENGINE = SpikeIntelligenceEngine()
+        except Exception:
+            _SPIKE_ENGINE = None
+    return _SPIKE_ENGINE
+
+
+def run_spike_intelligence(code: str, action: str = "health_check", **kwargs) -> dict:
+    """Entry point Pythonic untuk Spike Intelligence Engine (dipakai test)."""
+    engine = _get_spike_engine()
+    if engine is None:
+        return {"ok": False, "error": "SpikeIntelligenceEngine not available"}
+
+    try:
+        if action == "health_check":
+            return {"ok": True, "health": engine.health_check()}
+        elif action == "autocomplete":
+            line = int(kwargs.get("line", 1))
+            col = int(kwargs.get("column", 0))
+            path = kwargs.get("path", None)
+            return {"ok": True, "completions": engine.autocomplete(code, (line, col), path=path)}
+        elif action == "goto_definition":
+            line = int(kwargs.get("line", 1))
+            col = int(kwargs.get("column", 0))
+            path = kwargs.get("path", None)
+            return {"ok": True, "definitions": engine.goto_definition(code, (line, col), path=path)}
+        elif action == "lint":
+            filename = kwargs.get("filename", "untitled.py")
+            return {"ok": True, "issues": engine.lint(code, filename=filename)}
+        elif action == "parse_ast":
+            version = kwargs.get("version", None)
+            return {"ok": True, "ast": engine.parse_ast(code, version=version)}
+        elif action == "analyze_complexity":
+            threshold = int(kwargs.get("threshold", 7))
+            return {"ok": True, "analysis": engine.analyze_complexity(code, threshold=threshold)}
+        else:
+            return {"ok": False, "error": f"Unknown action: {action}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def run_spike_json(payload_json: str) -> str:
+    """Entry JSON untuk PyCall Kotlin (LintScheduler/autocomplete/palette).
+
+    payload: {"action": str, "code": str, "kwargs": {...}}
+    hasil  : dict di-serialize ke JSON string (konvensi PyCall.callJson).
+    Fail-open by design: error apa pun -> {"ok": false, ...} bukan exception,
+    agar jalur lint/editor tidak pernah crash karena intelligence engine.
+    """
+    import json as _json
+
+    try:
+        payload = _json.loads(payload_json or "{}")
+    except Exception as e:
+        return _json.dumps({"ok": False, "error": f"bad payload: {e}"})
+    code = payload.get("code", "") or ""
+    action = payload.get("action", "health_check") or "health_check"
+    kwargs = payload.get("kwargs", {}) or {}
+    if not isinstance(kwargs, dict):
+        kwargs = {}
+    return _json.dumps(run_spike_intelligence(code, action, **kwargs))
