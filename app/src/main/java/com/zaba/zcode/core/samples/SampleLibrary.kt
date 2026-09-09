@@ -69,6 +69,16 @@ object SampleLibrary {
                     "samples/simple_math.py"
                 ),
                 SampleEntry(
+                    "code_health", "Code Health Checkup",
+                    "Demo banner Problems + Complexity Report — editor yang memeriksa kode sebelum Run",
+                    "samples/code_health.py"
+                ),
+                SampleEntry(
+                    "autocomplete_tour", "Autocomplete Tour",
+                    "Tur semua tingkatan bantuan ketik: nama lokal, builtin, hingga isi modul",
+                    "samples/autocomplete_tour.py"
+                ),
+                SampleEntry(
                     "functions_quadratic", "Functions",
                     "Pemecah persamaan kuadrat pakai fungsi (dukung bilangan kompleks)",
                     "samples/functions_quadratic.py"

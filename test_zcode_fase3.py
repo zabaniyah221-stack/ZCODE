@@ -136,6 +136,8 @@ class TestPaletteRedesign:
 
 class TestSamples:
     SAMPLE_IDS = ["hello_world", "text_input", "simple_math", "functions_quadratic",
+                  # v1.0.23: tur fitur editor intelligence (lint/complexity/autocomplete)
+                  "code_health", "autocomplete_tour",
                   "for_loop_factorial", "while_loop_guess", "generators_squares",
                   "dictionaries_db", "numpy_basics", "numpy_stats", "web_fetch_json",
                   # batch v1.0.18 (2026-08-16): stdlib B2 + etalase TESTED B3
