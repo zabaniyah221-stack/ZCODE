@@ -5446,3 +5446,51 @@ class TestV1023SpikeWiring:
         assert "SpikeLint.ComplexityReport.unavailable()" in vm, (
             "fail-open complexity: engine absen = report unavailable, bukan crash"
         )
+
+
+class TestV1023PreviewPng:
+    """v1.0.23 (preview-PNG): hasil savefig/script terlihat tanpa file
+    manager. Deteksi pasca-run di onExit (cwd script = filesDir), kartu di
+    terminal, dialog downsampled. Fail-silent by design: tanpa gambar baru
+    = nol UI; deteksi tidak pernah menghapus file user."""
+
+    TERM = APP / "ui/terminal/TerminalScreen.kt"
+    DETECTOR = APP / "core/files/ImageResultDetector.kt"
+
+    def test_detector_pure_and_conservative(self):
+        src = strip_kt_comments(read(self.DETECTOR))
+        assert "IMAGE_EXTENSIONS = setOf(\"png\", \"jpg\", \"jpeg\", \"webp\", \"bmp\")" in src
+        assert "it.lastModified() >= sinceMs" in src, "filter mtime wajib (hanya hasil run ini)"
+        assert "it.isFile" in src, "hanya file biasa — jangan ikutkan subdir"
+        assert "delete()" not in src and "deleteRecursively()" not in src, (
+            "detektor TIDAK BOLEH menghapus/memindahkan file user"
+        )
+
+    def test_terminal_hook_and_card_and_viewer(self):
+        src = strip_kt_comments(read(self.TERM))
+        # hook pasca-run di onExit dengan runStartMs + filesDir (workspace)
+        assert "detectNewImages(filesDir, runStartMs)" in src, (
+            "deteksi wajib pasca-run (setelah waitForExit) dengan filesDir (cwd script)"
+        )
+        assert "activeSession.waitForExit()" in src
+        assert 'Breadcrumb.log("IMG_RESULT"' in src, "breadcrumb observability hilang"
+        assert "imageResults = emptyList()" in src, "kartu wajib reset tiap run baru"
+        assert "if (imageResults.isNotEmpty())" in src, "nol gambar = nol UI (fail-silent)"
+        assert "imageViewerFile = img" in src, "tap kartu harus membuka viewer"
+        assert "ImageViewerDialog(file = img, onDismiss = { imageViewerFile = null })" in src
+
+    def test_viewer_downsamples_for_armv7(self):
+        src = strip_kt_comments(read(self.TERM))
+        assert "inJustDecodeBounds = true" in src, "bounds dulu (RAM ARMv7)"
+        assert "inSampleSize = sample" in src, "decode wajib downsampled"
+        assert "Dispatchers.IO" in src, "decode di luar main thread"
+        assert "asImageBitmap()" in src
+
+    def test_matplotlib_samples_point_to_preview(self):
+        samples_dir = ROOT / "app/src/main/assets/samples"
+        chart = read(samples_dir / "matplotlib_chart.py")
+        sub = read(samples_dir / "matplotlib_subplots.py")
+        for sample in (chart, sub):
+            assert "kartu preview" in sample.lower(), (
+                "sample matplotlib harus mengarah ke kartu preview (bukan 'buka di galeri')"
+            )
