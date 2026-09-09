@@ -304,6 +304,9 @@ fun WorkbenchScreen(
                     }
                 }
             }
+            "complexity_report" -> {
+                vm.requestComplexityReport()
+            }
             "go_to_definition" -> {
                 showGoToDefinitionDialog = true
             }
@@ -1045,6 +1048,56 @@ fun WorkbenchScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showRenameSymbolDialog = false }) { Text("Batal") }
+            }
+
+        )
+    }
+
+    // ---------- Dialog: Complexity Report (v1.0.23, RFC G4) ----------
+    // Data dari Spike Intelligence Engine (mccabe) via run_spike_json.
+    // Fail-open: engine absen -> pesan pack; data ada -> daftar blok,
+    // tap = gotoLine. Tidak memblokir apa pun (warn-only by design).
+    vm.spikeComplexity?.let { report ->
+        AlertDialog(
+            onDismissRequest = { vm.dismissComplexityReport() },
+            title = { Text("Complexity Report (mccabe)", fontSize = 16.sp) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    if (!report.available) {
+                        Text(
+                            "Engine tidak tersedia. Pasang pack \"Editor Intelligence\" " +
+                                "lewat INSTALL MODULES untuk mengaktifkan analisis.",
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        Text(
+                            "Max CC: ${report.maxComplexity} · MI: ${"%.1f".format(report.maintainabilityIndex)}" +
+                                " · fungsi: ${report.functionCount} · kelas: ${report.classCount}",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                        if (report.blocks.isEmpty()) {
+                            Text("Tidak ada fungsi/kelas di file aktif.", fontSize = 12.sp)
+                        }
+                        report.blocks.forEach { b ->
+                            Text(
+                                "L${b.line}  ${b.name}  (cc ${b.complexity}${if (b.isHigh) " !" else ""})",
+                                fontSize = 12.sp,
+                                color = if (b.isHigh) MaterialTheme.colorScheme.error else Color.Unspecified,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        gotoLine(b.line)
+                                        vm.dismissComplexityReport()
+                                    }
+                                    .padding(vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.dismissComplexityReport() }) { Text("Tutup") }
             }
         )
     }

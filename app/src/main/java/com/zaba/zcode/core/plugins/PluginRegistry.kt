@@ -78,6 +78,11 @@ object PluginRegistry {
             PluginKind.ACTION
         ),
         PluginInfo(
+            "complexity_report", "Complexity Report (mccabe)",
+            "Laporan kompleksitas per fungsi + maintainability (butuh pack Editor Intelligence)",
+            PluginKind.ACTION
+        ),
+        PluginInfo(
             "go_to_definition", "Go to Definition",
             "Lompat ke definisi fungsi, kelas, atau variabel terpilih",
             PluginKind.ACTION

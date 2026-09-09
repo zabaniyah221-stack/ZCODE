@@ -5383,3 +5383,66 @@ class TestV1023AboutLicenseLayout:
         assert "versionCode $versionCodeLabel" in src, (
             "versionCode harus tampil (QA memastikan APK yang terpasang)"
         )
+
+
+class TestV1023SpikeWiring:
+    """v1.0.23 (RFC_V1023 §7): wiring Spike Intelligence ke jalur yang sudah
+    hidup. Producer problems = validateSyntaxDebounced; pyflakes MENAMBAH
+    (non-mengganti) di belakang Checker, fail-open, stale-drop, budget 256KB,
+    probe pack di-cache. Complexity report = palette + dialog, tap->gotoLine."""
+
+    SPIKE = APP / "core/editor/SpikeLint.kt"
+    VM = ROOT / "app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt"
+
+    def test_spikelint_fail_open_and_budget(self):
+        src = strip_kt_comments(read(self.SPIKE))
+        for token in (
+            "const val MAX_CODE_CHARS = 256 * 1024",
+            "source = \"pyflakes\"",
+            'Breadcrumb.log("SPKE_LINT_MS"',
+            'Breadcrumb.log("SPKE_LINT_FAIL"',
+            "return null",
+        ):
+            assert token in src, f"SpikeLint kehilangan kontrak: {token}"
+        # Probe di-cache per process (tanpa pack = bukan panggilan berulang)
+        assert "@Volatile" in src and "pyflakesReady: Boolean? = null" in src, (
+            "probe ketersediaan wajib di-cache per process"
+        )
+        assert "\"health_check\"" in src, "probe memakai action health_check engine"
+
+    def test_vm_merges_pyflakes_behind_checker_with_stale_guard(self):
+        src = strip_kt_comments(read(self.VM))
+        # Checker tetap dipublikasikan dulu (instan), spike menambah di belakang
+        assert "SpikeLint.lint(getApplication(), code, activeFile)" in src, (
+            "validateSyntaxDebounced harus memanggil SpikeLint.lint di belakang Checker"
+        )
+        assert "if (code == activeCode)" in src, (
+            "stale-drop wajib: hasil spike tidak boleh menimpa kode yang sudah berubah"
+        )
+        assert "problems = list + spike.problems" in src, (
+            "merge harus ADITIF (list Checker + spike), bukan mengganti"
+        )
+        assert "SpikeLint.pyflakesAvailable(getApplication())" in src, (
+            "gate probe pack wajib (tanpa pack = nol panggilan Python)"
+        )
+
+    def test_complexity_palette_and_dialog(self):
+        registry = read(APP / "core/plugins/PluginRegistry.kt")
+        screen = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert '"complexity_report", "Complexity Report (mccabe)"' in registry, (
+            "entri palette complexity_report hilang dari PluginRegistry"
+        )
+        assert "\"complexity_report\" -> {\n                vm.requestComplexityReport()" in screen, (
+            "dispatch palette tidak memanggil requestComplexityReport"
+        )
+        assert "vm.spikeComplexity?.let { report ->" in screen, (
+            "dialog hasil complexity hilang"
+        )
+        assert "gotoLine(b.line)" in screen, (
+            "tap blok complexity wajib lompat ke baris (gotoLine)"
+        )
+        vm = strip_kt_comments(read(self.VM))
+        assert "fun requestComplexityReport()" in vm
+        assert "SpikeLint.ComplexityReport.unavailable()" in vm, (
+            "fail-open complexity: engine absen = report unavailable, bukan crash"
+        )

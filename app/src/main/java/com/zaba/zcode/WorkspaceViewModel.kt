@@ -13,6 +13,7 @@ import com.chaquo.python.Python
 import com.zaba.zcode.core.editor.Checker
 import com.zaba.zcode.core.editor.Problem
 import com.zaba.zcode.core.editor.Severity
+import com.zaba.zcode.core.editor.SpikeLint
 import com.zaba.zcode.core.execution.ExecutionEngine
 import com.zaba.zcode.core.files.FileManager
 import com.zaba.zcode.core.files.Paths
@@ -943,8 +944,53 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                     problems = list
                     syntaxError = err
                 }
+                // v1.0.23 (RFC_V1023 G1): pyflakes async DI BELAKANG Checker —
+                // Checker tetap instan dan dipublikasikan dulu; hasil spike
+                // MENAMBAH (non-mengganti). Fail-open: null = daftar Checker
+                // dibiarkan apa adanya. Stale-drop: hanya diterapkan bila kode
+                // belum berubah sejak analisis (SKILL 12.3/18). Budget 256 KB
+                // + probe pack di-cache per process (tanpa pack = nol panggil).
+                if (code.isNotEmpty() && code.length <= SpikeLint.MAX_CODE_CHARS &&
+                    SpikeLint.pyflakesAvailable(getApplication())
+                ) {
+                    val spike = withContext(Dispatchers.IO) {
+                        SpikeLint.lint(getApplication(), code, activeFile)
+                    }
+                    if (spike != null) {
+                        withContext(Dispatchers.Main) {
+                            if (code == activeCode) {
+                                problems = list + spike.problems
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Spike Intelligence — complexity report (v1.0.23, RFC G4)
+    // ------------------------------------------------------------------
+
+    /** Hasil laporan kompleksitas untuk dialog; null = tidak ada sesi berjalan. */
+    var spikeComplexity by mutableStateOf<SpikeLint.ComplexityReport?>(null)
+        private set
+
+    fun requestComplexityReport() {
+        val snapshot = pluginSnapshot() ?: return
+        scope.launch {
+            val report = withContext(Dispatchers.IO) {
+                SpikeLint.complexity(getApplication(), snapshot.code)
+            }
+            withContext(Dispatchers.Main) {
+                // Fail-open: engine/deps absen -> dialog menjelaskan pack.
+                spikeComplexity = report ?: SpikeLint.ComplexityReport.unavailable()
+            }
+        }
+    }
+
+    fun dismissComplexityReport() {
+        spikeComplexity = null
     }
 
     // ------------------------------------------------------------------
