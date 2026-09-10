@@ -14674,5 +14674,135 @@
    }
   ],
   "curatedAt": "2026-08-17 (analisis subprocess-python)"
+ },
+ {
+  "name": "jedi",
+  "displayName": "jedi",
+  "importName": "jedi",
+  "category": "Dev Tools / Testing",
+  "type": "pure",
+  "status": "EXPERIMENTAL",
+  "testedVersion": null,
+  "python": [
+   "3.11"
+  ],
+  "abis": [],
+  "description": "Engine autocomplete & go-to-definition (kasta 3 ZCODE).",
+  "useCases": [],
+  "works": [
+   "Autocomplete isi modul asli (mis. os.) + inferensi tipe setelah pack terpasang",
+   "Tanpa pack ini, autocomplete nama lokal/builtin tetap berfungsi penuh (bawaan editor)"
+  ],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [
+   "Completion pertama untuk library besar bisa lambat di device low-end — waktunya tercatat di breadcrumb SPKE_* (Diagnostics)"
+  ],
+  "smokeTest": null,
+  "license": "MIT",
+  "publisher": "David Halter",
+  "source": "https://pypi.org/project/jedi/",
+  "sha256": null,
+  "longDescription": "Pustaka analisis kode yang pernah menjadi engine resmi VS Code. Di ZCODE: completion stdlib + inferensi tipe + goto definition, dipanggil melalui Spike Intelligence Engine. Bagian pack Editor Intelligence (opsional).",
+  "whoMadeIt": "David Halter",
+  "sources": [
+   {
+    "untuk": "what",
+    "label": "pypi.org/project/jedi",
+    "url": "https://pypi.org/project/jedi/"
+   },
+   {
+    "untuk": "why",
+    "label": "github.com/davidhalter/jedi",
+    "url": "https://github.com/davidhalter/jedi"
+   }
+  ],
+  "curatedAt": "2026-09-09 (v1.0.23 Editor Intelligence)",
+  "whyUse": ""
+ },
+ {
+  "name": "pyflakes",
+  "displayName": "pyflakes",
+  "importName": "pyflakes",
+  "category": "Dev Tools / Testing",
+  "type": "pure",
+  "status": "EXPERIMENTAL",
+  "testedVersion": null,
+  "python": [
+   "3.11"
+  ],
+  "abis": [],
+  "description": "Linter semantik ringan — undefined name, unused import.",
+  "useCases": [],
+  "works": [
+   "Menandai undefined name / unused import / penimpaan builtin SEBELUM Run",
+   "Hasil muncul di banner Problems + gutter; tap untuk lompat ke baris"
+  ],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "MIT",
+  "publisher": "PyCQA",
+  "source": "https://pypi.org/project/pyflakes/",
+  "sha256": null,
+  "longDescription": "Pemeriksa kode pre-Run di ZCODE (v1.0.23): hasilnya menyatu ke banner Problems dan gutter editor, MENAMBAH di belakang Checker bawaan (fail-open — tanpa pack ini pemeriksaan dasar tetap jalan). Bagian pack Editor Intelligence (opsional).",
+  "whoMadeIt": "PyCQA",
+  "sources": [
+   {
+    "untuk": "what",
+    "label": "pypi.org/project/pyflakes",
+    "url": "https://pypi.org/project/pyflakes/"
+   },
+   {
+    "untuk": "why",
+    "label": "github.com/PyCQA/pyflakes",
+    "url": "https://github.com/PyCQA/pyflakes"
+   }
+  ],
+  "curatedAt": "2026-09-09 (v1.0.23 Editor Intelligence)",
+  "whyUse": ""
+ },
+ {
+  "name": "mccabe",
+  "displayName": "mccabe",
+  "importName": "mccabe",
+  "category": "Dev Tools / Testing",
+  "type": "pure",
+  "status": "EXPERIMENTAL",
+  "testedVersion": null,
+  "python": [
+   "3.11"
+  ],
+  "abis": [],
+  "description": "Kompleksitas siklomatik per fungsi (Complexity Report).",
+  "useCases": [],
+  "works": [
+   "Laporan kompleksitas + maintainability index dari Command Palette"
+  ],
+  "doesNotWork": [],
+  "dependencies": [],
+  "risks": [],
+  "smokeTest": null,
+  "license": "MIT",
+  "publisher": "PyCQA (Ned Batchelder)",
+  "source": "https://pypi.org/project/mccabe/",
+  "sha256": null,
+  "longDescription": "Menghitung seberapa berkelok tiap fungsi. Di ZCODE: palette 'Complexity Report (mccabe)' — daftar fungsi + skor + maintainability index; tap nama fungsi untuk lompat ke barisnya. Bagian pack Editor Intelligence (opsional).",
+  "whoMadeIt": "PyCQA (Ned Batchelder)",
+  "sources": [
+   {
+    "untuk": "what",
+    "label": "pypi.org/project/mccabe",
+    "url": "https://pypi.org/project/mccabe/"
+   },
+   {
+    "untuk": "why",
+    "label": "github.com/PyCQA/mccabe",
+    "url": "https://github.com/PyCQA/mccabe"
+   }
+  ],
+  "curatedAt": "2026-09-09 (v1.0.23 Editor Intelligence)",
+  "whyUse": ""
  }
 ]
