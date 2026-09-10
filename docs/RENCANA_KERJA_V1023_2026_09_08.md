@@ -185,3 +185,56 @@ rencana ini menunggu approval sebelum eksekusi.
 1. Rencana kerja ini **DISETUJUI PENUH** — eksekusi mulai Fase 0, tiap fase
    berhenti di gate untuk laporan + review user.
 2. **preview-PNG MASUK v1.0.23** (commit #5 Fase 2 aktif).
+
+
+---
+
+## 12. STATUS EKSEKUSI & RUNBOOK FASE PUSH (update 2026-09-09)
+
+### 12.1 Eksekusi sesi (14 commit, semua check.sh hijau)
+
+366ce61 F0 rekaman v1.0.22 · 862c840 F0 dokumen sesi · 5082dfd #1 fix
+update cache · 3c0379a F1 RFC · 800e975 #2 About Model B · cd8cadf #3
+un-mute CM6 · 72989e9 #4a engine+McCabe · 68536bf #4b wiring lint/complexity
+· d974382 samples tur · e91417d #5 preview-PNG · 0438d01 visi jembatan ·
+28dd0fc katalog pack · (commit #6 ini) notes kandidat + runbook.
+Guard baru semuanya mutasi-proven; suite 719.
+
+### 12.2 Yang MENUNGGU tangan user (pola SKILL 28.6 — token agent tak bisa push .github/workflows/*)
+
+1. **production.yml v1.0.23**: konten lengkap sudah digenerate + zero-residual
+   terverifikasi (15 substitusi + versionCode 25->26), disimpan DI LUAR repo
+   di `~/production-v1.0.23-staging.yml` (bukan source of truth ketiga —
+   SKILL 27). User: buka `.github/workflows/production.yml` di branch
+   `arena/v1023-intelligence` via web GitHub → replace seluruh isi → commit.
+2. **build.yml check job** (opsional tapi disarankan): tambah
+   `jedi pyflakes mccabe parso` ke baris `pip install --break-system-packages`
+   di job `check` — supaya path deps-ASLI ikut diuji CI (pelajaran McCabe).
+   Agent siapkan diff-nya saat hand-off.
+
+### 12.3 Urutan FASE PUSH (PAT sekali pakai, eksekusi bersama)
+
+```text
+[PAT diterima via askpass /var/tmp — single-use, revoke setelahnya]
+1. push branch arena/v1023-intelligence
+2. USER: web-edit .github/workflows/production.yml (isi staging) [+ build.yml deps]
+3. agent: git pull -> verifikasi staging == live byte-identical
+4. agent: COMMIT KOHEREN EMPAT-TITIK (SKILL 28.2):
+   gradle.properties 1.0.23/26 + mirror ci/workflows/production.yml +
+   guard pasangan di test_zcode_production_release.py
+   (1.0.22/25->1.0.23/26, BUILD-v1.0.23, ZCODE-v1.0.23.apk, versionCode
+   '26', notes-file V1.0.23) -> suite hijau -> push
+5. PR + review user -> MERGE ke main (merge commit)
+6. USER: dispatch production DARI main (typed confirm BUILD-v1.0.23)
+7. 1 run -> draft byte-exact -> UAT A+B (checklist RELEASE_NOTES_V1.0.23)
+   [+ adb logcat dari laptop]
+8. publish draft tanpa rebuild -> tutup rekaman (PRD/SIGNING/notes status)
+   -> close PR #31 (superseded)
+```
+
+### 12.4 Batas jujur sesi
+
+Browser harness & bionic311 belum dijalankan (sandbox terbatas) —
+direkomendasikan pra-rilis; perf jedi ARMv7 belum terukur (gerbang UAT);
+compile Kotlin = CI; ident git lokal di-set ulang tiap sesi (snapshot
+menghapus .git/config — konfigurasi identity-only, bukan kredensial).
