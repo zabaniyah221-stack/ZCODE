@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,12 +25,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -53,6 +56,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -136,6 +140,11 @@ fun TerminalScreen(
     // bisa 1-3 dtk; tanpa ini layar terlihat kosong/diam seolah tap Run telat.
     var startingPython by remember { mutableStateOf(true) }
     var sessionState by remember { mutableStateOf(SessionState.START) }
+
+    // v1.0.23 (preview-PNG): gambar yang muncul selama run ini (mis.
+    // plt.savefig) + file yang sedang dilihat. Reset tiap run baru.
+    var imageResults by remember { mutableStateOf<List<File>>(emptyList()) }
+    var imageViewerFile by remember { mutableStateOf<File?>(null) }
     // Guard tap-traceback saat script hidup (diskusi user 2026-08-18):
     // navigateUp men-dispose layar → onDispose sendKill → script yang lagi
     // nunggu input() mati TANPA peringatan. Back = niat eksplisit; tap link
@@ -364,6 +373,8 @@ fun TerminalScreen(
         // F1.2 + F2.4: tampilkan status cold-start SEBELUM memanggil startInteractiveSession
         if (showPythonIndicator) appendToTerminal("sys", "\u2026 Menyalakan Python\n")
         withContext(Dispatchers.Main) { kotlinx.coroutines.yield() }
+        val runStartMs = System.currentTimeMillis()
+        imageResults = emptyList()
         Breadcrumb.log("SESSION_START_CALL")
         val activeSession = ExecutionEngine.startInteractiveSession(
             context = context,
@@ -401,6 +412,16 @@ fun TerminalScreen(
         // waitForExit TANPA hard timeout (SPEC-001 §17) — menunggu sampai selesai
         withContext(Dispatchers.IO) {
             activeSession.waitForExit()
+        }
+        // v1.0.23 (preview-PNG): pasca-run (session terminal — termasuk
+        // FAILED), cek workspace utk gambar baru (cwd script = filesDir).
+        // Kosong = nol UI. Diletakkan SETELAH waitForExit (bukan di dalam
+        // onExit) agar hook tetap ringan dan menangkap semua state akhir.
+        val images = com.zaba.zcode.core.files.ImageResultDetector
+            .detectNewImages(filesDir, runStartMs)
+        if (images.isNotEmpty()) {
+            Breadcrumb.log("IMG_RESULT", images.joinToString(",") { it.name })
+            imageResults = images
         }
     }
 
@@ -818,6 +839,40 @@ fun TerminalScreen(
             }
             } // SelectionContainer (BUG I)
 
+            // v1.0.23 (preview-PNG): kartu hasil gambar run ini. Tap nama
+            // file -> dialog preview. Tanpa gambar baru = kartu tidak dirender
+            // (nol noise). Teks stabil tanpa emoji dekoratif (AGENTS §12).
+            if (imageResults.isNotEmpty()) {
+                Surface(
+                    color = Color(0xFF101812),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Column(Modifier.padding(10.dp)) {
+                        Text(
+                            "Hasil gambar dari run ini:",
+                            fontSize = 11.sp,
+                            color = Color(0xFF8A9BB0)
+                        )
+                        imageResults.forEach { img ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { imageViewerFile = img }
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(img.name, fontSize = 13.sp, color = Color(0xFF6FB1FF))
+                                Text("Lihat >", fontSize = 12.sp, color = Color(0xFF8A9BB0))
+                            }
+                        }
+                    }
+                }
+            }
+
             // TextField transparan 1dp: pengikat keyboard virtual (ketik langsung di terminal)
             TextField(
                 value = inputVal,
@@ -846,7 +901,49 @@ fun TerminalScreen(
                 )
             )
         }
+
+        imageViewerFile?.let { img -> ImageViewerDialog(file = img, onDismiss = { imageViewerFile = null }) }
     }
+}
+
+/**
+ * v1.0.23 (preview-PNG): penampil gambar hasil run. Decode DOWNSAMPLED di
+ * background (BitmapFactory.Options.inSampleSize; bitmap penuh 2000px di
+ * RAM ARMv7 = pemborosan) — tanpa dependensi baru, tanpa menulis ulang file.
+ */
+@Composable
+private fun ImageViewerDialog(file: File, onDismiss: () -> Unit) {
+    var bitmap by remember(file) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(file) {
+        withContext(Dispatchers.IO) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(file.absolutePath, bounds)
+            var sample = 1
+            val maxDim = maxOf(bounds.outWidth, bounds.outHeight)
+            while (maxDim / (sample * 2) >= 1024) sample *= 2
+            val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+            bitmap = BitmapFactory.decodeFile(file.absolutePath, opts)
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(file.name, fontSize = 15.sp) },
+        text = {
+            val bmp = bitmap
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = "Preview ${file.name}",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text("Memuat ${file.name}…", fontSize = 12.sp, color = Color(0xFF8A9BB0))
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Tutup") }
+        }
+    )
 }
 
 private fun stateLabel(s: SessionState): String = when (s) {

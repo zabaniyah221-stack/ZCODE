@@ -74,6 +74,11 @@ PRODUCTION APK SIGNED       : YES (v1.0.21)
 PRODUCTION DEVICE UAT       : PASS — user report, crash none (v1.0.21)
 PUBLIC RELEASE              : YES — v1.0.21
 UPDATE CONTINUITY           : DEVICE VERIFIED — v1.0.20→v1.0.21 in-place (user report)
+CI PRODUCTION SIGNING       : VERIFIED — run 32822998488 (v1.0.22)
+PRODUCTION APK SIGNED       : YES (v1.0.22)
+PRODUCTION DEVICE UAT       : PASS — user report, crash none (v1.0.22)
+PUBLIC RELEASE              : YES — v1.0.22
+UPDATE CONTINUITY           : DEVICE VERIFIED — v1.0.21→v1.0.22 in-place (user report + telemetri 2026-09-08)
 ```
 
 Recovery drill tetap wajib meskipun release pertama sudah terbit: satu backup
@@ -209,3 +214,38 @@ Not claimed: an independent agent re-download of the public asset (network
 from the agent sandbox to release assets was blocked at check time). The
 v1.0.21 in-place update is the first device evidence of update continuity for
 `com.zaba.zcode`; it closes the open item recorded in §8.
+
+## 10. v1.0.22 production evidence
+
+```text
+Workflow run       : 32822998488 — SUCCESS
+Source commit/tag  : 26bc8a0a21037439daeddb9fa0a0bef6975a22d4 (tag v1.0.22)
+Release URL        : https://github.com/muzape28-blip/ZCODE/releases/tag/v1.0.22
+Published          : 2026-08-25T08:19:33Z
+APK bytes          : 34,759,201
+APK SHA-256        :
+e7384101d31728c99aa0bcc3f90e75ee139fc04d2c29b483c8e049f5a3f9e32b
+Certificate SHA-256:
+401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
+Signature scheme   : APK Signature Scheme v2 verified
+```
+
+Evidence chain:
+
+1. workflow verified exactly one release APK, package/version/assets, and signer;
+2. user installed the v1.0.22 draft in place over v1.0.21 (no uninstall, no
+   clear app data) and reported the app running perfectly — user report,
+   dikonfirmasi telemetri 2026-09-08 (`docs/UAT_UPDATER_CHECKPATH_2026_09_08.md`:
+   APP_START v1.0.22 sejak 08-25 15:04, nol crash Java sepanjang log 846 baris);
+3. the existing draft was published without another production workflow run;
+4. the GitHub release asset digest (API) reports the same APK SHA-256
+   (checked by the agent 2026-09-08 via the releases API);
+5. temporary CI keystore cleanup step succeeded.
+
+Not claimed: independent agent re-download of the public asset (egress
+diblok — pola §8/§9). Updater one-tap v1.0.22: check-path DEVICE VERIFIED
+(user report + telemetri 2026-09-08); jalur download→verify→install→receipt
+belum pernah dieksekusi di device — fitur baru ada sejak v1.0.22 dan tidak
+dapat menguji dirinya sendiri; pengujian nyatanya = siklus update v1.0.23.
+Known issue benign: cache 24 jam auto-check tidak terbaca lintas process
+(`UAT_UPDATER_CHECKPATH_2026_09_08.md` §2) — fix direncanakan v1.0.23.

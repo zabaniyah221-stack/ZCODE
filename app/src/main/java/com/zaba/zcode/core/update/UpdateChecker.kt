@@ -161,9 +161,15 @@ object UpdateChecker {
             f
         }
 
-    /** Baca cache; null bila tak ada/korup/lebih tua dari TTL. */
-    private fun readCache(): CheckOutcome? {
-        val f = synchronized(lock) { cacheFile } ?: return null
+    /** Baca cache; null bila tak ada/korup/lebih tua dari TTL.
+     *
+     * v1.0.23: path WAJIB di-resolve via cachePath(context). Membaca field
+     * statis `cacheFile` saja membuat process baru selalu melihat null dan
+     * cache tidak pernah terbaca lintas app restart — bug ditemukan lewat
+     * telemetri device (0 cache-hit dari 15 auto-check;
+     * docs/UAT_UPDATER_CHECKPATH_2026_09_08.md §2). */
+    private fun readCache(context: Context): CheckOutcome? {
+        val f = cachePath(context)
         if (!f.exists()) return null
         return try {
             val now = System.currentTimeMillis()
@@ -228,7 +234,7 @@ object UpdateChecker {
             return CheckOutcome.Failed(CheckOutcome.Failed.PARSE, msg)
         }
         if (!fresh) {
-            val cached = readCache()
+            val cached = readCache(context)
             if (cached != null) {
                 Breadcrumb.log("UPDATE_CHECK_OK", "cache local=$local")
                 return reconcile(cached, local)
@@ -238,7 +244,12 @@ object UpdateChecker {
         when (outcome) {
             is CheckOutcome.Newer -> Breadcrumb.log("UPDATE_CHECK_NEWER", "${outcome.tag} local=$local")
             is CheckOutcome.UpToDate -> Breadcrumb.log("UPDATE_CHECK_OK", "local=$local")
-            is CheckOutcome.Failed -> Breadcrumb.log("UPDATE_CHECK_FAIL", outcome.reasonCode)
+            // v1.0.23: Failed tidak di-log di sini - satu owner telemetri
+            // kegagalan ada di fetchAndCompare/currentVersion (layer yang
+            // memegang detail). Dulu dua layer log -> entri dobel
+            // "NETWORK jaringan:..." + "NETWORK" (SKILL 20 #1). Branch tetap
+            // wajib: when atas sealed harus exhaustive.
+            is CheckOutcome.Failed -> Unit
         }
         return outcome
     }
@@ -269,9 +280,11 @@ object UpdateChecker {
         try {
             val code = conn.responseCode
             if (code == 403 || code == 429) {
+                Breadcrumb.log("UPDATE_CHECK_FAIL", "rate: $code")
                 return CheckOutcome.Failed(CheckOutcome.Failed.RATE_LIMITED, "Rate limited")
             }
             if (code !in 200..299) {
+                Breadcrumb.log("UPDATE_CHECK_FAIL", "http: $code")
                 return CheckOutcome.Failed(CheckOutcome.Failed.HTTP_ERROR, "HTTP $code")
             }
             val body = conn.inputStream.bufferedReader().readText()

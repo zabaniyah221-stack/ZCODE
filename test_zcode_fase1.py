@@ -46,6 +46,32 @@ class TestFase1Files:
         # 'nonlocal' hanya ada di grammar Lezer-python — bukti lang-python terbundle
         assert "nonlocal" in read(ASSETS / "editor/codemirror.bundle.js")
 
+    def test_cm6_scope_completion_sources_unmuted(self):
+        # v1.0.23 (RFC_V1023 §7, Tier 2.5): localCompletionSource +
+        # globalCompletion (@codemirror/lang-python) DIGABUNG di dalam
+        # zcodeCompletions. Latar: `override` CM6 menimpa seluruh sumber
+        # bahasa — [zcodeCompletions] sendirian tanpa sadar membisukan
+        # keduanya sejak migrasi CM6 (kodenya ter-bundel via python() tapi
+        # tak pernah dipanggil). Menumpuknya sebagai entry array terpisah
+        # juga salah: source pertama yang non-null MENANG (berebut, bukan
+        # bergabung). Kontrak: SATU sumber orchestrator yang memanggil
+        # keduanya + bundle ter-rebuild membawa marker.
+        src = read(ROOT / "editor-src/src/editor.js")
+        assert 'import { python, localCompletionSource, globalCompletion } from "@codemirror/lang-python";' in src, (
+            "editor.js harus mengimpor localCompletionSource + globalCompletion"
+        )
+        assert "for (const tierSource of [localCompletionSource, globalCompletion])" in src, (
+            "zcodeCompletions wajib memanggil kedua sumber scope-aware (merge loop)"
+        )
+        assert "override: [zcodeCompletions]," in src, (
+            "override tetap SATU sumber (orchestrator) — entry terpisah saling membisukan"
+        )
+        bundle = read(ASSETS / "editor/codemirror.bundle.js")
+        assert "un-mute v1.0.23" in bundle, (
+            "bundle belum diregenerasi dengan completion un-mute "
+            "(cd editor-src && npm ci && npm run build)"
+        )
+
     def test_workspace_viewmodel_exists(self):
         p = JAVA / "WorkspaceViewModel.kt"
         assert p.exists()

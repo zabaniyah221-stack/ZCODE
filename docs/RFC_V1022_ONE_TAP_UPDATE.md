@@ -362,3 +362,18 @@ hilang). Toggle OFF = perilaku persis sebelum fitur.
 - GitHub Releases API (field `digest`, `size`, unauthenticated): https://docs.github.com/en/rest/releases/releases
 - Semantik `/releases/latest`: https://docs.github.com/en/rest/releases/releases#the-latest-release
 - Rate limit REST (60 req/jam/IP unauthenticated): https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+
+---
+
+## Errata implementasi (2026-09-08, sesi arena/v1023-intelligence)
+
+1. **D8 — nama breadcrumb:** daftar kontrak menyebut `UPDATE_CHECK_SAME`;
+   implementasi memakai `UPDATE_CHECK_OK` untuk kondisi up-to-date. Kontrak
+   telemetri aktual: `UPDATE_CHECK_BEGIN / _OK / _NEWER / _FAIL`.
+2. **D2 — bug cache 24 jam:** `readCache()` membaca field statis `cacheFile`
+   yang hanya diinisialisasi oleh `writeCache()`, sehingga pada process baru
+   cache selalu terbaca kosong dan auto-check app start selalu menyentuh
+   jaringan (telemetri 2026-09-08: 0 cache-hit dari 15 auto-check). Dampak
+   benign — 1 request API ekstra per app start. Fix direncanakan di v1.0.23
+   (`RENCANA_KERJA_V1023_2026_09_08.md` §5 commit 1). Bukti:
+   `docs/UAT_UPDATER_CHECKPATH_2026_09_08.md` §2.

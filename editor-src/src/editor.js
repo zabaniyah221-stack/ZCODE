@@ -50,12 +50,16 @@ import { setDiagnostics as cmSetDiagnostics, lintGutter } from "@codemirror/lint
 // Python; toggle terpisah, default OFF — keputusan user 2026-08-17).
 import { highlightTrailingWhitespace } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { python } from "@codemirror/lang-python";
+import { python, localCompletionSource, globalCompletion } from "@codemirror/lang-python";
 
 // ---------------------------------------------------------------------
-// Autocomplete kasta 1+2 (batch anti-sepi S4) — offline, deterministik.
-// Sumber: kata dalam dokumen + keyword Python + builtins + snippet.
-// Kasta 3 (jedi/LSP) = batch terpisah, lihat backlog.
+// Autocomplete kasta 1+2 + Tier 2.5 (v1.0.23, RFC_V1023 §7) — offline,
+// deterministik. Sumber: simbol lokal scope-aware + globals resmi
+// (@codemirror/lang-python) + kata dokumen + keyword + builtins + snippet.
+// PENTING: sumber lang-python DIGABUNG di sini, bukan ditumpuk di array
+// `override` — override CM6 bersifat menimpa (source pertama yang
+// non-null menang), jadi menumpuknya saling membisukan. Kasta 3 (jedi)
+// = gerbang ukur, batch terpisah.
 // ---------------------------------------------------------------------
 
 const PY_KEYWORDS = [
@@ -121,6 +125,21 @@ function zcodeCompletions(context) {
     if (apply) o.apply = apply;
     options.push(o);
   };
+
+  // Tier 2.5 (v1.0.23): un-mute sumber completion bawaan lang-python.
+  // Sejak migrasi CM6, `override: [zcodeCompletions]` tanpa sadar
+  // membisukan localCompletionSource (nama lokal scope-aware) dan
+  // globalCompletion (keyword + globals resmi) yang sebenarnya sudah
+  // ter-bundel di dependensi. Digabung ke satu sumber agar tidak
+  // berebut (lihat komentar blok atas).
+  for (const tierSource of [localCompletionSource, globalCompletion]) {
+    const tierResult = tierSource(context);
+    if (tierResult) {
+      for (const tierOption of tierResult.options) {
+        push(tierOption.label, tierOption.type, tierOption.detail, tierOption.apply);
+      }
+    }
+  }
 
   // Kasta 1: kata-kata dalam dokumen (≥2 char, maks ~60 pool)
   const docWords =

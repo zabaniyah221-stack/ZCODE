@@ -132,13 +132,13 @@ Parse → Resolve → Storage Guard → Download → Verify → Extract
 
 ### Library dan Samples
 
-- **342 kartu package** pada snapshot v1.0.19.
+- **345 kartu package** pada snapshot v1.0.23.
 - **231 package berstatus TESTED** pada perangkat/lingkungan yang tercatat.
 - Status dibedakan: TESTED, COMPATIBLE, EXPERIMENTAL, INCOMPATIBLE, UNAVAILABLE.
 - Detail package menjelaskan What/Why/How/Where/Who, versi, dependency, risiko,
   sumber, dan batas perangkat.
 - Tombol **Coba contoh lengkap** menghubungkan kartu package ke Samples.
-- **37 sample runnable dalam 11 kategori**: Basics, NumPy, Matplotlib, Web & API,
+- **39 sample runnable dalam 11 kategori**: Basics, NumPy, Matplotlib, Web & API,
   File & Office, Database, Data & Matematika, Gambar & QR, Security, Utilities,
   dan Project Mini.
 - Sample package memeriksa dependency sebelum file dibuat dan menawarkan

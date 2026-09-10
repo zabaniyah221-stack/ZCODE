@@ -2,7 +2,7 @@
 
 ## Data Safety, GPL Compliance, dan Verified One-Tap Update
 
-**Status dokumen:** `APPROVED / v1.0.21 RELEASED, v1.0.22 DESIGNED`
+**Status dokumen:** `APPROVED / v1.0.21 RELEASED, v1.0.22 RELEASED`
 **Tanggal:** 2026-08-22
 **Branch repair lokal:** `arena/v1021-pr28-repair`
 **Pemutakhiran 2026-08-25:** v1.0.21 sudah merge (PR #29), signed, dan
@@ -332,6 +332,9 @@ Acuan:
 v1.0.20 = RELEASED + DEVICE VERIFIED + exact-byte public audit
 v1.0.21 = RELEASED + DEVICE VERIFIED (user report; in-place dari v1.0.20,
           2026-08-23T01:40:05Z, run 32570675883)
+v1.0.22 = RELEASED + DEVICE VERIFIED (user report; in-place dari v1.0.21,
+          2026-08-25T08:19:33Z, run 32822998488; updater check-path
+          DEVICE VERIFIED — jalur download→install menunggu v1.0.23)
 ```
 
 5. Perbarui README/PRD yang masih menyebut snapshot versi lama tanpa mengubah

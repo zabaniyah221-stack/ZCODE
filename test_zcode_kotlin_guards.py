@@ -5307,3 +5307,191 @@ class TestCITestListCompleteness:
             "test_*.py root tidak dijalankan CI (false green PR #31/#32): "
             f"{missing} — daftarkan di tools/check.sh (baris pytest eksplisit)"
         )
+
+
+class TestV1023UpdateCacheCrossProcess:
+    """v1.0.23: bug cache 24 jam (docs/UAT_UPDATER_CHECKPATH_2026_09_08.md §2)
+    — readCache() dulu membaca field statis `cacheFile` yang hanya diisi
+    writeCache(), sehingga process baru selalu melihat null dan auto-check
+    app start selalu menyentuh jaringan (telemetri device: 0 cache-hit
+    dari 15 auto-check). Guard: readCache wajib resolve path dari context,
+    dan telemetri FAIL tepat satu owner (dedupe SKILL 20 #1)."""
+
+    def test_readcache_resolves_path_via_context_not_stale_static_field(self):
+        src = strip_kt_comments(read(UPDATE / "UpdateChecker.kt"))
+        assert "private fun readCache(context: Context)" in src, (
+            "readCache harus menerima Context — tanpa itu, process baru "
+            "tidak bisa menemukan file cache (bug lintas restart)"
+        )
+        assert "readCache()" not in src, "panggilan readCache() tanpa context masih ada"
+        m = re.search(r"private fun readCache\(context: Context\)[^}]*", src)
+        assert m and "cachePath(context)" in m.group(0), (
+            "readCache wajib memanggil cachePath(context) — bukan membaca field statis"
+        )
+        assert "synchronized(lock) { cacheFile } ?: return null" not in src, (
+            "pola bug readCache statis kembali hidup — cache mati lintas process"
+        )
+
+    def test_fail_telemetry_has_single_owner(self):
+        src = strip_kt_comments(read(UPDATE / "UpdateChecker.kt"))
+        assert (
+            'is CheckOutcome.Failed -> Breadcrumb.log("UPDATE_CHECK_FAIL", outcome.reasonCode)' not in src
+        ), "checkLatest tidak boleh log Failed (dobel dengan fetchAndCompare — SKILL 20 #1)"
+        for token in (
+            'Breadcrumb.log("UPDATE_CHECK_FAIL", "rate: $code")',
+            'Breadcrumb.log("UPDATE_CHECK_FAIL", "http: $code")',
+            'Breadcrumb.log("UPDATE_CHECK_FAIL", "NETWORK $msg")',
+        ):
+            assert token in src, f"path gagal fetchAndCompare kehilangan telemetri: {token}"
+
+
+class TestV1023AboutLicenseLayout:
+    """v1.0.23 Model B (keputusan user 2026-09-08): teks hukum penuh via baris
+    expandable dari assets ter-package, bisa disalin (SelectionContainer —
+    PRD 'semua teks harus bisa disalin'), tanpa jendela license nested-scroll
+    tetap 150dp versi lama, provenance GPLv3+ZABACODE tetap tampil."""
+
+    ABOUT = APP / "ui" / "settings" / "AboutScreen.kt"
+
+    def _src(self) -> str:
+        return strip_kt_comments(read(self.ABOUT))
+
+    def test_all_three_license_assets_are_loaded_and_expandable(self):
+        src = self._src()
+        for asset in ("GPL-3.0.txt", "NOTICE.txt", "MIT.txt"):
+            assert asset in src, f"About harus memuat teks aset ter-package: {asset}"
+        for label in ("GNU GPL v3", "ZABACODE provenance", "MIT — independent parts"):
+            assert label in src, f"baris lisensi expandable hilang: {label}"
+
+    def test_license_text_is_copyable_and_flows_into_page_scroll(self):
+        src = self._src()
+        assert "SelectionContainer {" in src, (
+            "teks lisensi wajib dibungkus SelectionContainer (bisa disalin)"
+        )
+        assert "height(150.dp)" not in src, (
+            "jendela license tetap 150dp (nested scroll) kembali hidup — "
+            "konten expand harus mengalir ke scroll halaman"
+        )
+        assert "rememberSaveable { mutableStateOf(false) }" in src, (
+            "state expand per baris wajib survive rotasi (SKILL 17)"
+        )
+
+    def test_provenance_summary_stays_gplv3_and_zabacode(self):
+        src = self._src()
+        assert "under GPLv3" in src
+        assert "derived from ZABACODE" in src or "ZABACODE" in src
+        assert "versionCode $versionCodeLabel" in src, (
+            "versionCode harus tampil (QA memastikan APK yang terpasang)"
+        )
+
+
+class TestV1023SpikeWiring:
+    """v1.0.23 (RFC_V1023 §7): wiring Spike Intelligence ke jalur yang sudah
+    hidup. Producer problems = validateSyntaxDebounced; pyflakes MENAMBAH
+    (non-mengganti) di belakang Checker, fail-open, stale-drop, budget 256KB,
+    probe pack di-cache. Complexity report = palette + dialog, tap->gotoLine."""
+
+    SPIKE = APP / "core/editor/SpikeLint.kt"
+    VM = ROOT / "app/src/main/java/com/zaba/zcode/WorkspaceViewModel.kt"
+
+    def test_spikelint_fail_open_and_budget(self):
+        src = strip_kt_comments(read(self.SPIKE))
+        for token in (
+            "const val MAX_CODE_CHARS = 256 * 1024",
+            "source = \"pyflakes\"",
+            'Breadcrumb.log("SPKE_LINT_MS"',
+            'Breadcrumb.log("SPKE_LINT_FAIL"',
+            "return null",
+        ):
+            assert token in src, f"SpikeLint kehilangan kontrak: {token}"
+        # Probe di-cache per process (tanpa pack = bukan panggilan berulang)
+        assert "@Volatile" in src and "pyflakesReady: Boolean? = null" in src, (
+            "probe ketersediaan wajib di-cache per process"
+        )
+        assert "\"health_check\"" in src, "probe memakai action health_check engine"
+
+    def test_vm_merges_pyflakes_behind_checker_with_stale_guard(self):
+        src = strip_kt_comments(read(self.VM))
+        # Checker tetap dipublikasikan dulu (instan), spike menambah di belakang
+        assert 'SpikeLint.lint(getApplication(), code, activeFile ?: "untitled.py")' in src, (
+            "validateSyntaxDebounced harus memanggil SpikeLint.lint di belakang Checker "
+            "(filename non-null: activeFile ?: untitled.py)"
+        )
+        assert "if (code == activeCode)" in src, (
+            "stale-drop wajib: hasil spike tidak boleh menimpa kode yang sudah berubah"
+        )
+        assert "problems = list + spike.problems" in src, (
+            "merge harus ADITIF (list Checker + spike), bukan mengganti"
+        )
+        assert "SpikeLint.pyflakesAvailable(getApplication())" in src, (
+            "gate probe pack wajib (tanpa pack = nol panggilan Python)"
+        )
+
+    def test_complexity_palette_and_dialog(self):
+        registry = read(APP / "core/plugins/PluginRegistry.kt")
+        screen = strip_kt_comments(read(UI / "workbench/WorkbenchScreen.kt"))
+        assert '"complexity_report", "Complexity Report (mccabe)"' in registry, (
+            "entri palette complexity_report hilang dari PluginRegistry"
+        )
+        assert "\"complexity_report\" -> {\n                vm.requestComplexityReport()" in screen, (
+            "dispatch palette tidak memanggil requestComplexityReport"
+        )
+        assert "vm.spikeComplexity?.let { report ->" in screen, (
+            "dialog hasil complexity hilang"
+        )
+        assert "gotoLine(b.line)" in screen, (
+            "tap blok complexity wajib lompat ke baris (gotoLine)"
+        )
+        vm = strip_kt_comments(read(self.VM))
+        assert "fun requestComplexityReport()" in vm
+        assert "SpikeLint.ComplexityReport.unavailable()" in vm, (
+            "fail-open complexity: engine absen = report unavailable, bukan crash"
+        )
+
+
+class TestV1023PreviewPng:
+    """v1.0.23 (preview-PNG): hasil savefig/script terlihat tanpa file
+    manager. Deteksi pasca-run di onExit (cwd script = filesDir), kartu di
+    terminal, dialog downsampled. Fail-silent by design: tanpa gambar baru
+    = nol UI; deteksi tidak pernah menghapus file user."""
+
+    TERM = APP / "ui/terminal/TerminalScreen.kt"
+    DETECTOR = APP / "core/files/ImageResultDetector.kt"
+
+    def test_detector_pure_and_conservative(self):
+        src = strip_kt_comments(read(self.DETECTOR))
+        assert "IMAGE_EXTENSIONS = setOf(\"png\", \"jpg\", \"jpeg\", \"webp\", \"bmp\")" in src
+        assert "it.lastModified() >= sinceMs" in src, "filter mtime wajib (hanya hasil run ini)"
+        assert "it.isFile" in src, "hanya file biasa — jangan ikutkan subdir"
+        assert "delete()" not in src and "deleteRecursively()" not in src, (
+            "detektor TIDAK BOLEH menghapus/memindahkan file user"
+        )
+
+    def test_terminal_hook_and_card_and_viewer(self):
+        src = strip_kt_comments(read(self.TERM))
+        # hook pasca-run di onExit dengan runStartMs + filesDir (workspace)
+        assert "detectNewImages(filesDir, runStartMs)" in src, (
+            "deteksi wajib pasca-run (setelah waitForExit) dengan filesDir (cwd script)"
+        )
+        assert "activeSession.waitForExit()" in src
+        assert 'Breadcrumb.log("IMG_RESULT"' in src, "breadcrumb observability hilang"
+        assert "imageResults = emptyList()" in src, "kartu wajib reset tiap run baru"
+        assert "if (imageResults.isNotEmpty())" in src, "nol gambar = nol UI (fail-silent)"
+        assert "imageViewerFile = img" in src, "tap kartu harus membuka viewer"
+        assert "ImageViewerDialog(file = img, onDismiss = { imageViewerFile = null })" in src
+
+    def test_viewer_downsamples_for_armv7(self):
+        src = strip_kt_comments(read(self.TERM))
+        assert "inJustDecodeBounds = true" in src, "bounds dulu (RAM ARMv7)"
+        assert "inSampleSize = sample" in src, "decode wajib downsampled"
+        assert "Dispatchers.IO" in src, "decode di luar main thread"
+        assert "asImageBitmap()" in src
+
+    def test_matplotlib_samples_point_to_preview(self):
+        samples_dir = ROOT / "app/src/main/assets/samples"
+        chart = read(samples_dir / "matplotlib_chart.py")
+        sub = read(samples_dir / "matplotlib_subplots.py")
+        for sample in (chart, sub):
+            assert "kartu preview" in sample.lower(), (
+                "sample matplotlib harus mengarah ke kartu preview (bukan 'buka di galeri')"
+            )

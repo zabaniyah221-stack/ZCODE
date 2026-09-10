@@ -17,7 +17,9 @@ await esbuild.build({
     js:
       "/* ZCODE CodeMirror 6 bundle — GENERATED FILE, JANGAN EDIT MANUAL.\n" +
       "   Regenerasi: cd editor-src && npm ci && npm run build\n" +
-      "   Offline-first: tidak ada CDN/fetch; semua kode ada di file ini. */",
+      "   Offline-first: tidak ada CDN/fetch; semua kode ada di file ini.\n" +
+      "   Completion: doc-words+keywords+builtins+snippets + lang-python\n" +
+      "   local/global scope-aware (un-mute v1.0.23). */",
   },
 });
 
