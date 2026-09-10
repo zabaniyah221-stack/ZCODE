@@ -1,15 +1,15 @@
-name: Build ZCODE Production — v1.0.22
+name: Build ZCODE Production — v1.0.23
 
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type BUILD-v1.0.22 to create the signed draft release"
+        description: "Type BUILD-v1.0.23 to create the signed draft release"
         required: true
         type: string
 
 concurrency:
-  group: zcode-production-v1.0.22
+  group: zcode-production-v1.0.23
   cancel-in-progress: false
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
           git diff --check
 
   build-production:
-    if: inputs.confirm == 'BUILD-v1.0.22'
+    if: inputs.confirm == 'BUILD-v1.0.23'
     needs: check
     runs-on: ubuntu-22.04
     environment: production
@@ -42,7 +42,7 @@ jobs:
       contents: write
     env:
       EXPECTED_SIGNER: 401392193b734263c8ecce93e12be1f7f307203afe4282dc2550094088f38bd2
-      RELEASE_TAG: v1.0.22
+      RELEASE_TAG: v1.0.23
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -130,8 +130,8 @@ jobs:
 
           "$AAPT" dump badging "$APK" | tee production-badging.txt
           grep -q "package: name='com.zaba.zcode'" production-badging.txt
-          grep -q "versionCode='25'" production-badging.txt
-          grep -q "versionName='1.0.22'" production-badging.txt
+          grep -q "versionCode='26'" production-badging.txt
+          grep -q "versionName='1.0.23'" production-badging.txt
           grep -q "application-label:'ZCODE'" production-badging.txt
           if grep -q '^application-debuggable' production-badging.txt; then
             echo "Production APK must not be debuggable"
@@ -163,11 +163,11 @@ jobs:
 
           OUT="$RUNNER_TEMP/zcode-production-apk"
           mkdir -p "$OUT"
-          cp "$APK" "$OUT/ZCODE-v1.0.22.apk"
+          cp "$APK" "$OUT/ZCODE-v1.0.23.apk"
           cp production-apksigner.txt "$OUT/apksigner.txt"
           (
             cd "$OUT"
-            sha256sum ZCODE-v1.0.22.apk > ZCODE-v1.0.22.apk.sha256
+            sha256sum ZCODE-v1.0.23.apk > ZCODE-v1.0.23.apk.sha256
           )
 
           cleanup_keystore
@@ -177,7 +177,7 @@ jobs:
       - name: Upload the one production APK for internal UAT
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ZCODE-v1.0.22-production
+          name: ZCODE-v1.0.23-production
           path: ${{ runner.temp }}/zcode-production-apk/*
           if-no-files-found: error
 
@@ -196,7 +196,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ZCODE-v1.0.22-production-technical-reports
+          name: ZCODE-v1.0.23-production-technical-reports
           path: ${{ runner.temp }}/zcode-production-reports/*
           if-no-files-found: warn
           retention-days: 14
@@ -213,13 +213,13 @@ jobs:
           fi
           OUT="$RUNNER_TEMP/zcode-production-apk"
           gh release create "$RELEASE_TAG" \
-            "$OUT/ZCODE-v1.0.22.apk" \
-            "$OUT/ZCODE-v1.0.22.apk.sha256" \
+            "$OUT/ZCODE-v1.0.23.apk" \
+            "$OUT/ZCODE-v1.0.23.apk.sha256" \
             "$OUT/apksigner.txt" \
             --draft \
             --target "$GITHUB_SHA" \
-            --title "ZCODE v1.0.22" \
-            --notes-file docs/RELEASE_NOTES_V1.0.22.md
+            --title "ZCODE v1.0.23" \
+            --notes-file docs/RELEASE_NOTES_V1.0.23.md
 
       - name: Verify production keystore remains absent
         if: always()

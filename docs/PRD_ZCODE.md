@@ -12,7 +12,7 @@ dihadapi, bukti, kemampuan mengoperasikan solusi, biaya belajar/migrasi, risiko,
 acceptance criteria, dan jalan mundur. Tidak boleh berubah diam-diam hanya
 karena teknologi baru terlihat lebih menarik.
 
-Versi produksi saat ini: `1.0.22` / versionCode 25
+Versi produksi saat ini: `1.0.22` / versionCode 25 (kandidat rilis berikutnya 1.0.23/26 — PRODUCTION CONFIGURED, belum RELEASED)
 (`RELEASED 2026-08-25T08:19:33Z, run 32822998488, DEVICE VERIFIED (user report)`;
 updater check-path DEVICE VERIFIED — jalur download→install menunggu siklus
 update v1.0.23, lihat `docs/UAT_UPDATER_CHECKPATH_2026_09_08.md`).

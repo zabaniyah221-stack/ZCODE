@@ -129,14 +129,14 @@ class TestProductionBuildContract:
         assert "System.getenv" in signing
 
     def test_version_and_main_identity_are_exact(self):
-        # Rilis berjalan: 1.0.22/25 (satu-satunya sumber =
+        # Rilis berjalan: 1.0.23/26 (satu-satunya sumber =
         # gradle.properties). Production workflow direvisi in-place ke
-        # v1.0.22 (pola rumah, prasyarat 1392cc6); guard pasangan 1.0.22/25
+        # v1.0.23 (pola rumah, prasyarat 1392cc6); guard pasangan 1.0.23/26
         # hidup di TestSingleProductionWorkflow (di bawah) yang membaca
         # production.yml sebagai workflow rilis berjalan.
         props = read(ROOT / "gradle.properties")
-        assert "zcode.versionName=1.0.22" in props
-        assert "zcode.versionCode=25" in props
+        assert "zcode.versionName=1.0.23" in props
+        assert "zcode.versionCode=26" in props
         manifest = read(MAIN_MANIFEST)
         strings = read(MAIN_STRINGS)
         assert 'android:taskAffinity="com.zaba.zcode"' in manifest
@@ -218,7 +218,7 @@ class TestSingleProductionWorkflow:
         assert "push:" not in src and "pull_request:" not in src
         assert "environment: production" in src
         assert "permissions:" in src and "contents: write" in src
-        assert "BUILD-v1.0.22" in src
+        assert "BUILD-v1.0.23" in src
         assert "concurrency:" in src
 
     def test_exactly_one_release_apk_is_built(self):
@@ -229,12 +229,14 @@ class TestSingleProductionWorkflow:
         assert "assemblePerformance" not in src
         assert "find app/build/outputs/apk/release" in src
         assert "app/build/outputs/apk/debug" not in src
-        assert "ZCODE-v1.0.22.apk" in src
+        assert "ZCODE-v1.0.23.apk" in src
         assert "ZCODE-Fase12-APK" not in src
         assert "ZCODE-v1.0.20-rc1" not in src
         # Pin v1.0.21 harus hilang setelah revisi in-place (pola 1392cc6).
         assert "1.0.21" not in src, "pin v1.0.21 masih hidup di production.yml"
+        assert "1.0.22" not in src, "pin v1.0.22 masih hidup di production.yml"
         assert "versionCode='24'" not in src
+        assert "versionCode='25'" not in src
 
     def test_secret_boundary_is_exact_and_cleanup_is_unconditional(self):
         src = self.source()
@@ -280,8 +282,8 @@ class TestSingleProductionWorkflow:
         src = self.source()
         for token in (
             "com.zaba.zcode",
-            "versionCode='25'",
-            "versionName='1.0.22'",
+            "versionCode='26'",
+            "versionName='1.0.23'",
             "application-label:'ZCODE'",
             "application-debuggable",
             "profileable",
@@ -301,12 +303,12 @@ class TestSingleProductionWorkflow:
         assert "gh release create" in src
         assert "--draft" in src
         assert "--target \"$GITHUB_SHA\"" in src
-        assert "docs/RELEASE_NOTES_V1.0.22.md" in src
+        assert "docs/RELEASE_NOTES_V1.0.23.md" in src
         assert "gh release view" in src
         assert "git ls-remote --exit-code --tags" in src
         assert "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4" in src
         assert "zcode-production-apk" in src
-        assert "ZCODE-v1.0.22.apk.sha256" in src
+        assert "ZCODE-v1.0.23.apk.sha256" in src
         assert "release-promotion" not in src.lower()
 
     def test_canonical_debug_does_not_emit_competing_apk(self):
