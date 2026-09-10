@@ -5413,8 +5413,9 @@ class TestV1023SpikeWiring:
     def test_vm_merges_pyflakes_behind_checker_with_stale_guard(self):
         src = strip_kt_comments(read(self.VM))
         # Checker tetap dipublikasikan dulu (instan), spike menambah di belakang
-        assert "SpikeLint.lint(getApplication(), code, activeFile)" in src, (
-            "validateSyntaxDebounced harus memanggil SpikeLint.lint di belakang Checker"
+        assert 'SpikeLint.lint(getApplication(), code, activeFile ?: "untitled.py")' in src, (
+            "validateSyntaxDebounced harus memanggil SpikeLint.lint di belakang Checker "
+            "(filename non-null: activeFile ?: untitled.py)"
         )
         assert "if (code == activeCode)" in src, (
             "stale-drop wajib: hasil spike tidak boleh menimpa kode yang sudah berubah"

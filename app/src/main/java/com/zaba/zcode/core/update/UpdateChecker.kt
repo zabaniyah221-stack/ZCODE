@@ -247,7 +247,9 @@ object UpdateChecker {
             // v1.0.23: Failed tidak di-log di sini - satu owner telemetri
             // kegagalan ada di fetchAndCompare/currentVersion (layer yang
             // memegang detail). Dulu dua layer log -> entri dobel
-            // "NETWORK jaringan:..." + "NETWORK" (SKILL 20 #1).
+            // "NETWORK jaringan:..." + "NETWORK" (SKILL 20 #1). Branch tetap
+            // wajib: when atas sealed harus exhaustive.
+            is CheckOutcome.Failed -> Unit
         }
         return outcome
     }

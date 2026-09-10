@@ -954,7 +954,7 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                     SpikeLint.pyflakesAvailable(getApplication())
                 ) {
                     val spike = withContext(Dispatchers.IO) {
-                        SpikeLint.lint(getApplication(), code, activeFile)
+                        SpikeLint.lint(getApplication(), code, activeFile ?: "untitled.py")
                     }
                     if (spike != null) {
                         withContext(Dispatchers.Main) {
