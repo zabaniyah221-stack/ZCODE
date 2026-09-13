@@ -58,6 +58,7 @@ fun main() = application {
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
     var pyInfo by remember { mutableStateOf("python3 …") }
+    var showAbout by remember { mutableStateOf(false) }
     val navigator = rememberWebViewNavigator()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -108,6 +109,10 @@ fun main() = application {
                         Text("▶ Run (F5)")
                     }
                     Text("  ZCODE Desktop v0.0.1", fontSize = 13.sp, color = TEXT)
+                    androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    Button(onClick = { showAbout = true }, Modifier.padding(end = 8.dp)) {
+                        Text("About")
+                    }
                 }
                 Divider(color = Color(0xFF30363D))
                 Row(Modifier.weight(1f)) {
@@ -120,8 +125,12 @@ fun main() = application {
                             }
                         }
                     }
-                    // Editor CM6 (bundle SAMA persis)
-                    Box(Modifier.weight(1f)) {
+                    // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
+                    Column(Modifier.weight(1f)) {
+                        Text("  workspace_tmp.py", fontSize = 11.sp, color = Color(0xFF8B949E),
+                            modifier = Modifier.fillMaxWidth().background(SURFACE).padding(4.dp),
+                            maxLines = 1)
+                        Box(Modifier.weight(1f)) {
                         if (!kcefReady) {
                             Text("Initializing KCEF…", Modifier.align(Alignment.Center), color = TEXT)
                         } else {
@@ -140,6 +149,21 @@ fun main() = application {
                                 }
                                 println("[SPIKE] BRIDGE_READY=$ready")
                                 done = true
+                            }
+                        }
+                        }
+                    }
+                }
+                // Dialog About (versi + GPLv3, scope §2)
+                if (showAbout) {
+                    androidx.compose.ui.window.Dialog(onCloseRequest = { showAbout = false }) {
+                        Column(Modifier.background(SURFACE).padding(16.dp)) {
+                            Text("ZCODE Desktop v0.0.1-desktop", color = TEXT, fontSize = 15.sp)
+                            Text("IDE Python • offline-first • gratis", color = TEXT, fontSize = 12.sp)
+                            Text("Lisensi GPLv3 • github.com/zabaniyah221-stack/ZCODE",
+                                color = Color(0xFF8B949E), fontSize = 11.sp)
+                            Button(onClick = { showAbout = false }, Modifier.padding(top = 8.dp)) {
+                                Text("Tutup")
                             }
                         }
                     }
