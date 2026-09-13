@@ -61,6 +61,42 @@ fun main() = application {
     var runCount by remember { mutableStateOf(0) }
     var outputText by remember { mutableStateOf("") }
     var outputOpen by remember { mutableStateOf(false) }
+    // Tab per file: nama → isi. Statistik: 1 tab = 1 file.
+    var openFiles by remember { mutableStateOf(mapOf("workspace_tmp.py" to "")) }
+    var currentFile by remember { mutableStateOf("workspace_tmp.py") }
+    var currentPath by remember { mutableStateOf<String?>(null) }
+
+    fun showInEditor(text: String) {
+        scope.launch {
+            delay(500)
+            val esc = text.replace("\\", "\\\\").replace("'", "\\'")
+                .replace("\n", "\\n")
+            navigator.evaluateJavaScript("setCode('$esc')") {}
+        }
+    }
+
+    fun openFileDialog() {
+        val dlg = java.awt.FileDialog(null as java.awt.Frame?, "Buka file Python", java.awt.FileDialog.LOAD)
+        dlg.isVisible = true
+        if (dlg.file != null) {
+            val f = java.io.File(dlg.directory, dlg.file)
+            try {
+                val text = f.readText()
+                openFiles = openFiles + (f.name to text)
+                currentFile = f.name
+                currentPath = f.absolutePath
+                showInEditor(text)
+                logLine = "[OK] dibuka ${f.name}"
+            } catch (_: Exception) {
+                logLine = "[ERR] gagal buka ${f.name}"
+            }
+        }
+    }
+
+    fun switchTab(name: String) {
+        currentFile = name
+        showInEditor(openFiles[name].orEmpty())
+    }
     var pyInfo by remember { mutableStateOf("python3 …") }
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -104,9 +140,11 @@ fun main() = application {
                 while (code.isEmpty() && n++ < 50) Thread.sleep(100)
             }
             val res = withContext(Dispatchers.IO) {
-                val script = File("workspace_tmp.py")
-                script.writeText(code)
-                Runner.run(script, File("src/main/python"))
+                // Simpan kembali ke file asal bila ada, else workspace_tmp.py
+                val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
+                target.writeText(code)
+                currentFile = target.name
+                Runner.run(target, File("src/main/python"))
             }
             outputText = res.output.ifBlank { "(tanpa output)" }
             outputOpen = true // auto-show saat Run pertama (keputusan UI/UX)
@@ -154,7 +192,9 @@ fun main() = application {
                     // Sidebar toggle Ctrl+B — di sini via klik ☰ (shortcut global menyusul)
                     if (sidebarOpen) {
                         Column(Modifier.width(180.dp).fillMaxHeight().background(SURFACE).padding(8.dp)) {
-                            listOf("Files", "Packages", "Samples", "Settings", "About").forEach {
+                            Text("Files", Modifier.fillMaxWidth().clickable { openFileDialog() }.padding(6.dp),
+                                fontSize = fontSize.sp, color = TEXT)
+                            listOf("Packages", "Samples", "Settings", "About").forEach {
                                 Text(it, Modifier.fillMaxWidth().clickable { }.padding(6.dp),
                                     fontSize = fontSize.sp, color = TEXT)
                             }
@@ -162,9 +202,21 @@ fun main() = application {
                     }
                     // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
                     Column(Modifier.weight(1f)) {
-                        Text("  workspace_tmp.py", fontSize = 11.sp, color = Color(0xFF8B949E),
+                        // Breadcrumb dasar = path file aktif
+                    Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
                             modifier = Modifier.fillMaxWidth().background(SURFACE).padding(4.dp),
                             maxLines = 1)
+                        // Bar tab per file (Ctrl+Tab menyusul)
+                        Row(modifier = Modifier.fillMaxWidth().background(SURFACE)) {
+                            openFiles.keys.forEach { name ->
+                                val sel = name == currentFile
+                                Text(" $name ", color = if (sel) ACCENT else TEXT,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.clickable { switchTab(name) }
+                                        .background(if (sel) BG else SURFACE)
+                                        .padding(6.dp))
+                            }
+                        }
                         Box(Modifier.weight(1f)) {
                         if (!kcefReady) {
                             Text("Initializing KCEF…", Modifier.align(Alignment.Center), color = TEXT)
