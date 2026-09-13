@@ -59,6 +59,32 @@ fun main() = application {
     var runCount by remember { mutableStateOf(0) }
     var pyInfo by remember { mutableStateOf("python3 …") }
     var showAbout by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var fontSize by remember { mutableStateOf(14) }
+    // Muat preferensi (file config desktop, bukan SharedPreferences)
+    LaunchedEffect(Unit) {
+        val saved: Int? = withContext(Dispatchers.IO) {
+            try {
+                val cfg = File(System.getProperty("user.home"),
+                    ".config/zcode-desktop/settings.properties")
+                if (cfg.isFile()) {
+                    val p = java.util.Properties()
+                    cfg.inputStream().use(p::load)
+                    p.getProperty("ui.fontSize")?.toIntOrNull()
+                } else null
+            } catch (_: Exception) { null }
+        }
+        if (saved != null) fontSize = saved
+    }
+    fun saveSettings() {
+        try {
+            val dir = File(System.getProperty("user.home"), ".config/zcode-desktop")
+            dir.mkdirs()
+            val p = java.util.Properties()
+            p.setProperty("ui.fontSize", fontSize.toString())
+            File(dir, "settings.properties").outputStream().use { p.store(it, null) }
+        } catch (_: Exception) { }
+    }
     val navigator = rememberWebViewNavigator()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -108,8 +134,11 @@ fun main() = application {
                     Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
                         Text("▶ Run (F5)")
                     }
-                    Text("  ZCODE Desktop v0.0.1", fontSize = 13.sp, color = TEXT)
+                    Text("  ZCODE Desktop v0.0.1", fontSize = fontSize.sp, color = TEXT)
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    Button(onClick = { showSettings = true }, Modifier.padding(end = 4.dp)) {
+                        Text("Settings")
+                    }
                     Button(onClick = { showAbout = true }, Modifier.padding(end = 8.dp)) {
                         Text("About")
                     }
@@ -121,7 +150,7 @@ fun main() = application {
                         Column(Modifier.width(180.dp).fillMaxHeight().background(SURFACE).padding(8.dp)) {
                             listOf("Files", "Packages", "Samples", "Settings", "About").forEach {
                                 Text(it, Modifier.fillMaxWidth().clickable { }.padding(6.dp),
-                                    fontSize = 13.sp, color = TEXT)
+                                    fontSize = fontSize.sp, color = TEXT)
                             }
                         }
                     }
@@ -151,6 +180,29 @@ fun main() = application {
                                 done = true
                             }
                         }
+                        }
+                    }
+                }
+                // Dialog Settings (font UI + persist; font editor ikut bundle 14px — limit Fase 1)
+                if (showSettings) {
+                    androidx.compose.ui.window.Dialog(onCloseRequest = { showSettings = false }) {
+                        Column(Modifier.background(SURFACE).padding(16.dp)) {
+                            Text("Settings", color = TEXT, fontSize = 15.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 8.dp)) {
+                                Text("Font UI: $fontSize", color = TEXT, fontSize = 12.sp,
+                                    modifier = Modifier.padding(end = 8.dp))
+                                Button(onClick = {
+                                    if (fontSize > 10) { fontSize--; saveSettings() }
+                                }) { Text("−") }
+                                Button(onClick = {
+                                    if (fontSize < 20) { fontSize++; saveSettings() }
+                                }, modifier = Modifier.padding(start = 4.dp)) { Text("+") }
+                            }
+                            Text("Font editor ikut bundle (14px).",
+                                color = Color(0xFF8B949E), fontSize = 11.sp)
+                            Button(onClick = { showSettings = false },
+                                modifier = Modifier.padding(top = 8.dp)) { Text("Tutup") }
                         }
                     }
                 }
