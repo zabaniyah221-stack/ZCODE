@@ -196,11 +196,17 @@ fun main() = application {
                     else if (it.isCtrlPressed && it.key == Key.O) { openFileDialog(); true }
                     else false
                 }) {
-                // Toolbar: Run + F5
+                // Toolbar: jalan utama tiap aksi (shortcut = jalan pintasnya)
                 Row(Modifier.fillMaxWidth().height(48.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
                         Text("▶ Run (F5)")
+                    }
+                    Button(onClick = { openFileDialog() }, Modifier.padding(start = 4.dp)) {
+                        Text("Buka (Ctrl+O)")
+                    }
+                    Button(onClick = { saveCurrent() }, Modifier.padding(start = 4.dp)) {
+                        Text("Simpan (Ctrl+S)")
                     }
                     Text("  ZCODE Desktop v0.0.1", fontSize = fontSize.sp, color = TEXT)
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
@@ -213,7 +219,7 @@ fun main() = application {
                 }
                 Divider(color = Color(0xFF30363D))
                 Row(Modifier.weight(1f)) {
-                    // Sidebar toggle Ctrl+B — di sini via klik ☰ (shortcut global menyusul)
+                    // Sidebar: jalan utama = klik ☰ (belum ada shortcut; jangan klaim Ctrl+B)
                     if (sidebarOpen) {
                         Column(Modifier.width(180.dp).fillMaxHeight().background(SURFACE).padding(8.dp)) {
                             Text("Files", Modifier.fillMaxWidth().clickable { openFileDialog() }.padding(6.dp),
