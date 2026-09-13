@@ -57,6 +57,36 @@ fun main() = application {
     val windowState = rememberWindowState()
     var kcefReady by remember { mutableStateOf(false) }
     var sidebarOpen by remember { mutableStateOf(true) }
+    var showAbout by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var fontSize by remember { mutableStateOf(14) }
+    // Muat preferensi (file config desktop, bukan SharedPreferences)
+    LaunchedEffect(Unit) {
+        val saved: Int? = withContext(Dispatchers.IO) {
+            try {
+                val cfg = File(System.getProperty("user.home"),
+                    ".config/zcode-desktop/settings.properties")
+                if (cfg.isFile()) {
+                    val p = java.util.Properties()
+                    cfg.inputStream().use(p::load)
+                    p.getProperty("ui.fontSize")?.toIntOrNull()
+                } else null
+            } catch (_: Exception) { null }
+        }
+        if (saved != null) fontSize = saved
+    }
+    fun saveSettings() {
+        try {
+            val dir = File(System.getProperty("user.home"), ".config/zcode-desktop")
+            dir.mkdirs()
+            val p = java.util.Properties()
+            p.setProperty("ui.fontSize", fontSize.toString())
+            File(dir, "settings.properties").outputStream().use { p.store(it, null) }
+        } catch (_: Exception) { }
+    }
+    val navigator = rememberWebViewNavigator()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
     var outputText by remember { mutableStateOf("") }
@@ -98,35 +128,6 @@ fun main() = application {
         showInEditor(openFiles[name].orEmpty())
     }
     var pyInfo by remember { mutableStateOf("python3 …") }
-    var showAbout by remember { mutableStateOf(false) }
-    var showSettings by remember { mutableStateOf(false) }
-    var fontSize by remember { mutableStateOf(14) }
-    // Muat preferensi (file config desktop, bukan SharedPreferences)
-    LaunchedEffect(Unit) {
-        val saved: Int? = withContext(Dispatchers.IO) {
-            try {
-                val cfg = File(System.getProperty("user.home"),
-                    ".config/zcode-desktop/settings.properties")
-                if (cfg.isFile()) {
-                    val p = java.util.Properties()
-                    cfg.inputStream().use(p::load)
-                    p.getProperty("ui.fontSize")?.toIntOrNull()
-                } else null
-            } catch (_: Exception) { null }
-        }
-        if (saved != null) fontSize = saved
-    }
-    fun saveSettings() {
-        try {
-            val dir = File(System.getProperty("user.home"), ".config/zcode-desktop")
-            dir.mkdirs()
-            val p = java.util.Properties()
-            p.setProperty("ui.fontSize", fontSize.toString())
-            File(dir, "settings.properties").outputStream().use { p.store(it, null) }
-        } catch (_: Exception) { }
-    }
-    val navigator = rememberWebViewNavigator()
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     fun doRun() {
         runCount++
