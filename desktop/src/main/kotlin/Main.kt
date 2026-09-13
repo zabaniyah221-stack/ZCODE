@@ -36,6 +36,7 @@ import dev.datlag.kcef.KCEF
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -56,6 +57,32 @@ fun main() = application {
     var sidebarOpen by remember { mutableStateOf(true) }
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
+    var pyInfo by remember { mutableStateOf("python3 …") }
+    val navigator = rememberWebViewNavigator()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    fun doRun() {
+        runCount++
+        logLine = "[>] menjalankan…"
+        scope.launch {
+            var code = ""
+            navigator.evaluateJavaScript("getCode()") { code = it.toString() }
+            // Tunggu callback JS (poll sederhana, cukup untuk v0.0.1)
+            withContext(Dispatchers.IO) {
+                var n = 0
+                while (code.isEmpty() && n++ < 50) Thread.sleep(100)
+            }
+            val res = withContext(Dispatchers.IO) {
+                val script = File("workspace_tmp.py")
+                script.writeText(code)
+                Runner.run(script, File("src/main/python"))
+            }
+            val first = res.output.lineSequence().take(5).joinToString(" | ")
+            logLine = if (res.exitCode == 0) "[OK] exit 0 · $first"
+                      else "[ERR] exit ${res.exitCode} · $first"
+            println("[RUN] exit=${res.exitCode} out=${res.output.take(200)}")
+        }
+    }
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
@@ -63,6 +90,7 @@ fun main() = application {
         }
         kcefReady = true
         println("[SPIKE] KCEF_INIT_OK")
+        pyInfo = Runner.pythonInfo()
     }
 
     Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE Desktop") {
@@ -71,12 +99,12 @@ fun main() = application {
         )) {
             Column(Modifier.fillMaxSize().background(BG)
                 .onKeyEvent {
-                    if (it.key == Key.F5) { runCount++; true } else false
+                    if (it.key == Key.F5) { doRun(); true } else false
                 }) {
                 // Toolbar: Run + F5
                 Row(Modifier.fillMaxWidth().height(48.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { runCount++ }, Modifier.padding(start = 8.dp)) {
+                    Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
                         Text("▶ Run (F5)")
                     }
                     Text("  ZCODE Desktop v0.0.1", fontSize = 13.sp, color = TEXT)
@@ -99,7 +127,6 @@ fun main() = application {
                         } else {
                             val page = File("zcode-www/index.html")
                             val state = rememberWebViewState("file://${page.absolutePath}")
-                            val navigator = rememberWebViewNavigator()
                             var done by remember { mutableStateOf(false) }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator)
                             LaunchedEffect(state.loadingState) {
@@ -120,7 +147,7 @@ fun main() = application {
                 // Status bar: interpreter + versi (keputusan UI/UX §2)
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("  python3 sistem  ·  run#$runCount  ·  $logLine",
+                    Text("  $pyInfo  ·  run#$runCount  ·  $logLine",
                         fontSize = 11.sp, color = TEXT, maxLines = 1)
                 }
             }
