@@ -57,6 +57,8 @@ fun main() = application {
     var sidebarOpen by remember { mutableStateOf(true) }
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
+    var outputText by remember { mutableStateOf("") }
+    var outputOpen by remember { mutableStateOf(false) }
     var pyInfo by remember { mutableStateOf("python3 …") }
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -104,6 +106,8 @@ fun main() = application {
                 script.writeText(code)
                 Runner.run(script, File("src/main/python"))
             }
+            outputText = res.output.ifBlank { "(tanpa output)" }
+            outputOpen = true // auto-show saat Run pertama (keputusan UI/UX)
             val first = res.output.lineSequence().take(5).joinToString(" | ")
             logLine = if (res.exitCode == 0) "[OK] exit 0 · $first"
                       else "[ERR] exit ${res.exitCode} · $first"
@@ -219,6 +223,24 @@ fun main() = application {
                             }
                         }
                     }
+                }
+                // Panel output (auto-show saat Run; toggle via klik status)
+                if (outputOpen) {
+                    Column(Modifier.fillMaxWidth().height(140.dp).background(Color(0xFF0A0E14))) {
+                        Row(verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                            Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
+                                modifier = Modifier.weight(1f))
+                            Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
+                                modifier = Modifier.clickable { outputOpen = false }
+                                    .padding(end = 8.dp))
+                        }
+                        Text(outputText, color = TEXT, fontSize = 12.sp,
+                            modifier = Modifier.fillMaxSize()
+                                .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                                .padding(8.dp))
+                    }
+                    Divider(color = Color(0xFF30363D))
                 }
                 // Status bar: interpreter + versi (keputusan UI/UX §2)
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
