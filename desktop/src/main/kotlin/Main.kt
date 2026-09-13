@@ -127,6 +127,25 @@ fun main() = application {
         currentFile = name
         showInEditor(openFiles[name].orEmpty())
     }
+
+    /** Ctrl+S: simpan isi editor ke file asal (atau workspace_tmp.py). */
+    fun saveCurrent() {
+        scope.launch {
+            var code = ""
+            var n = 0
+            while (code.isEmpty() && n++ < 50) {
+                val d = kotlinx.coroutines.CompletableDeferred<String>()
+                navigator.evaluateJavaScript("getCode()") { d.complete(it.toString()) }
+                code = d.await()
+                if (code.isEmpty()) delay(100)
+            }
+            val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
+            withContext(Dispatchers.IO) { target.writeText(code) }
+            openFiles = openFiles + (target.name to code)
+            currentFile = target.name
+            logLine = "[OK] tersimpan ${target.name}"
+        }
+    }
     var pyInfo by remember { mutableStateOf("python3 …") }
 
     fun doRun() {
@@ -171,7 +190,10 @@ fun main() = application {
         )) {
             Column(Modifier.fillMaxSize().background(BG)
                 .onKeyEvent {
-                    if (it.key == Key.F5) { doRun(); true } else false
+                    if (it.key == Key.F5) { doRun(); true }
+                    else if (it.isCtrlPressed && it.key == Key.S) { saveCurrent(); true }
+                    else if (it.isCtrlPressed && it.key == Key.O) { openFileDialog(); true }
+                    else false
                 }) {
                 // Toolbar: Run + F5
                 Row(Modifier.fillMaxWidth().height(48.dp).background(SURFACE),
