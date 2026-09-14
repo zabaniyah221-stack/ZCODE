@@ -179,6 +179,16 @@ fun main() = application {
             logLine = "[OK] tersimpan ${target.name}"
         }
     }
+    /** Tutup drawer output + KEMBALIKAN fokus ke editor (temuan 14 Sep:
+     *  tutup panel tanpa refokus = editor tak bisa diedit). */
+    fun closeOutput() {
+        outputOpen = false
+        try { cefBrowser?.setFocus(true) } catch (_: Exception) { }
+        try {
+            navigator.evaluateJavaScript(
+                "document.querySelector('.cm-content')?.focus()") {}
+        } catch (_: Exception) { }
+    }
     var pyInfo by remember { mutableStateOf("python3 …") }
 
     fun doRun() {
@@ -247,10 +257,17 @@ fun main() = application {
     }
 
     Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE Desktop") {
+        // Cat dasar hitam (temuan 14 Sep): blink putih = background default
+        // window AWT sebelum frame pertama + area CEF sebelum paint.
         // F5 global level AWT (temuan 14 Sep): saat fokus di editor native CEF,
         // key event tak sampai ke onKeyEvent Compose → tangkap di dispatcher.
         // F5 = shortcut tombol Run (jalan utama ada) → sah.
         DisposableEffect(Unit) {
+            try {
+                java.awt.Window.getWindows()
+                    .firstOrNull { (it as? java.awt.Frame)?.title == "ZCODE Desktop" }
+                    ?.background = java.awt.Color(0x0D, 0x11, 0x17)
+            } catch (_: Exception) { }
             val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
             val d = java.awt.KeyEventDispatcher { e ->
                 if (e.id == java.awt.event.KeyEvent.KEY_PRESSED &&
@@ -414,7 +431,7 @@ fun main() = application {
                                 Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
                                     modifier = Modifier.weight(1f))
                                 Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
-                                    modifier = Modifier.clickable { outputOpen = false }
+                                    modifier = Modifier.clickable { closeOutput() }
                                         .padding(end = 8.dp))
                             }
                             androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
