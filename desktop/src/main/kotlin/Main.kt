@@ -37,7 +37,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.multiplatform.webview.web.WebContent
 import com.multiplatform.webview.web.WebView
+import com.multiplatform.webview.web.WebViewFactoryParam
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import dev.datlag.kcef.KCEF
@@ -294,7 +296,16 @@ fun main() = application {
                             var done by remember { mutableStateOf(false) }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator,
                                 onCreated = fun(b: KCEFBrowser) { cefBrowser = b },
-                                onDispose = fun(_: KCEFBrowser) { cefBrowser = null })
+                                onDispose = fun(_: KCEFBrowser) { cefBrowser = null },
+                                // Factory sendiri: defaultWebViewFactory crash
+                                // (createContext null saat race init, 14 Sep).
+                                // Kita tak butuh custom UA → tanpa requestContext.
+                                factory = fun(param: WebViewFactoryParam): KCEFBrowser {
+                                    val url = (param.state.content as? WebContent.Url)?.url
+                                        ?: KCEFBrowser.BLANK_URI
+                                    return param.client.createBrowser(
+                                        url, param.rendering, param.transparent)
+                                })
                             // Indikator load TIDAK boleh overlay di atas WebView:
                             // view yang muncul/hilang mencuri fokus keyboard
                             // (temuan 14 Sep: ketikan mati setelah 2-3 huruf).
