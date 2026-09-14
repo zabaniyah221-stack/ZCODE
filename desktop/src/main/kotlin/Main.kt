@@ -65,7 +65,9 @@ private val TEXT = Color(0xFFC9D1D9)
 fun main() = application {
     val windowState = rememberWindowState()
     var kcefReady by remember { mutableStateOf(false) }
-    var sidebarOpen by remember { mutableStateOf(true) }
+    // UI minimal Fase fokus (14 Sep): sidebar + tombol non-Run DIHAPUS sementara.
+    // Fungsi buka/simpan/tab dipertahankan untuk nanti; shortcut Ctrl+S/Ctrl+O
+    // ikut dimatikan karena tiap shortcut wajib punya tombol.
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var fontSize by remember { mutableStateOf(14) }
@@ -164,6 +166,8 @@ fun main() = application {
         runCount++
         logLine = "[>] menjalankan…"
         scope.launch {
+            // Timer per tahap (temuan 14 Sep: Run lama, biang belum tahu).
+            val t0 = System.currentTimeMillis()
             var code = ""
             navigator.evaluateJavaScript("getCode()") { code = it.toString() }
             // Tunggu callback JS (poll sederhana, cukup untuk v0.0.1)
@@ -171,13 +175,16 @@ fun main() = application {
                 var n = 0
                 while (code.isEmpty() && n++ < 50) Thread.sleep(100)
             }
+            val tGet = System.currentTimeMillis() - t0
             // Guard temuan 14 Sep: editor kosong/belum siap jangan dieksekusi sunyi.
             if (code.isBlank()) {
                 outputText = "(editor kosong atau belum siap — tunggu status bridge OK)"
                 outputOpen = true
-                logLine = "[ERR] Run dibatalkan: editor kosong"
+                logLine = "[ERR] Run dibatalkan: editor kosong (ambil ${tGet}ms)"
+                println("[RUN-TIME] batal get=${tGet}ms")
                 return@launch
             }
+            val t1 = System.currentTimeMillis()
             val res = withContext(Dispatchers.IO) {
                 // Simpan kembali ke file asal bila ada, else workspace_tmp.py
                 val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
@@ -185,12 +192,14 @@ fun main() = application {
                 currentFile = target.name
                 Runner.run(target, File("src/main/python"))
             }
+            val tPy = System.currentTimeMillis() - t1
+            val tTot = System.currentTimeMillis() - t0
             outputText = res.output.ifBlank { "(tanpa output)" }
             outputOpen = true // auto-show saat Run pertama (keputusan UI/UX)
             val first = res.output.lineSequence().take(5).joinToString(" | ")
-            logLine = if (res.exitCode == 0) "[OK] exit 0 · $first"
-                      else "[ERR] exit ${res.exitCode} · $first"
-            println("[RUN] exit=${res.exitCode} out=${res.output.take(200)}")
+            logLine = if (res.exitCode == 0) "[OK] exit 0 · ambil ${tGet}ms · py ${tPy}ms · total ${tTot}ms · $first"
+                      else "[ERR] exit ${res.exitCode} · ambil ${tGet}ms · py ${tPy}ms · $first"
+            println("[RUN] exit=${res.exitCode} get=${tGet}ms py=${tPy}ms total=${tTot}ms out=${res.output.take(200)}")
         }
     }
 
@@ -210,47 +219,21 @@ fun main() = application {
             Column(Modifier.fillMaxSize().background(BG)
                 .onKeyEvent {
                     if (it.key == Key.F5) { doRun(); true }
-                    else if (it.isCtrlPressed && it.key == Key.S) { saveCurrent(); true }
-                    else if (it.isCtrlPressed && it.key == Key.O) { openFileDialog(); true }
                     else false
                 }) {
-                // Toolbar: jalan utama tiap aksi (shortcut = jalan pintasnya)
+                // Toolbar minimal: hanya Run (+ judul). Buka/Simpan kembali
+                // saat UI lengkap (aturan: shortcut wajib punya tombol).
                 Row(Modifier.fillMaxWidth().height(48.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
                         Text("▶ Run (F5)")
                     }
-                    Button(onClick = { openFileDialog() }, Modifier.padding(start = 4.dp)) {
-                        Text("Buka (Ctrl+O)")
-                    }
-                    Button(onClick = { saveCurrent() }, Modifier.padding(start = 4.dp)) {
-                        Text("Simpan (Ctrl+S)")
-                    }
                     Text("  ZCODE Desktop v0.0.1", fontSize = fontSize.sp, color = TEXT)
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                 }
                 Divider(color = Color(0xFF30363D))
-                Row(Modifier.weight(1f)) {
-                    // Sidebar: jalan utama = klik ☰ (belum ada shortcut; jangan klaim Ctrl+B)
-                    if (sidebarOpen) {
-                        Column(Modifier.width(180.dp).fillMaxHeight().background(SURFACE).padding(8.dp)) {
-                            Text("Files", Modifier.fillMaxWidth().clickable { openFileDialog() }.padding(6.dp),
-                                fontSize = fontSize.sp, color = TEXT)
-                            // Jalan utama sama dengan tombol toolbar (tanpa duplikat mati).
-                            Text("Settings", Modifier.fillMaxWidth().clickable { showSettings = true }.padding(6.dp),
-                                fontSize = fontSize.sp, color = TEXT)
-                            Text("About", Modifier.fillMaxWidth().clickable { showAbout = true }.padding(6.dp),
-                                fontSize = fontSize.sp, color = TEXT)
-                            // Belum Fase 1: ngaku, jangan mati sunyi.
-                            listOf("Packages", "Samples").forEach {
-                                Text(it, Modifier.fillMaxWidth().clickable {
-                                    logLine = "[i] $it belum tersedia di Fase 1"
-                                }.padding(6.dp),
-                                    fontSize = fontSize.sp, color = Color(0xFF8B949E))
-                            }
-                        }
-                    }
-                    // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
+                // Fase fokus: TANPA sidebar — langsung editor.
+                // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
                     Column(Modifier.weight(1f)) {
                         // Breadcrumb dasar = path file aktif
                     Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
@@ -336,53 +319,6 @@ fun main() = application {
                                 } else {
                                     logLine = "[ERR] bridge editor tak siap"
                                 }
-                            }
-                        }
-                        }
-                    }
-                }
-                // Dialog Settings — window eksplisit (temuan 14 Sep: tanpa judul/ukuran
-                // jadi "Untitled" + area putih). Font editor ikut bundle — limit Fase 1.
-                if (showSettings) {
-                    androidx.compose.ui.window.Dialog(
-                        onCloseRequest = { showSettings = false },
-                        title = "Pengaturan ZCODE",
-                        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(380.dp, 300.dp))
-                    ) {
-                        Column(Modifier.fillMaxSize().background(SURFACE).padding(16.dp)) {
-                            Text("Settings", color = TEXT, fontSize = 15.sp)
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 8.dp)) {
-                                Text("Font UI: $fontSize", color = TEXT, fontSize = 12.sp,
-                                    modifier = Modifier.padding(end = 8.dp))
-                                Button(onClick = {
-                                    if (fontSize > 10) { fontSize--; saveSettings() }
-                                }) { Text("−") }
-                                Button(onClick = {
-                                    if (fontSize < 20) { fontSize++; saveSettings() }
-                                }, modifier = Modifier.padding(start = 4.dp)) { Text("+") }
-                            }
-                            Text("Font editor ikut bundle (14px).",
-                                color = Color(0xFF8B949E), fontSize = 11.sp)
-                            Button(onClick = { showSettings = false },
-                                modifier = Modifier.padding(top = 8.dp)) { Text("Tutup") }
-                        }
-                    }
-                }
-                // Dialog About (versi + GPLv3, scope §2)
-                if (showAbout) {
-                    androidx.compose.ui.window.Dialog(
-                        onCloseRequest = { showAbout = false },
-                        title = "Tentang ZCODE",
-                        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(400.dp, 260.dp))
-                    ) {
-                        Column(Modifier.fillMaxSize().background(SURFACE).padding(16.dp)) {
-                            Text("ZCODE Desktop v0.0.1-desktop", color = TEXT, fontSize = 15.sp)
-                            Text("IDE Python • offline-first • gratis", color = TEXT, fontSize = 12.sp)
-                            Text("Lisensi GPLv3 • github.com/zabaniyah221-stack/ZCODE",
-                                color = Color(0xFF8B949E), fontSize = 11.sp)
-                            Button(onClick = { showAbout = false }, Modifier.padding(top = 8.dp)) {
-                                Text("Tutup")
                             }
                         }
                     }
