@@ -114,6 +114,9 @@ fun main() = application {
     // Handle browser native (lift ke sini supaya terlihat dari Box editor):
     // fokus Compose SAJA tidak sampai ke Chromium.
     var cefBrowser by remember { mutableStateOf<KCEFBrowser?>(null) }
+    // Bridge siap? (lift agar doRun tak poll buta 5 detik saat editor kosong
+    // — temuan 14 Sep: "lama padahal kosong".)
+    var bridgeOk by remember { mutableStateOf(false) }
     // JsBridge F5 (temuan 14 Sep): F5 di dalam CEF native tak sampai ke
     // dispatcher AWT Compose → JS keydown panggil balik via callNative.
     val jsBridge = rememberWebViewJsBridge(navigator)
@@ -191,16 +194,25 @@ fun main() = application {
 
     fun doRun() {
         runCount++
+        // Guard cepat (temuan 14 Sep): bridge belum siap = editor belum bisa
+        // dibaca. Batal LANGSUNG tanpa poll buta 5 detik.
+        if (!bridgeOk) {
+            outputText = "(tunggu editor siap — status bar belum [OK] editor siap)"
+            outputOpen = true
+            logLine = "[ERR] Run dibatalkan: editor belum siap"
+            println("[RUN-TIME] batal bridge-belum-siap")
+            return
+        }
         logLine = "[>] menjalankan…"
         scope.launch {
             // Timer per tahap (temuan 14 Sep: Run lama, biang belum tahu).
             val t0 = System.currentTimeMillis()
             var code = ""
             navigator.evaluateJavaScript("getCode()") { code = it.toString() }
-            // Tunggu callback JS (poll sederhana, cukup untuk v0.0.1)
+            // Tunggu callback JS — SINGKAT (1 detik) karena bridge sudah OK.
             withContext(Dispatchers.IO) {
                 var n = 0
-                while (code.isEmpty() && n++ < 50) Thread.sleep(100)
+                while (code.isEmpty() && n++ < 10) Thread.sleep(100)
             }
             val tGet = System.currentTimeMillis() - t0
             // Guard temuan 14 Sep: editor kosong/belum siap jangan dieksekusi sunyi.
@@ -247,7 +259,14 @@ fun main() = application {
 
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
-            KCEF.init(builder = { installDir(File("kcef-bundle")) })
+            // backgroundColor hitam (riset 14 Sep): cat dasar CEF sebelum load,
+            // gantikan putih default. CefSettings().ColorType(a,r,g,b)=0D1117.
+            val cefTmp = org.cef.CefSettings()
+            val bgHitam = cefTmp.ColorType(255, 0x0D, 0x11, 0x17)
+            KCEF.init(builder = {
+                installDir(File("kcef-bundle"))
+                settings { backgroundColor = bgHitam }
+            })
         }
         kcefReady = true
         println("[SPIKE] KCEF_INIT_OK")
@@ -261,10 +280,14 @@ fun main() = application {
         // key event tak sampai ke onKeyEvent Compose → tangkap di dispatcher.
         // F5 = shortcut tombol Run (jalan utama ada) → sah.
         DisposableEffect(Unit) {
+            // Workaround CMP-7700 (riset 14 Sep): set window background DAN
+            // content pane background — keduanya, bukan salah satu.
             try {
-                java.awt.Window.getWindows()
+                val win = java.awt.Window.getWindows()
                     .firstOrNull { (it as? java.awt.Frame)?.title == "ZCODE Desktop" }
-                    ?.background = java.awt.Color(0x0D, 0x11, 0x17)
+                val hitam = java.awt.Color(0x0D, 0x11, 0x17)
+                win?.background = hitam
+                (win as? javax.swing.JFrame)?.contentPane?.background = hitam
             } catch (_: Exception) { }
             val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
             val d = java.awt.KeyEventDispatcher { e ->
@@ -388,6 +411,7 @@ fun main() = application {
                                 }
                                 println("[SPIKE] BRIDGE_READY=$ready")
                                 done = true
+                                bridgeOk = ready
                                 if (ready) {
                                     logLine = "[OK] editor siap"
                                     // Kembalikan fokus ke editor CM6
