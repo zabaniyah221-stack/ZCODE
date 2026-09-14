@@ -41,6 +41,7 @@ import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import dev.datlag.kcef.KCEF
+import dev.datlag.kcef.KCEFBrowser
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -92,6 +93,9 @@ fun main() = application {
     }
     val navigator = rememberWebViewNavigator()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Handle browser native (lift ke sini supaya terlihat dari Box editor):
+    // fokus Compose SAJA tidak sampai ke Chromium.
+    var cefBrowser by remember { mutableStateOf<KCEFBrowser?>(null) }
 
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
@@ -262,9 +266,9 @@ fun main() = application {
                             }
                         }
                         // Fokus klik (temuan 14 Sep): klik mouse TIDAK memindahkan
-                        // fokus Compose ke WebView (Tab bisa). Tiap Press di area
-                        // editor paksa fokus ke sini TANPA consume, supaya klik
-                        // tetap sampai ke CEF (posisi kursor) + keyboard masuk.
+                        // fokus ke Chromium (Tab bisa). Tiap Press: fokus Compose
+                        // + browser.setFocus(true) native, TANPA consume supaya
+                        // klik tetap sampai ke CEF (posisi kursor) + keyboard masuk.
                         val editorFocus = remember { FocusRequester() }
                         Box(Modifier.weight(1f)
                             .focusRequester(editorFocus)
@@ -276,6 +280,8 @@ fun main() = application {
                                         if (ev.type == PointerEventType.Press) {
                                             try { editorFocus.requestFocus() }
                                             catch (_: Exception) { }
+                                            try { cefBrowser?.setFocus(true) }
+                                            catch (_: Exception) { }
                                         }
                                     }
                                 }
@@ -286,7 +292,9 @@ fun main() = application {
                             val page = File("zcode-www/index.html")
                             val state = rememberWebViewState("file://${page.absolutePath}")
                             var done by remember { mutableStateOf(false) }
-                            WebView(state, Modifier.fillMaxSize(), navigator = navigator)
+                            WebView(state, Modifier.fillMaxSize(), navigator = navigator,
+                                onCreated = { cefBrowser = it },
+                                onDispose = { cefBrowser = null })
                             // Indikator load TIDAK boleh overlay di atas WebView:
                             // view yang muncul/hilang mencuri fokus keyboard
                             // (temuan 14 Sep: ketikan mati setelah 2-3 huruf).
