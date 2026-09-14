@@ -532,12 +532,16 @@ fun main() = application {
                     // editor TANPA resize (logika ModalNavigationDrawer Android).
                     // Tanpa resize = tanpa repaint putih CEF. Tanpa focus
                     // handler agar fokus tetap di editor saat auto-show.
+                    // Box overlay full-size: drawer menimpa editor kanan.
+                    // contentAlignment (bukan scope-align) agar tak konflik
+                    // ColumnScope/BoxScope overload.
+                    Box(Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterEnd) {
                     AnimatedVisibility(
                         visible = outputOpen,
                         // TANPA fade (temuan 14 Sep): fade = transparan sesaat =
                         // blink putih. Murni slide + area animasi dicat gelap.
-                        // align End: overlay kanan di atas editor (Box scope).
-                        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+                        modifier = Modifier.fillMaxHeight()
                             .background(Color(0xFF0A0E14)),
                         enter = slideInHorizontally(
                             initialOffsetX = { it }, animationSpec = tween(150)),
@@ -569,6 +573,7 @@ fun main() = application {
                             }
                         }
                     }
+                    } // tutup Box overlay drawer
                 }
                 // Status bar: interpreter + run (versi pindah ke About nanti).
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
