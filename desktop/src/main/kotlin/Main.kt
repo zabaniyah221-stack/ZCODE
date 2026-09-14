@@ -603,8 +603,12 @@ fun main() = application {
                 }
             } // tutup Column utama
             // Splash sibling TERAKHIR (overlay, bukan recreate): hitam + logo.
-            if (showSplash) {
-                Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)),
+            // EKSPERIMEN MERAH NEMPEL (14 Sep, sementara): splash MERAH dan
+            // TAK DISEMBUNYIKAN. Merah di area editor = overlay Compose BISA
+            // menutup CEF (T1 gugur). Editor tembus = CEF native di atas
+            // (T1 benar). REVERT setelah verdict.
+            if (true) {
+                Box(Modifier.fillMaxSize().background(Color(0xFFFF0000)),
                     contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (logoBmp != null) {
