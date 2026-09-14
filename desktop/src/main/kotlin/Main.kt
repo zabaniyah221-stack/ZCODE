@@ -236,9 +236,17 @@ fun main() = application {
                         Column(Modifier.width(180.dp).fillMaxHeight().background(SURFACE).padding(8.dp)) {
                             Text("Files", Modifier.fillMaxWidth().clickable { openFileDialog() }.padding(6.dp),
                                 fontSize = fontSize.sp, color = TEXT)
-                            listOf("Packages", "Samples", "Settings", "About").forEach {
-                                Text(it, Modifier.fillMaxWidth().clickable { }.padding(6.dp),
-                                    fontSize = fontSize.sp, color = TEXT)
+                            // Jalan utama sama dengan tombol toolbar (tanpa duplikat mati).
+                            Text("Settings", Modifier.fillMaxWidth().clickable { showSettings = true }.padding(6.dp),
+                                fontSize = fontSize.sp, color = TEXT)
+                            Text("About", Modifier.fillMaxWidth().clickable { showAbout = true }.padding(6.dp),
+                                fontSize = fontSize.sp, color = TEXT)
+                            // Belum Fase 1: ngaku, jangan mati sunyi.
+                            listOf("Packages", "Samples").forEach {
+                                Text(it, Modifier.fillMaxWidth().clickable {
+                                    logLine = "[i] $it belum tersedia di Fase 1"
+                                }.padding(6.dp),
+                                    fontSize = fontSize.sp, color = Color(0xFF8B949E))
                             }
                         }
                     }
