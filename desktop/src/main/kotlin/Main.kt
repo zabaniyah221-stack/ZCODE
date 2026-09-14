@@ -190,6 +190,10 @@ fun main() = application {
     var runCount by remember { mutableStateOf(0) }
     var outputText by remember { mutableStateOf("") }
     var outputOpen by remember { mutableStateOf(false) }
+    // State list output di level composable (bukan dalam Column) agar
+    // terlihat drawer overlay di root Box (revisi 14 Sep).
+    val outLines = remember(outputText) { outputText.lines() }
+    val outList = rememberLazyListState()
     // Tab per file: nama → isi. Statistik: 1 tab = 1 file.
     var openFiles by remember { mutableStateOf(mapOf("workspace_tmp.py" to "")) }
     var currentFile by remember { mutableStateOf("workspace_tmp.py") }
@@ -405,9 +409,7 @@ fun main() = application {
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                 }
                 Divider(color = Color(0xFF30363D))
-                // Panel output: state list di sini agar terlihat drawer kanan.
-                val outLines = remember(outputText) { outputText.lines() }
-                val outList = rememberLazyListState()
+                // Autoscroll output ke baris terakhir saat ada hasil baru.
                 LaunchedEffect(outLines.size, outputOpen) {
                     try {
                         if (outLines.isNotEmpty()) outList.scrollToItem(outLines.lastIndex)
@@ -527,53 +529,7 @@ fun main() = application {
                             }
                         }
                     } // tutup Box editor
-                    } // tutup Column editor — drawer overlay di bawah (Box scope)
-                    // Drawer output kanan OVERLAY (revisi 14 Sep): menimpa
-                    // editor TANPA resize (logika ModalNavigationDrawer Android).
-                    // Tanpa resize = tanpa repaint putih CEF. Tanpa focus
-                    // handler agar fokus tetap di editor saat auto-show.
-                    // Box overlay full-size: drawer menimpa editor kanan.
-                    // contentAlignment (bukan scope-align) agar tak konflik
-                    // ColumnScope/BoxScope overload.
-                    Box(Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.CenterEnd) {
-                    AnimatedVisibility(
-                        visible = outputOpen,
-                        // TANPA fade (temuan 14 Sep): fade = transparan sesaat =
-                        // blink putih. Murni slide + area animasi dicat gelap.
-                        modifier = Modifier.fillMaxHeight()
-                            .background(Color(0xFF0A0E14)),
-                        enter = slideInHorizontally(
-                            initialOffsetX = { it }, animationSpec = tween(150)),
-                        exit = slideOutHorizontally(
-                            targetOffsetX = { it }, animationSpec = tween(150))
-                    ) {
-                        Column(Modifier.width(420.dp).fillMaxHeight()
-                            .background(Color(0xFF0A0E14))) {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                                Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
-                                    modifier = Modifier.weight(1f))
-                                Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
-                                    modifier = Modifier.clickable { closeOutput() }
-                                        .padding(end = 8.dp))
-                            }
-                            androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
-                                LazyColumn(state = outList,
-                                    modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
-                                    items(outLines) { line ->
-                                        Text(line, color = TEXT, fontSize = 12.sp)
-                                    }
-                                }
-                                // Scrollbar dragable: jalan utama scroll via mouse.
-                                VerticalScrollbar(
-                                    modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
-                                    adapter = rememberScrollbarAdapter(outList)
-                                )
-                            }
-                        }
-                    }
-                    } // tutup Box overlay drawer
+                    } // tutup Column editor
                 }
                 // Status bar: interpreter + run (versi pindah ke About nanti).
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
@@ -582,6 +538,47 @@ fun main() = application {
                         fontSize = 11.sp, color = TEXT, maxLines = 1)
                 }
             } // tutup Column utama
+            // Drawer output OVERLAY kanan (revisi 14 Sep): di root Box,
+            // sejajar Column utama — receiver tunggal BoxScope agar
+            // AnimatedVisibility + Modifier.align tak konflik overload.
+            // Menimpa segalanya TANPA resize CEF = tanpa repaint putih.
+            // Tanpa focus handler (kecuali tombol tutup) agar fokus editor aman.
+            AnimatedVisibility(
+                visible = outputOpen,
+                // TANPA fade (temuan 14 Sep): fade = transparan sesaat =
+                // blink putih. Murni slide + area animasi dicat gelap.
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+                    .background(Color(0xFF0A0E14)),
+                enter = slideInHorizontally(
+                    initialOffsetX = { it }, animationSpec = tween(150)),
+                exit = slideOutHorizontally(
+                    targetOffsetX = { it }, animationSpec = tween(150))
+            ) {
+                Column(Modifier.width(420.dp).fillMaxHeight()
+                    .background(Color(0xFF0A0E14))) {
+                    Row(verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                        Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
+                            modifier = Modifier.weight(1f))
+                        Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
+                            modifier = Modifier.clickable { closeOutput() }
+                                .padding(end = 8.dp))
+                    }
+                    androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+                        LazyColumn(state = outList,
+                            modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
+                            items(outLines) { line ->
+                                Text(line, color = TEXT, fontSize = 12.sp)
+                            }
+                        }
+                        // Scrollbar dragable: jalan utama scroll via mouse.
+                        VerticalScrollbar(
+                            modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
+                            adapter = rememberScrollbarAdapter(outList)
+                        )
+                    }
+                }
+            }
             // Splash sibling TERAKHIR (overlay, bukan recreate): hitam + logo.
             if (showSplash) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)),
