@@ -293,8 +293,8 @@ fun main() = application {
                             val state = rememberWebViewState("file://${page.absolutePath}")
                             var done by remember { mutableStateOf(false) }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator,
-                                onCreated = { cefBrowser = it },
-                                onDispose = { cefBrowser = null })
+                                onCreated = fun(b: KCEFBrowser) { cefBrowser = b },
+                                onDispose = fun(_: KCEFBrowser) { cefBrowser = null })
                             // Indikator load TIDAK boleh overlay di atas WebView:
                             // view yang muncul/hilang mencuri fokus keyboard
                             // (temuan 14 Sep: ketikan mati setelah 2-3 huruf).
