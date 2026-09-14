@@ -3,6 +3,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -274,9 +280,21 @@ fun main() = application {
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                 }
                 Divider(color = Color(0xFF30363D))
-                // Fase fokus: TANPA sidebar — langsung editor.
-                // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
-                    Column(Modifier.weight(1f)) {
+                // Panel output: state list di sini agar terlihat drawer kanan.
+                val outLines = remember(outputText) { outputText.lines() }
+                val outList = rememberLazyListState()
+                LaunchedEffect(outLines.size, outputOpen) {
+                    try {
+                        if (outLines.isNotEmpty()) outList.scrollToItem(outLines.lastIndex)
+                    } catch (_: Exception) { }
+                }
+                // Fase fokus: TANPA sidebar — editor + drawer output kanan.
+                // Drawer output (logika = drawer Android): hidden default,
+                // slide kanan→kiri 150ms (prinsip drawer: cepat, tutup-dulu-aksi),
+                // lebar TETAP 420dp, muncul via F5/Run, tutup via ✕.
+                androidx.compose.foundation.layout.Row(Modifier.weight(1f)) {
+                    // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
                         // Breadcrumb dasar = path file aktif
                     Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
                             modifier = Modifier.fillMaxWidth().background(SURFACE).padding(4.dp),
@@ -376,43 +394,43 @@ fun main() = application {
                             }
                         }
                     }
-                }
-                // Panel output: LazyColumn per baris (temuan 14 Sep: scroll parent
-                // loyo — issue lib #123 outer-steals-scroll, atasi sendiri) +
-                // auto ke baris terakhir agar traceback tak terpotong.
-                val outLines = remember(outputText) { outputText.lines() }
-                val outList = rememberLazyListState()
-                LaunchedEffect(outLines.size, outputOpen) {
-                    try {
-                        if (outLines.isNotEmpty()) outList.scrollToItem(outLines.lastIndex)
-                    } catch (_: Exception) { }
-                }
-                if (outputOpen) {
-                    Column(Modifier.fillMaxWidth().height(140.dp).background(Color(0xFF0A0E14))) {
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                            Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
-                                modifier = Modifier.weight(1f))
-                            Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
-                                modifier = Modifier.clickable { outputOpen = false }
-                                    .padding(end = 8.dp))
-                        }
-                        androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
-                            LazyColumn(state = outList,
-                                modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
-                                items(outLines) { line ->
-                                    Text(line, color = TEXT, fontSize = 12.sp)
-                                }
+                    // Drawer output kanan: sibling (BUKAN overlay — overlay curi
+                    // fokus, insiden 14 Sep). Resize, bukan timpa. Tanpa
+                    // focusRequester agar fokus tetap di editor saat auto-show.
+                    AnimatedVisibility(
+                        visible = outputOpen,
+                        enter = slideInHorizontally(
+                            initialOffsetX = { it }, animationSpec = tween(150)) +
+                                fadeIn(animationSpec = tween(150)),
+                        exit = slideOutHorizontally(
+                            targetOffsetX = { it }, animationSpec = tween(150)) +
+                                fadeOut(animationSpec = tween(150))
+                    ) {
+                        Column(Modifier.width(420.dp).fillMaxHeight()
+                            .background(Color(0xFF0A0E14))) {
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                                Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
+                                    modifier = Modifier.weight(1f))
+                                Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
+                                    modifier = Modifier.clickable { outputOpen = false }
+                                        .padding(end = 8.dp))
                             }
-                            // Scrollbar dragable: jalan utama scroll via mouse
-                            // (wheel saja tak cukup — temuan 14 Sep).
-                            VerticalScrollbar(
-                                modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
-                                adapter = rememberScrollbarAdapter(outList)
-                            )
+                            androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+                                LazyColumn(state = outList,
+                                    modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
+                                    items(outLines) { line ->
+                                        Text(line, color = TEXT, fontSize = 12.sp)
+                                    }
+                                }
+                                // Scrollbar dragable: jalan utama scroll via mouse.
+                                VerticalScrollbar(
+                                    modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
+                                    adapter = rememberScrollbarAdapter(outList)
+                                )
+                            }
                         }
                     }
-                    Divider(color = Color(0xFF30363D))
                 }
                 // Status bar: interpreter + versi (keputusan UI/UX §2)
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
