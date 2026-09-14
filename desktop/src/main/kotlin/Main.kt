@@ -222,12 +222,6 @@ fun main() = application {
                     }
                     Text("  ZCODE Desktop v0.0.1", fontSize = fontSize.sp, color = TEXT)
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                    Button(onClick = { showSettings = true }, Modifier.padding(end = 4.dp)) {
-                        Text("Settings")
-                    }
-                    Button(onClick = { showAbout = true }, Modifier.padding(end = 8.dp)) {
-                        Text("About")
-                    }
                 }
                 Divider(color = Color(0xFF30363D))
                 Row(Modifier.weight(1f)) {
