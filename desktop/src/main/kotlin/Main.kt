@@ -5,8 +5,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.VerticalScrollbar
@@ -420,12 +418,14 @@ fun main() = application {
                     // focusRequester agar fokus tetap di editor saat auto-show.
                     AnimatedVisibility(
                         visible = outputOpen,
+                        // TANPA fade (temuan 14 Sep): fade = transparan sesaat =
+                        // blink putih. Murni slide + area animasi dicat gelap.
+                        modifier = Modifier.fillMaxHeight()
+                            .background(Color(0xFF0A0E14)),
                         enter = slideInHorizontally(
-                            initialOffsetX = { it }, animationSpec = tween(150)) +
-                                fadeIn(animationSpec = tween(150)),
+                            initialOffsetX = { it }, animationSpec = tween(150)),
                         exit = slideOutHorizontally(
-                            targetOffsetX = { it }, animationSpec = tween(150)) +
-                                fadeOut(animationSpec = tween(150))
+                            targetOffsetX = { it }, animationSpec = tween(150))
                     ) {
                         Column(Modifier.width(420.dp).fillMaxHeight()
                             .background(Color(0xFF0A0E14))) {
