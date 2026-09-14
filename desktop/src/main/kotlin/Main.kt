@@ -393,7 +393,8 @@ fun main() = application {
                                 }
                             }
                         }
-                    }
+                    } // tutup Box editor
+                    } // tutup Column editor — sibling drawer di bawah
                     // Drawer output kanan: sibling (BUKAN overlay — overlay curi
                     // fokus, insiden 14 Sep). Resize, bukan timpa. Tanpa
                     // focusRequester agar fokus tetap di editor saat auto-show.
