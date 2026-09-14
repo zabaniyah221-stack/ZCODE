@@ -603,12 +603,12 @@ fun main() = application {
                 }
             } // tutup Column utama
             // Splash sibling TERAKHIR (overlay, bukan recreate): hitam + logo.
-            // EKSPERIMEN MERAH NEMPEL (14 Sep, sementara): splash MERAH dan
-            // TAK DISEMBUNYIKAN. Merah di area editor = overlay Compose BISA
-            // menutup CEF (T1 gugur). Editor tembus = CEF native di atas
-            // (T1 benar). REVERT setelah verdict.
-            if (true) {
-                Box(Modifier.fillMaxSize().background(Color(0xFFFF0000)),
+            // VERDICT eksperimen merah 14 Sep: overlay Compose TAK BISA menutup
+            // area CEF native (heavyweight di atas). Splash tetap berguna untuk
+            // fase sebelum CEF ada + area non-editor; blink resize CEF tak bisa
+            // ditutup splash (saran teman gugur untuk area editor).
+            if (showSplash) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)),
                     contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (logoBmp != null) {
