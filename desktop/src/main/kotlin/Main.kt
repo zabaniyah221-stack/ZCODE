@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Button
 import androidx.compose.material.Divider
@@ -475,9 +474,9 @@ fun main() = application {
                 // Drawer output (logika = drawer Android): hidden default,
                 // slide kanan→kiri 150ms (prinsip drawer: cepat, tutup-dulu-aksi),
                 // lebar TETAP 420dp, muncul via F5/Run, tutup via ✕.
-                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f)) {
+                androidx.compose.foundation.layout.Row(Modifier.weight(1f)) {
                     // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
-                    Column(Modifier.fillMaxSize()) {
+                    Column(Modifier.weight(1f).fillMaxHeight()) {
                         // Breadcrumb dasar = path file aktif
                     Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
                             modifier = Modifier.fillMaxWidth().background(SURFACE).padding(4.dp),
@@ -586,14 +585,14 @@ fun main() = application {
                         }
                     } // tutup Box editor
                     } // tutup Column editor
-                    // Drawer overlay di AREA KONTEN (bawah toolbar, atas status):
-                    // tak menutupi toolbar. Fungsi terpisah agar AnimatedVisibility
-                    // tanpa receiver scope (revisi 14 Sep: konflik overload).
-                    // Tinggi EKSPILISIT = tinggi area konten (temuan 14 Sep:
-                    // fillMaxHeight di overlay collapse ikut konten).
+                    // Drawer SIBLING kanan (revisi 14 Sep, final): overlay Compose
+                    // TAK BISA menimpa CEF native (heavyweight selalu di atas) —
+                    // itu akar splash tak nutup + drawer di bawah editor.
+                    // Sibling resize terbukti tampil penuh (v5). Blink resize
+                    // 150ms diterima sementara; DrawerPanel top-level tetap
+                    // (tanpa receiver scope).
                     DrawerPanel(
-                        Modifier.align(Alignment.CenterEnd)
-                            .requiredHeight(maxHeight),
+                        Modifier.fillMaxHeight(),
                         outputOpen, outLines, outList, { closeOutput() })
                 }
                 // Status bar: interpreter + run (versi pindah ke About nanti).
