@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.Button
 import androidx.compose.material.Divider
@@ -368,9 +369,10 @@ fun main() = application {
             val tTot = System.currentTimeMillis() - t0
             outputText = res.output.ifBlank { "(tanpa output)" }
             outputOpen = true // auto-show saat Run pertama (keputusan UI/UX)
-            val first = res.output.lineSequence().take(5).joinToString(" | ")
-            logLine = if (res.exitCode == 0) "[OK] exit 0 · ambil ${tGet}ms · py ${tPy}ms · total ${tTot}ms · $first"
-                      else "[ERR] exit ${res.exitCode} · ambil ${tGet}ms · py ${tPy}ms · $first"
+            // Status bar RINGKAS (temuan 14 Sep): detail output di drawer,
+            // status satu baris tak boleh kepanjangan.
+            logLine = if (res.exitCode == 0) "[OK] exit 0 · ambil ${tGet}ms · py ${tPy}ms · total ${tTot}ms"
+                      else "[ERR] exit ${res.exitCode} · ambil ${tGet}ms · py ${tPy}ms"
             println("[RUN] exit=${res.exitCode} get=${tGet}ms py=${tPy}ms total=${tTot}ms out=${res.output.take(200)}")
         }
     }
@@ -473,7 +475,7 @@ fun main() = application {
                 // Drawer output (logika = drawer Android): hidden default,
                 // slide kanan→kiri 150ms (prinsip drawer: cepat, tutup-dulu-aksi),
                 // lebar TETAP 420dp, muncul via F5/Run, tutup via ✕.
-                androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f)) {
                     // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
                     Column(Modifier.fillMaxSize()) {
                         // Breadcrumb dasar = path file aktif
@@ -587,8 +589,11 @@ fun main() = application {
                     // Drawer overlay di AREA KONTEN (bawah toolbar, atas status):
                     // tak menutupi toolbar. Fungsi terpisah agar AnimatedVisibility
                     // tanpa receiver scope (revisi 14 Sep: konflik overload).
+                    // Tinggi EKSPILISIT = tinggi area konten (temuan 14 Sep:
+                    // fillMaxHeight di overlay collapse ikut konten).
                     DrawerPanel(
-                        Modifier.align(Alignment.CenterEnd),
+                        Modifier.align(Alignment.CenterEnd)
+                            .requiredHeight(maxHeight),
                         outputOpen, outLines, outList, { closeOutput() })
                 }
                 // Status bar: interpreter + run (versi pindah ke About nanti).
