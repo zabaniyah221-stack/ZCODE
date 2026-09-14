@@ -166,15 +166,10 @@ fun main() = application {
     // Bridge siap? (lift agar doRun tak poll buta 5 detik saat editor kosong
     // — temuan 14 Sep: "lama padahal kosong".)
     var bridgeOk by remember { mutableStateOf(false) }
-    // Veil anti-blink drawer (temuan 14 Sep): CEF resize → repaint putih
-    // sesaat. Veil hitam polos 300ms di atas editor, TANPA handler/fokus
-    // (tak consume event, tak curi fokus — hanya cat).
-    var veil by remember { mutableStateOf(false) }
-    LaunchedEffect(outputOpen) {
-        veil = true
-        delay(300)
-        veil = false
-    }
+    // Drawer = OVERLAY kanan (revisi 14 Sep): menimpa editor tanpa resize,
+    // persis logika ModalNavigationDrawer Android. Tanpa resize CEF =
+    // tanpa repaint putih = veil tak perlu. Tanpa focus handler/clickable
+    // di area overlay (kecuali tombol tutup) agar tak curi fokus editor.
     // Splash (diskusi 14 Sep): layar hitam + logo {Z} sampai bridge OK.
     // Fungsional (indikator load beneran), bukan sekadar nutupin blink.
     var showSplash by remember { mutableStateOf(true) }
@@ -422,9 +417,9 @@ fun main() = application {
                 // Drawer output (logika = drawer Android): hidden default,
                 // slide kanan→kiri 150ms (prinsip drawer: cepat, tutup-dulu-aksi),
                 // lebar TETAP 420dp, muncul via F5/Run, tutup via ✕.
-                androidx.compose.foundation.layout.Row(Modifier.weight(1f)) {
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
                     // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
-                    Column(Modifier.weight(1f).fillMaxHeight()) {
+                    Column(Modifier.fillMaxSize()) {
                         // Breadcrumb dasar = path file aktif
                     Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
                             modifier = Modifier.fillMaxWidth().background(SURFACE).padding(4.dp),
@@ -531,20 +526,18 @@ fun main() = application {
                                 }
                             }
                         }
-                        // Veil: cat hitam polos di atas editor (tanpa handler).
-                        if (veil) {
-                            Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)))
-                        }
                     } // tutup Box editor
-                    } // tutup Column editor — sibling drawer di bawah
-                    // Drawer output kanan: sibling (BUKAN overlay — overlay curi
-                    // fokus, insiden 14 Sep). Resize, bukan timpa. Tanpa
-                    // focusRequester agar fokus tetap di editor saat auto-show.
+                    } // tutup Column editor — drawer overlay di bawah (Box scope)
+                    // Drawer output kanan OVERLAY (revisi 14 Sep): menimpa
+                    // editor TANPA resize (logika ModalNavigationDrawer Android).
+                    // Tanpa resize = tanpa repaint putih CEF. Tanpa focus
+                    // handler agar fokus tetap di editor saat auto-show.
                     AnimatedVisibility(
                         visible = outputOpen,
                         // TANPA fade (temuan 14 Sep): fade = transparan sesaat =
                         // blink putih. Murni slide + area animasi dicat gelap.
-                        modifier = Modifier.fillMaxHeight()
+                        // align End: overlay kanan di atas editor (Box scope).
+                        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
                             .background(Color(0xFF0A0E14)),
                         enter = slideInHorizontally(
                             initialOffsetX = { it }, animationSpec = tween(150)),
