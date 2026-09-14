@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
@@ -27,6 +28,7 @@ import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -124,6 +126,58 @@ private val BG = Color(0xFF0D1117)
 private val SURFACE = Color(0xFF161B22)
 private val ACCENT = Color(0xFF58A6FF)
 private val TEXT = Color(0xFFC9D1D9)
+
+/**
+ * Drawer output kanan OVERLAY (revisi 14 Sep): fungsi top-level agar
+ * AnimatedVisibility tanpa receiver scope (konflik overload ColumnScope
+ * saat dipanggil dalam Column — 3x CI merah). Menimpa editor TANPA
+ * resize CEF = tanpa repaint putih. Tanpa focus handler (kecuali tombol
+ * tutup) agar fokus editor aman.
+ */
+@Composable
+private fun DrawerPanel(
+    modifier: Modifier,
+    visible: Boolean,
+    lines: List<String>,
+    listState: LazyListState,
+    onClose: () -> Unit
+) {
+    AnimatedVisibility(
+        visible = visible,
+        // TANPA fade (temuan 14 Sep): fade = transparan sesaat = blink putih.
+        // Murni slide + area animasi dicat gelap.
+        modifier = modifier.fillMaxHeight().background(Color(0xFF0A0E14)),
+        enter = slideInHorizontally(
+            initialOffsetX = { it }, animationSpec = tween(150)),
+        exit = slideOutHorizontally(
+            targetOffsetX = { it }, animationSpec = tween(150))
+    ) {
+        Column(Modifier.width(420.dp).fillMaxHeight()
+            .background(Color(0xFF0A0E14))) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().padding(4.dp)) {
+                Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
+                    modifier = Modifier.weight(1f))
+                Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
+                    modifier = Modifier.clickable { onClose() }
+                        .padding(end = 8.dp))
+            }
+            Row(Modifier.fillMaxSize()) {
+                LazyColumn(state = listState,
+                    modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
+                    items(lines) { line ->
+                        Text(line, color = TEXT, fontSize = 12.sp)
+                    }
+                }
+                // Scrollbar dragable: jalan utama scroll via mouse.
+                VerticalScrollbar(
+                    modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
+                    adapter = rememberScrollbarAdapter(listState)
+                )
+            }
+        }
+    }
+}
 
 fun main() = application {
     val windowState = rememberWindowState()
@@ -530,6 +584,12 @@ fun main() = application {
                         }
                     } // tutup Box editor
                     } // tutup Column editor
+                    // Drawer overlay di AREA KONTEN (bawah toolbar, atas status):
+                    // tak menutupi toolbar. Fungsi terpisah agar AnimatedVisibility
+                    // tanpa receiver scope (revisi 14 Sep: konflik overload).
+                    DrawerPanel(
+                        Modifier.align(Alignment.CenterEnd),
+                        outputOpen, outLines, outList, { closeOutput() })
                 }
                 // Status bar: interpreter + run (versi pindah ke About nanti).
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
@@ -538,47 +598,6 @@ fun main() = application {
                         fontSize = 11.sp, color = TEXT, maxLines = 1)
                 }
             } // tutup Column utama
-            // Drawer output OVERLAY kanan (revisi 14 Sep): di root Box,
-            // sejajar Column utama — receiver tunggal BoxScope agar
-            // AnimatedVisibility + Modifier.align tak konflik overload.
-            // Menimpa segalanya TANPA resize CEF = tanpa repaint putih.
-            // Tanpa focus handler (kecuali tombol tutup) agar fokus editor aman.
-            AnimatedVisibility(
-                visible = outputOpen,
-                // TANPA fade (temuan 14 Sep): fade = transparan sesaat =
-                // blink putih. Murni slide + area animasi dicat gelap.
-                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
-                    .background(Color(0xFF0A0E14)),
-                enter = slideInHorizontally(
-                    initialOffsetX = { it }, animationSpec = tween(150)),
-                exit = slideOutHorizontally(
-                    targetOffsetX = { it }, animationSpec = tween(150))
-            ) {
-                Column(Modifier.width(420.dp).fillMaxHeight()
-                    .background(Color(0xFF0A0E14))) {
-                    Row(verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(4.dp)) {
-                        Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
-                            modifier = Modifier.weight(1f))
-                        Text("tutup ✕", color = ACCENT, fontSize = 11.sp,
-                            modifier = Modifier.clickable { closeOutput() }
-                                .padding(end = 8.dp))
-                    }
-                    androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
-                        LazyColumn(state = outList,
-                            modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
-                            items(outLines) { line ->
-                                Text(line, color = TEXT, fontSize = 12.sp)
-                            }
-                        }
-                        // Scrollbar dragable: jalan utama scroll via mouse.
-                        VerticalScrollbar(
-                            modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
-                            adapter = rememberScrollbarAdapter(outList)
-                        )
-                    }
-                }
-            }
             // Splash sibling TERAKHIR (overlay, bukan recreate): hitam + logo.
             if (showSplash) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)),
