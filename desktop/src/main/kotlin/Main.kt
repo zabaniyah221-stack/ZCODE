@@ -160,6 +160,13 @@ fun main() = application {
                 var n = 0
                 while (code.isEmpty() && n++ < 50) Thread.sleep(100)
             }
+            // Guard temuan 14 Sep: editor kosong/belum siap jangan dieksekusi sunyi.
+            if (code.isBlank()) {
+                outputText = "(editor kosong atau belum siap — tunggu status bridge OK)"
+                outputOpen = true
+                logLine = "[ERR] Run dibatalkan: editor kosong"
+                return@launch
+            }
             val res = withContext(Dispatchers.IO) {
                 // Simpan kembali ke file asal bila ada, else workspace_tmp.py
                 val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
@@ -254,15 +261,27 @@ fun main() = application {
                             val page = File("zcode-www/index.html")
                             val state = rememberWebViewState("file://${page.absolutePath}")
                             var done by remember { mutableStateOf(false) }
+                            var loadInfo by remember { mutableStateOf("membuka halaman…") }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator)
+                            // Observability: tampilkan tahap load di layar + log,
+                            // biar blank-page tidak buta (temuan uji GUI 14 Sep).
+                            val ls = state.loadingState
+                            LaunchedEffect(ls) { loadInfo = "status: $ls" }
+                            if (!done) {
+                                Text(loadInfo, Modifier.align(Alignment.Center), color = Color(0xFF8B949E))
+                            }
                             LaunchedEffect(state.loadingState) {
                                 if (done) return@LaunchedEffect
                                 var ready = false
                                 for (i in 1..20) {
-                                    var got: String? = null
-                                    navigator.evaluateJavaScript("(typeof getCode==='function')?'BRIDGE_OK':'NO_BRIDGE'") { got = it.toString() }
-                                    delay(1000)
-                                    if (got != null && "BRIDGE_OK" in got!!) { ready = true; break }
+                                    try {
+                                        var got: String? = null
+                                        navigator.evaluateJavaScript("(typeof getCode==='function')?'BRIDGE_OK':'NO_BRIDGE'") { got = it.toString() }
+                                        delay(1000)
+                                        if (got != null && "BRIDGE_OK" in got!!) { ready = true; break }
+                                    } catch (_: Exception) {
+                                        delay(1000)
+                                    }
                                 }
                                 println("[SPIKE] BRIDGE_READY=$ready")
                                 done = true
@@ -271,10 +290,15 @@ fun main() = application {
                         }
                     }
                 }
-                // Dialog Settings (font UI + persist; font editor ikut bundle 14px — limit Fase 1)
+                // Dialog Settings — window eksplisit (temuan 14 Sep: tanpa judul/ukuran
+                // jadi "Untitled" + area putih). Font editor ikut bundle — limit Fase 1.
                 if (showSettings) {
-                    androidx.compose.ui.window.Dialog(onCloseRequest = { showSettings = false }) {
-                        Column(Modifier.background(SURFACE).padding(16.dp)) {
+                    androidx.compose.ui.window.Dialog(
+                        onCloseRequest = { showSettings = false },
+                        title = "Pengaturan ZCODE",
+                        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(380.dp, 300.dp))
+                    ) {
+                        Column(Modifier.fillMaxSize().background(SURFACE).padding(16.dp)) {
                             Text("Settings", color = TEXT, fontSize = 15.sp)
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(top = 8.dp)) {
@@ -296,8 +320,12 @@ fun main() = application {
                 }
                 // Dialog About (versi + GPLv3, scope §2)
                 if (showAbout) {
-                    androidx.compose.ui.window.Dialog(onCloseRequest = { showAbout = false }) {
-                        Column(Modifier.background(SURFACE).padding(16.dp)) {
+                    androidx.compose.ui.window.Dialog(
+                        onCloseRequest = { showAbout = false },
+                        title = "Tentang ZCODE",
+                        state = androidx.compose.ui.window.rememberDialogState(size = androidx.compose.ui.unit.DpSize(400.dp, 260.dp))
+                    ) {
+                        Column(Modifier.fillMaxSize().background(SURFACE).padding(16.dp)) {
                             Text("ZCODE Desktop v0.0.1-desktop", color = TEXT, fontSize = 15.sp)
                             Text("IDE Python • offline-first • gratis", color = TEXT, fontSize = 12.sp)
                             Text("Lisensi GPLv3 • github.com/zabaniyah221-stack/ZCODE",
