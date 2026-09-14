@@ -340,10 +340,13 @@ fun main() = application {
                                     while (true) {
                                         val ev = awaitPointerEvent()
                                         if (ev.type == PointerEventType.Press) {
-                                            try { editorFocus.requestFocus() }
+                                            var fok = false
+                                            var brw = false
+                                            try { editorFocus.requestFocus(); fok = true }
                                             catch (_: Exception) { }
-                                            try { cefBrowser?.setFocus(true) }
+                                            try { cefBrowser?.setFocus(true); brw = cefBrowser != null }
                                             catch (_: Exception) { }
+                                            println("[FOCUS] press fok=$fok browser=$brw")
                                         }
                                     }
                                 }
