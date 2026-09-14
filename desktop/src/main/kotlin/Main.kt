@@ -100,6 +100,25 @@ private fun resolveWebPage(): File {
 
 private val webPageFile: File by lazy { resolveWebPage() }
 
+/**
+ * Lokasi zcode_run.py. Sama pola resolveWebPage: dev → resources/jar.
+ * Temuan 14 Sep: path "src/main/python" mati di versi installed.
+ */
+private fun resolveRunnerFile(): File {
+    val dev = File("src/main/python/zcode_run.py")
+    if (dev.isFile()) return dev
+    val alt = File("src/main/resources/zcode_run.py")
+    if (alt.isFile()) return alt
+    val dir = java.nio.file.Files.createTempDirectory("zcode-app").toFile()
+    val loader = object {}::class.java
+    val src = loader.getResourceAsStream("/zcode_run.py")
+    val dst = File(dir, "zcode_run.py")
+    if (src != null) dst.outputStream().use { src.copyTo(it) }
+    return dst
+}
+
+private val runnerFile: File by lazy { resolveRunnerFile() }
+
 // GitHub Dark (palet ZCODE) — default sesuai keputusan NOTEZ v0.2.0.
 private val BG = Color(0xFF0D1117)
 private val SURFACE = Color(0xFF161B22)
@@ -272,11 +291,16 @@ fun main() = application {
             val t1 = System.currentTimeMillis()
             outputText = "[>] menjalankan python…"
             val res = withContext(Dispatchers.IO) {
-                // Simpan kembali ke file asal bila ada, else workspace_tmp.py
-                val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
+                // Simpan kembali ke file asal bila ada, else workspace di cache
+                // (cwd installed tak tentu — temuan 14 Sep).
+                val target = currentPath?.let { java.io.File(it) } ?: run {
+                    val dir = File(System.getProperty("user.home"), ".cache/zcode")
+                    dir.mkdirs()
+                    File(dir, "workspace_tmp.py")
+                }
                 target.writeText(code)
                 currentFile = target.name
-                Runner.run(target, File("src/main/python"))
+                Runner.run(target, runnerFile)
             }
             val tPy = System.currentTimeMillis() - t1
             val tTot = System.currentTimeMillis() - t0

@@ -12,10 +12,10 @@ data class RunResult(val exitCode: Int, val output: String)
  * Satu operasi = satu proses; tidak ada proses yatim (destroy di finally).
  */
 object Runner {
-    suspend fun run(script: File, runnerDir: File): RunResult = withContext(Dispatchers.IO) {
+    suspend fun run(script: File, runner: File): RunResult = withContext(Dispatchers.IO) {
         val proc = ProcessBuilder(
             "python3",
-            File(runnerDir, "zcode_run.py").absolutePath,
+            runner.absolutePath,
             script.absolutePath
         )
             .directory(script.parentFile)
