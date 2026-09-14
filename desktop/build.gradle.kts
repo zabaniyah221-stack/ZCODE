@@ -12,6 +12,16 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "MainKt"
+        // Paket .deb (diskusi 14 Sep): install sekali, klik dari menu.
+        // Catatan jujur: bundle CEF (~500MB) TIDAK ikut — diunduh KCEF
+        // saat run pertama (butuh internet sekali).
+        nativeDistributions {
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
+            packageName = "zcode"
+            version = "0.0.1"
+            vendor = "ZABA"
+            description = "ZCODE Desktop — IDE Python offline-first"
+        }
     }
 }
 
