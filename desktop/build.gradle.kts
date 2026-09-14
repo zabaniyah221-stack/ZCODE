@@ -7,6 +7,10 @@ plugins {
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation("io.github.kevinnzou:compose-webview-multiplatform-desktop:2.0.1")
+    // Migrasi RSTA (blueprint 15 Sep, irisan 1): editor Swing, CEF dihapus
+    // irisan 3. Pin eksak, Maven Central terverifikasi.
+    implementation("com.fifesoft:rsyntaxtextarea:3.6.0")
+    implementation("com.fifesoft:autocomplete:3.3.2")
 }
 
 compose.desktop {
