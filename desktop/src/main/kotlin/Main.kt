@@ -150,6 +150,8 @@ fun main() = application {
     // Splash (diskusi 14 Sep): layar hitam + logo {Z} sampai bridge OK.
     // Fungsional (indikator load beneran), bukan sekadar nutupin blink.
     var showSplash by remember { mutableStateOf(true) }
+    // Pesan splash dinamis: progres download CEF saat run pertama installed.
+    var splashMsg by remember { mutableStateOf("memuat editor…") }
     val logoBmp: ImageBitmap? = remember {
         try {
             val bytes = object {}::class.java.getResourceAsStream("/zcode_logo.png")?.readBytes()
@@ -308,9 +310,19 @@ fun main() = application {
             // gantikan putih default. CefSettings().ColorType(a,r,g,b)=0D1117.
             val cefTmp = org.cef.CefSettings()
             val bgHitam = cefTmp.ColorType(255, 0x0D, 0x11, 0x17)
+            // Lokasi TETAP (temuan 14 Sep): installDir relatif ikut cwd peluncur
+            // → bundle tersebar + download ulang. Satu rumah di ~/.cache.
+            val kcefDir = File(System.getProperty("user.home"), ".cache/zcode/kcef-bundle")
             KCEF.init(builder = {
-                installDir(File("kcef-bundle"))
+                installDir(kcefDir)
                 settings { backgroundColor = bgHitam }
+                // Progres download CEF → splash + log (run pertama installed
+                // unduh ~500MB; tanpa ini start diam dikira macet).
+                progress {
+                    onDownloading { splashMsg = "mengunduh Chromium ${it.toInt()}%…" }
+                    onExtracting { splashMsg = "menyiapkan Chromium…" }
+                    onInitialized { splashMsg = "memuat editor…" }
+                }
             })
         }
         kcefReady = true
@@ -542,7 +554,7 @@ fun main() = application {
                         } else {
                             Text("{Z}", color = ACCENT, fontSize = 64.sp)
                         }
-                        Text("memuat editor…", color = Color(0xFF8B949E),
+                        Text(splashMsg, color = Color(0xFF8B949E),
                             fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
                     }
                 }
