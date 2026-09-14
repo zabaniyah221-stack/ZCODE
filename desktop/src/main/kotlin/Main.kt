@@ -3,12 +3,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -395,11 +397,19 @@ fun main() = application {
                                 modifier = Modifier.clickable { outputOpen = false }
                                     .padding(end = 8.dp))
                         }
-                        LazyColumn(state = outList,
-                            modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                            items(outLines) { line ->
-                                Text(line, color = TEXT, fontSize = 12.sp)
+                        androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+                            LazyColumn(state = outList,
+                                modifier = Modifier.weight(1f).fillMaxHeight().padding(8.dp)) {
+                                items(outLines) { line ->
+                                    Text(line, color = TEXT, fontSize = 12.sp)
+                                }
                             }
+                            // Scrollbar dragable: jalan utama scroll via mouse
+                            // (wheel saja tak cukup — temuan 14 Sep).
+                            VerticalScrollbar(
+                                modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
+                                adapter = rememberScrollbarAdapter(outList)
+                            )
                         }
                     }
                     Divider(color = Color(0xFF30363D))
