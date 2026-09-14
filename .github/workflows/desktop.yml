@@ -38,7 +38,7 @@ jobs:
         with:
           gradle-version: 8.5
       - name: Build .deb
-        run: gradle createDistributable --stacktrace
+        run: gradle packageDeb --stacktrace
       - name: Locate .deb
         run: find build -name "*.deb" 2>/dev/null; ls -R build/compose/binaries 2>/dev/null | head -n 15
       - uses: actions/upload-artifact@v4
