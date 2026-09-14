@@ -1,3 +1,4 @@
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -38,6 +39,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -117,6 +120,16 @@ fun main() = application {
     // Bridge siap? (lift agar doRun tak poll buta 5 detik saat editor kosong
     // — temuan 14 Sep: "lama padahal kosong".)
     var bridgeOk by remember { mutableStateOf(false) }
+    // Splash (diskusi 14 Sep): layar hitam + logo {Z} sampai bridge OK.
+    // Fungsional (indikator load beneran), bukan sekadar nutupin blink.
+    var showSplash by remember { mutableStateOf(true) }
+    val logoBmp: ImageBitmap? = remember {
+        try {
+            val bytes = object {}::class.java.getResourceAsStream("/zcode_logo.png")?.readBytes()
+                ?: return@remember null
+            org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
+        } catch (_: Exception) { null }
+    }
     // JsBridge F5 (temuan 14 Sep): F5 di dalam CEF native tak sampai ke
     // dispatcher AWT Compose → JS keydown panggil balik via callNative.
     val jsBridge = rememberWebViewJsBridge(navigator)
@@ -278,7 +291,7 @@ fun main() = application {
         pyInfo = Runner.pythonInfo()
     }
 
-    Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE Desktop") {
+    Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE") {
         // Cat dasar hitam (temuan 14 Sep): blink putih = background default
         // window AWT sebelum frame pertama + area CEF sebelum paint.
         // F5 global level AWT (temuan 14 Sep): saat fokus di editor native CEF,
@@ -289,7 +302,7 @@ fun main() = application {
             // content pane background — keduanya, bukan salah satu.
             try {
                 val win = java.awt.Window.getWindows()
-                    .firstOrNull { (it as? java.awt.Frame)?.title == "ZCODE Desktop" }
+                    .firstOrNull { (it as? java.awt.Frame)?.title == "ZCODE" }
                 val hitam = java.awt.Color(0x0D, 0x11, 0x17)
                 win?.background = hitam
                 (win as? javax.swing.JFrame)?.contentPane?.background = hitam
@@ -307,7 +320,10 @@ fun main() = application {
         MaterialTheme(colors = androidx.compose.material.darkColors(
             primary = ACCENT, surface = SURFACE, background = BG, onSurface = TEXT
         )) {
-            Column(Modifier.fillMaxSize().background(BG)
+            // Box pembungkus: splash overlay di atas segalanya TANPA recreate
+            // tree utama (recreate = WebView reload = blink + fokus hilang).
+            Box(Modifier.fillMaxSize().background(BG)) {
+            Column(Modifier.fillMaxSize()
                 .onKeyEvent {
                     if (it.key == Key.F5) { doRun(); true }
                     else false
@@ -319,7 +335,6 @@ fun main() = application {
                     Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
                         Text("▶ Run (F5)")
                     }
-                    Text("  ZCODE Desktop v0.0.1", fontSize = fontSize.sp, color = TEXT)
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                 }
                 Divider(color = Color(0xFF30363D))
@@ -418,6 +433,7 @@ fun main() = application {
                                 done = true
                                 bridgeOk = ready
                                 if (ready) {
+                                    showSplash = false
                                     logLine = "[OK] editor siap"
                                     // Kembalikan fokus ke editor CM6
                                     try {
@@ -482,12 +498,29 @@ fun main() = application {
                         }
                     }
                 }
-                // Status bar: interpreter + versi (keputusan UI/UX §2)
+                // Status bar: interpreter + run (versi pindah ke About nanti).
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("  $pyInfo  ·  run#$runCount  ·  $logLine",
                         fontSize = 11.sp, color = TEXT, maxLines = 1)
                 }
+            } // tutup Column utama
+            // Splash sibling TERAKHIR (overlay, bukan recreate): hitam + logo.
+            if (showSplash) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)),
+                    contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (logoBmp != null) {
+                            Image(logoBmp, contentDescription = "ZCODE",
+                                modifier = Modifier.width(160.dp))
+                        } else {
+                            Text("{Z}", color = ACCENT, fontSize = 64.sp)
+                        }
+                        Text("memuat editor…", color = Color(0xFF8B949E),
+                            fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
+                    }
+                }
+            }
             }
         }
     }
