@@ -16,6 +16,7 @@ import androidx.compose.material.Button
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -213,6 +214,20 @@ fun main() = application {
     }
 
     Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE Desktop") {
+        // F5 global level AWT (temuan 14 Sep): saat fokus di editor native CEF,
+        // key event tak sampai ke onKeyEvent Compose → tangkap di dispatcher.
+        // F5 = shortcut tombol Run (jalan utama ada) → sah.
+        DisposableEffect(Unit) {
+            val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+            val d = java.awt.KeyEventDispatcher { e ->
+                if (e.id == java.awt.event.KeyEvent.KEY_PRESSED &&
+                    e.keyCode == java.awt.event.KeyEvent.VK_F5) {
+                    doRun(); true
+                } else false
+            }
+            mgr.addKeyEventDispatcher(d)
+            onDispose { mgr.removeKeyEventDispatcher(d) }
+        }
         MaterialTheme(colors = androidx.compose.material.darkColors(
             primary = ACCENT, surface = SURFACE, background = BG, onSurface = TEXT
         )) {
@@ -323,7 +338,12 @@ fun main() = application {
                         }
                     }
                 }
-                // Panel output (auto-show saat Run; toggle via klik status)
+                // Panel output (auto-show saat Run; scroll di parent + auto-bawah
+                // agar traceback panjang tak terpotong — temuan 14 Sep).
+                val outScroll = rememberScrollState()
+                LaunchedEffect(outputText) {
+                    try { outScroll.scrollTo(outScroll.maxValue) } catch (_: Exception) { }
+                }
                 if (outputOpen) {
                     Column(Modifier.fillMaxWidth().height(140.dp).background(Color(0xFF0A0E14))) {
                         Row(verticalAlignment = Alignment.CenterVertically,
@@ -334,10 +354,10 @@ fun main() = application {
                                 modifier = Modifier.clickable { outputOpen = false }
                                     .padding(end = 8.dp))
                         }
-                        Text(outputText, color = TEXT, fontSize = 12.sp,
-                            modifier = Modifier.fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(8.dp))
+                        androidx.compose.foundation.layout.Box(
+                            Modifier.fillMaxSize().verticalScroll(outScroll).padding(8.dp)) {
+                            Text(outputText, color = TEXT, fontSize = 12.sp)
+                        }
                     }
                     Divider(color = Color(0xFF30363D))
                 }
