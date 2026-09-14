@@ -23,3 +23,23 @@ jobs:
           gradle-version: 8.5
       - name: Compile desktop (no GUI run)
         run: gradle compileKotlin --stacktrace
+  package-deb:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.5
+      - name: Build .deb
+        run: gradle createDistributable --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zcode-deb
+          path: desktop/build/compose/binaries/main/deb/*.deb
