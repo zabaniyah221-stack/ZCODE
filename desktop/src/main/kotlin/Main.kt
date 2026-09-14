@@ -68,10 +68,37 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Fase 1 — Workbench v0.0.1.
- * Toolbar (Run + F5) · sidebar toggle (Ctrl+B) · editor CM6 · status bar.
- * Scope §2 RENCANA V002: tanpa command palette, tanpa PTY, tanpa packaging.
+ * Lokasi halaman editor. Urutan: folder dev (gradle run) → extract dari
+ * resources/jar (versi installed/.deb) ke temp dir. Temuan 14 Sep: .deb
+ * tak bawa zcode-www → halaman blank → bridge false → splash selamanya.
  */
+private fun resolveWebPage(): File {
+    val dev = File("zcode-www/index.html")
+    if (dev.isFile()) return dev
+    val alt = File("src/main/resources/zcode-www/index.html")
+    if (alt.isFile()) return alt
+    val names = listOf(
+        "zcode-www/index.html",
+        "zcode-www/codemirror.bundle.js",
+        "zcode-www/fonts/fira_code.ttf",
+        "zcode-www/fonts/jetbrains_mono.ttf",
+        "zcode-www/fonts/OFL_FiraCode.txt",
+        "zcode-www/fonts/OFL_JetBrainsMono.txt",
+        "zcode-www/fonts/OFL_SourceCodePro.txt",
+        "zcode-www/fonts/source_code_pro.ttf"
+    )
+    val dir = java.nio.file.Files.createTempDirectory("zcode-www").toFile()
+    val loader = object {}::class.java
+    for (n in names) {
+        val src = loader.getResourceAsStream("/$n") ?: continue
+        val dst = File(dir, n.removePrefix("zcode-www/"))
+        dst.parentFile?.mkdirs()
+        dst.outputStream().use { src.copyTo(it) }
+    }
+    return File(dir, "index.html")
+}
+
+private val webPageFile: File by lazy { resolveWebPage() }
 
 // GitHub Dark (palet ZCODE) — default sesuai keputusan NOTEZ v0.2.0.
 private val BG = Color(0xFF0D1117)
@@ -395,8 +422,7 @@ fun main() = application {
                         if (!kcefReady) {
                             Text("Initializing KCEF…", Modifier.align(Alignment.Center), color = TEXT)
                         } else {
-                            val page = File("zcode-www/index.html")
-                            val state = rememberWebViewState("file://${page.absolutePath}")
+                            val state = rememberWebViewState("file://${webPageFile.absolutePath}")
                             var done by remember { mutableStateOf(false) }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator,
                                 webViewJsBridge = jsBridge,
