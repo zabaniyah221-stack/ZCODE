@@ -261,17 +261,14 @@ fun main() = application {
                             val page = File("zcode-www/index.html")
                             val state = rememberWebViewState("file://${page.absolutePath}")
                             var done by remember { mutableStateOf(false) }
-                            var loadInfo by remember { mutableStateOf("membuka halaman…") }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator)
-                            // Observability: tampilkan tahap load di layar + log,
-                            // biar blank-page tidak buta (temuan uji GUI 14 Sep).
-                            val ls = state.loadingState
-                            LaunchedEffect(ls) { loadInfo = "status: $ls" }
-                            if (!done) {
-                                Text(loadInfo, Modifier.align(Alignment.Center), color = Color(0xFF8B949E))
-                            }
+                            // Indikator load TIDAK boleh overlay di atas WebView:
+                            // view yang muncul/hilang mencuri fokus keyboard
+                            // (temuan 14 Sep: ketikan mati setelah 2-3 huruf).
+                            // Status cukup di log + status bar.
                             LaunchedEffect(state.loadingState) {
                                 if (done) return@LaunchedEffect
+                                logLine = "[>] memuat editor…"
                                 var ready = false
                                 for (i in 1..20) {
                                     try {
@@ -285,6 +282,16 @@ fun main() = application {
                                 }
                                 println("[SPIKE] BRIDGE_READY=$ready")
                                 done = true
+                                if (ready) {
+                                    logLine = "[OK] editor siap"
+                                    // Kembalikan fokus ke editor CM6
+                                    try {
+                                        navigator.evaluateJavaScript(
+                                            "document.querySelector('.cm-content')?.focus()") {}
+                                    } catch (_: Exception) { }
+                                } else {
+                                    logLine = "[ERR] bridge editor tak siap"
+                                }
                             }
                         }
                         }
