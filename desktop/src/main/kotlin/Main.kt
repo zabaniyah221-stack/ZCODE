@@ -205,6 +205,10 @@ fun main() = application {
         }
         logLine = "[>] menjalankan…"
         scope.launch {
+            // F5 = drawer langsung buka + status tahap (temuan 14 Sep):
+            // feedback instan, hasil nyusul async. Tak ada momen sunyi.
+            outputText = "[>] mengambil kode editor…"
+            outputOpen = true
             // Timer per tahap (temuan 14 Sep: Run lama, biang belum tahu).
             val t0 = System.currentTimeMillis()
             var code = ""
@@ -224,6 +228,7 @@ fun main() = application {
                 return@launch
             }
             val t1 = System.currentTimeMillis()
+            outputText = "[>] menjalankan python…"
             val res = withContext(Dispatchers.IO) {
                 // Simpan kembali ke file asal bila ada, else workspace_tmp.py
                 val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
