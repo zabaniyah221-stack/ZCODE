@@ -166,6 +166,15 @@ fun main() = application {
     // Bridge siap? (lift agar doRun tak poll buta 5 detik saat editor kosong
     // — temuan 14 Sep: "lama padahal kosong".)
     var bridgeOk by remember { mutableStateOf(false) }
+    // Veil anti-blink drawer (temuan 14 Sep): CEF resize → repaint putih
+    // sesaat. Veil hitam polos 300ms di atas editor, TANPA handler/fokus
+    // (tak consume event, tak curi fokus — hanya cat).
+    var veil by remember { mutableStateOf(false) }
+    LaunchedEffect(outputOpen) {
+        veil = true
+        delay(300)
+        veil = false
+    }
     // Splash (diskusi 14 Sep): layar hitam + logo {Z} sampai bridge OK.
     // Fungsional (indikator load beneran), bukan sekadar nutupin blink.
     var showSplash by remember { mutableStateOf(true) }
@@ -495,6 +504,10 @@ fun main() = application {
                                 done = true
                                 bridgeOk = ready
                                 if (ready) {
+                                    // Tahan splash sampai paint (temuan 14 Sep): bridge OK
+                                    // != frame pertama ter-render. +800ms agar CEF
+                                    // sempat paint sebelum splash dibuka.
+                                    delay(800)
                                     showSplash = false
                                     logLine = "[OK] editor siap"
                                     // Kembalikan fokus ke editor CM6
@@ -517,6 +530,10 @@ fun main() = application {
                                     logLine = "[ERR] bridge editor tak siap"
                                 }
                             }
+                        }
+                        // Veil: cat hitam polos di atas editor (tanpa handler).
+                        if (veil) {
+                            Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)))
                         }
                     } // tutup Box editor
                     } // tutup Column editor — sibling drawer di bawah
