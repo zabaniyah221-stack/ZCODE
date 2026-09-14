@@ -1,5 +1,6 @@
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
@@ -254,7 +259,25 @@ fun main() = application {
                                         .padding(6.dp))
                             }
                         }
-                        Box(Modifier.weight(1f)) {
+                        // Fokus klik (temuan 14 Sep): klik mouse TIDAK memindahkan
+                        // fokus Compose ke WebView (Tab bisa). Tiap Press di area
+                        // editor paksa fokus ke sini TANPA consume, supaya klik
+                        // tetap sampai ke CEF (posisi kursor) + keyboard masuk.
+                        val editorFocus = remember { FocusRequester() }
+                        Box(Modifier.weight(1f)
+                            .focusRequester(editorFocus)
+                            .focusable()
+                            .pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        if (ev.type == PointerEventType.Press) {
+                                            try { editorFocus.requestFocus() }
+                                            catch (_: Exception) { }
+                                        }
+                                    }
+                                }
+                            }) {
                         if (!kcefReady) {
                             Text("Initializing KCEF…", Modifier.align(Alignment.Center), color = TEXT)
                         } else {
