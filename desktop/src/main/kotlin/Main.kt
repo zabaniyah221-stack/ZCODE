@@ -6,6 +6,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,9 +41,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.multiplatform.webview.jsbridge.IJsMessageHandler
+import com.multiplatform.webview.jsbridge.JsMessage
+import com.multiplatform.webview.jsbridge.rememberWebViewJsBridge
 import com.multiplatform.webview.web.WebContent
 import com.multiplatform.webview.web.WebView
 import com.multiplatform.webview.web.WebViewFactoryParam
+import com.multiplatform.webview.web.WebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewNavigator
 import com.multiplatform.webview.web.rememberWebViewState
 import dev.datlag.kcef.KCEF
@@ -101,6 +108,9 @@ fun main() = application {
     // Handle browser native (lift ke sini supaya terlihat dari Box editor):
     // fokus Compose SAJA tidak sampai ke Chromium.
     var cefBrowser by remember { mutableStateOf<KCEFBrowser?>(null) }
+    // JsBridge F5 (temuan 14 Sep): F5 di dalam CEF native tak sampai ke
+    // dispatcher AWT Compose → JS keydown panggil balik via callNative.
+    val jsBridge = rememberWebViewJsBridge(navigator)
 
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
@@ -204,6 +214,21 @@ fun main() = application {
         }
     }
 
+    // Registrasi handler JsBridge ZcodeRun — di sini (setelah doRun) agar
+    // forward-reference local fun tidak unresolved. Dipanggil dari JS keydown F5.
+    LaunchedEffect(jsBridge) {
+        jsBridge.register(object : IJsMessageHandler {
+            override fun methodName() = "ZcodeRun"
+            override fun handle(
+                message: JsMessage,
+                navigator: WebViewNavigator?,
+                callback: (String) -> Unit
+            ) {
+                doRun()
+            }
+        })
+    }
+
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             KCEF.init(builder = { installDir(File("kcef-bundle")) })
@@ -293,6 +318,7 @@ fun main() = application {
                             val state = rememberWebViewState("file://${page.absolutePath}")
                             var done by remember { mutableStateOf(false) }
                             WebView(state, Modifier.fillMaxSize(), navigator = navigator,
+                                webViewJsBridge = jsBridge,
                                 onCreated = fun(b: KCEFBrowser) { cefBrowser = b },
                                 onDispose = fun(_: KCEFBrowser) { cefBrowser = null },
                                 // Factory sendiri: defaultWebViewFactory crash
@@ -331,6 +357,17 @@ fun main() = application {
                                         navigator.evaluateJavaScript(
                                             "document.querySelector('.cm-content')?.focus()") {}
                                     } catch (_: Exception) { }
+                                    // F5 dari dalam halaman → callNative ZcodeRun.
+                                    // preventDefault agar CEF tak reload.
+                                    try {
+                                        navigator.evaluateJavaScript(
+                                            "(function(){if(window.__zcodeF5)return;window.__zcodeF5=true;" +
+                                            "document.addEventListener('keydown',function(e){" +
+                                            "if(e.key==='F5'){e.preventDefault();" +
+                                            "if(window.kmpJsBridge&&window.kmpJsBridge.callNative)" +
+                                            "{window.kmpJsBridge.callNative('ZcodeRun','{}',null);}}" +
+                                            "},true);})()") {}
+                                    } catch (_: Exception) { }
                                 } else {
                                     logLine = "[ERR] bridge editor tak siap"
                                 }
@@ -338,11 +375,15 @@ fun main() = application {
                         }
                     }
                 }
-                // Panel output (auto-show saat Run; scroll di parent + auto-bawah
-                // agar traceback panjang tak terpotong — temuan 14 Sep).
-                val outScroll = rememberScrollState()
-                LaunchedEffect(outputText) {
-                    try { outScroll.scrollTo(outScroll.maxValue) } catch (_: Exception) { }
+                // Panel output: LazyColumn per baris (temuan 14 Sep: scroll parent
+                // loyo — issue lib #123 outer-steals-scroll, atasi sendiri) +
+                // auto ke baris terakhir agar traceback tak terpotong.
+                val outLines = remember(outputText) { outputText.lines() }
+                val outList = rememberLazyListState()
+                LaunchedEffect(outLines.size, outputOpen) {
+                    try {
+                        if (outLines.isNotEmpty()) outList.scrollToItem(outLines.lastIndex)
+                    } catch (_: Exception) { }
                 }
                 if (outputOpen) {
                     Column(Modifier.fillMaxWidth().height(140.dp).background(Color(0xFF0A0E14))) {
@@ -354,9 +395,11 @@ fun main() = application {
                                 modifier = Modifier.clickable { outputOpen = false }
                                     .padding(end = 8.dp))
                         }
-                        androidx.compose.foundation.layout.Box(
-                            Modifier.fillMaxSize().verticalScroll(outScroll).padding(8.dp)) {
-                            Text(outputText, color = TEXT, fontSize = 12.sp)
+                        LazyColumn(state = outList,
+                            modifier = Modifier.fillMaxSize().padding(8.dp)) {
+                            items(outLines) { line ->
+                                Text(line, color = TEXT, fontSize = 12.sp)
+                            }
                         }
                     }
                     Divider(color = Color(0xFF30363D))
