@@ -6,9 +6,8 @@ plugins {
 
 dependencies {
     implementation(compose.desktop.currentOs)
-    implementation("io.github.kevinnzou:compose-webview-multiplatform-desktop:2.0.1")
-    // Migrasi RSTA (blueprint 15 Sep, irisan 1): editor Swing, CEF dihapus
-    // irisan 3. Pin eksak, Maven Central terverifikasi.
+    // Editor RSTA Swing murni (migrasi 15 Sep, irisan 3): tanpa Chromium,
+    // tanpa download 500MB. Pin eksak, Maven Central terverifikasi.
     implementation("com.fifesoft:rsyntaxtextarea:3.6.0")
     implementation("com.fifesoft:autocomplete:3.3.2")
 }
@@ -17,8 +16,7 @@ compose.desktop {
     application {
         mainClass = "MainKt"
         // Paket .deb (diskusi 14 Sep): install sekali, klik dari menu.
-        // Catatan jujur: bundle CEF (~500MB) TIDAK ikut — diunduh KCEF
-        // saat run pertama (butuh internet sekali).
+        // RSTA Swing murni: tanpa runtime Chromium, .deb puluhan MB.
         nativeDistributions {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "zcode"
