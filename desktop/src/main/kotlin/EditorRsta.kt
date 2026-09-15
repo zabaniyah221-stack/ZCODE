@@ -231,10 +231,11 @@ class PycodestyleParser : AbstractParser() {
 /** Scrollbar Swing rasa output Compose (paket 15 Sep sore): thumb gelap. */
 fun styleDarkScrollbars() {
     try {
-        val ui = javax.swing.UIManager
-        ui.put("ScrollBar.thumb", javax.swing.plaf.ColorUIResource(ED_SEL))
-        ui.put("ScrollBar.track", javax.swing.plaf.ColorUIResource(ED_BG))
-        ui.put("ScrollBar.width", 12)
+        javax.swing.UIManager.put("ScrollBar.thumb",
+            javax.swing.plaf.ColorUIResource(ED_SEL))
+        javax.swing.UIManager.put("ScrollBar.track",
+            javax.swing.plaf.ColorUIResource(ED_BG))
+        javax.swing.UIManager.put("ScrollBar.width", 12)
     } catch (_: Exception) { }
 }
 
