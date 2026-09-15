@@ -90,16 +90,12 @@ private fun DrawerPanel(
     listState: LazyListState,
     onClose: () -> Unit
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        // Paket 15 Sep sore: alpha 0.92 (subtle, bukan tembus wallpaper —
-        // belakang drawer = background window sendiri).
-        modifier = modifier.fillMaxHeight().background(Color(0xEB0A0E14)),
-        enter = slideInHorizontally(
-            initialOffsetX = { it }, animationSpec = tween(150)),
-        exit = slideOutHorizontally(
-            targetOffsetX = { it }, animationSpec = tween(150))
-    ) {
+    // Blink output (16 Sep): slide 150ms resize sibling SwingPanel = ras
+    // repaint AWT. Tampil instan: kalau blink hilang = resize-race,
+    // kalau tetap = peer-creation pertama. Jangan kembalikan slide
+    // sebelum akar dipastikan.
+    if (!visible) return
+    Column(modifier.fillMaxHeight().background(Color(0xEB0A0E14))) {
         Column(Modifier.width(420.dp).fillMaxHeight()
             .background(Color(0xEB0A0E14))) {
             Row(verticalAlignment = Alignment.CenterVertically,
