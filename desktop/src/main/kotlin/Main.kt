@@ -124,7 +124,13 @@ private fun DrawerPanel(
     }
 }
 
-fun main() = application {
+fun main() {
+    // Panel AWT default light-gray = sumber blink (temuan 15 Sep).
+    // Set gelap sebelum komponen AWT pertama dibuat.
+    try {
+        javax.swing.UIManager.put("Panel.background", java.awt.Color(0x0D, 0x11, 0x17))
+    } catch (_: Exception) { }
+    application {
     val windowState = rememberWindowState()
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
@@ -285,12 +291,21 @@ fun main() = application {
 
     Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE") {
         DisposableEffect(Unit) {
+            // Blink putih (temuan 15 Sep, burst capture: 29.5% white 1 frame
+            // saat drawer dibuka): panel AWT perantara Compose (default
+            // light-gray 238,238,238) ikut repaint saat SwingPanel resize.
+            // Cat SEMUA container gelap, rekursif — warna sama dengan tema.
+            fun catGelap(c: java.awt.Component, hitam: java.awt.Color) {
+                try {
+                    c.background = hitam
+                    (c as? java.awt.Container)?.components?.forEach { catGelap(it, hitam) }
+                } catch (_: Exception) { }
+            }
             try {
                 val win = java.awt.Window.getWindows()
                     .firstOrNull { (it as? java.awt.Frame)?.title == "ZCODE" }
                 val hitam = java.awt.Color(0x0D, 0x11, 0x17)
-                win?.background = hitam
-                (win as? javax.swing.JFrame)?.contentPane?.background = hitam
+                if (win != null) catGelap(win, hitam)
             } catch (_: Exception) { }
             // F5 global level AWT: shortcut tombol Run (jalan utama ada tombol).
             val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
@@ -349,7 +364,7 @@ fun main() = application {
                         // Editor RSTA via SwingPanel (irisan 4): wiring tema +
                         // completion + parser terpusat di EditorRsta.kt.
                         // Swing native: fokus klik otomatis, tanpa jembatan JS/CEF.
-                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                        Box(Modifier.weight(1f).fillMaxWidth().background(BG)) {
                             SwingPanel(
                                 factory = {
                                     newPythonEditor(
@@ -400,4 +415,5 @@ fun main() = application {
             }
         }
     }
+}
 }

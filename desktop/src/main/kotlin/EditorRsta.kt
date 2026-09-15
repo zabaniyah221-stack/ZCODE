@@ -145,5 +145,11 @@ fun newPythonEditor(
     installPythonCompletion(area)
     area.addParser(PythonCompileParser())
     onReady(area)
-    return RTextScrollPane(area)
+    val pane = RTextScrollPane(area)
+    // Anti-blink (temuan 15 Sep): viewport + gutter default terang ikut
+    // repaint saat resize. Cat gelap eksplisit.
+    pane.background = ED_BG
+    pane.viewport.background = ED_BG
+    try { pane.gutter?.background = ED_BG } catch (_: Exception) { }
+    return pane
 }
