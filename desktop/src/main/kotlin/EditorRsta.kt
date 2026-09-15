@@ -66,8 +66,9 @@ private val PY_KEYWORDS = listOf(
 )
 
 /** Autocomplete: keyword + template blok (dipicu Ctrl+Spasi, popup jinak). */
+/** Auto-activation 300ms (paket 15 Sep sore): popup muncul saat ketik. */
 fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
-    val p = DefaultCompletionProvider()
+    val p = JediCompletionProvider()
     for (kw in PY_KEYWORDS) p.addCompletion(BasicCompletion(p, kw))
     p.addCompletion(TemplateCompletion(p, "def", "def \${name}(\${args}):",
         "def \${name}(\${args}):\n    \${cursor}"))
@@ -83,8 +84,64 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
         "try:\n    \${cursor}\nexcept \${Exception} as e:\n    pass"))
     val ac = AutoCompletion(p)
     ac.setTriggerKey(KeyStroke.getKeyStroke("ctrl SPACE"))
+    ac.setAutoActivationEnabled(true)
+    ac.setAutoActivationDelay(300)
     ac.install(area)
     return ac
+}
+
+/**
+ * Provider Jedi (paket 15 Sep sore): nama+signature asli dari analisis
+ * jedi 0.19.1 via subprocess (hanya analisis, TANPA eksekusi kode user).
+ * Guard: prefix <2 huruf → statis saja; timeout 4 dtk; gagal → statis.
+ */
+class JediCompletionProvider : DefaultCompletionProvider() {
+
+    override fun getCompletions(comp: javax.swing.text.JTextComponent):
+            MutableList<org.fife.ui.autocomplete.Completion> {
+        val base = super.getCompletions(comp).toMutableList()
+        try {
+            val doc = comp.document
+            val caret = comp.caretPosition
+            val before = doc.getText(0, caret.coerceAtMost(doc.length))
+            val prefix = before.takeLastWhile { it.isLetterOrDigit() || it == '_' }
+            if (prefix.length < 2) return base
+            val line = before.count { it == '\n' } + 1
+            val col = caret - (before.lastIndexOf('\n') + 1)
+            val seen = base.mapNotNull {
+                (it as? BasicCompletion)?.replacementText }.toMutableSet()
+            for ((name, sig) in queryJedi(doc.getText(0, doc.length), line, col)) {
+                if (name in seen || !name.startsWith(prefix)) continue
+                seen.add(name)
+                base.add(BasicCompletion(this, name, sig, "(jedi) $name"))
+            }
+        } catch (_: Exception) { }
+        return base
+    }
+
+    private fun queryJedi(code: String, line: Int, col: Int): List<Pair<String, String>> {
+        var tmp: File? = null
+        return try {
+            tmp = File.createTempFile("zcode_jedi", ".py")
+            tmp.writeText(code)
+            val script = "import jedi\n" +
+                "s=jedi.Script(path='" + tmp.absolutePath + "')\n" +
+                "print(chr(10).join(c.name+'\\t'+c.type for c in " +
+                "s.complete(" + line + "," + col + ")))"
+            val proc = ProcessBuilder("python3", "-c", script)
+                .redirectErrorStream(true).start()
+            val out = proc.inputStream.bufferedReader().readText()
+            if (!proc.waitFor(4, java.util.concurrent.TimeUnit.SECONDS)) {
+                proc.destroyForcibly(); return emptyList()
+            }
+            out.lines().mapNotNull { ln ->
+                val t = ln.split('\t')
+                if (t.size == 2 && t[0].isNotBlank()) t[0] to t[1] else null
+            }.take(30)
+        } catch (_: Exception) { emptyList() } finally {
+            try { tmp?.delete() } catch (_: Exception) { }
+        }
+    }
 }
 
 /**
@@ -129,6 +186,58 @@ class PythonCompileParser : AbstractParser() {
     }
 }
 
+/**
+ * Parser pycodestyle (paket 15 Sep sore): style warning jadi notice
+ * WARNING (ikon beda dari ERROR py_compile). Sunyi bila modul hilang.
+ */
+class PycodestyleParser : AbstractParser() {
+
+    override fun parse(doc: RSyntaxDocument, style: String): ParseResult {
+        val res = DefaultParseResult(this)
+        val code = try {
+            doc.getText(0, doc.length)
+        } catch (_: Exception) { return res }
+        if (code.isBlank()) return res
+        var tmp: File? = null
+        try {
+            tmp = File.createTempFile("zcode_style", ".py")
+            tmp.writeText(code)
+            val proc = ProcessBuilder("python3", "-m", "pycodestyle",
+                "--format=%(row)d:%(col)d:%(code)s:%(text)s", tmp.absolutePath)
+                .redirectErrorStream(true).start()
+            val out = proc.inputStream.bufferedReader().readText()
+            if (!proc.waitFor(6, java.util.concurrent.TimeUnit.SECONDS)) {
+                proc.destroyForcibly(); return res
+            }
+            for (ln in out.lines().take(50)) {
+                val t = ln.split(':', limit = 4)
+                if (t.size < 4) continue
+                val row = t[0].toIntOrNull() ?: continue
+                val notice = DefaultParserNotice(
+                    this, "${t[2]} ${t[3].trim().take(200)}",
+                    (row - 1).coerceAtLeast(0))
+                notice.level = org.fife.ui.rsyntaxtextarea.parser
+                    .ParserNotice.Level.WARNING
+                res.addNotice(notice)
+            }
+        } catch (_: Exception) {
+        } finally {
+            try { tmp?.delete() } catch (_: Exception) { }
+        }
+        return res
+    }
+}
+
+/** Scrollbar Swing rasa output Compose (paket 15 Sep sore): thumb gelap. */
+fun styleDarkScrollbars() {
+    try {
+        val ui = javax.swing.UIManager
+        ui.put("ScrollBar.thumb", javax.swing.plaf.ColorUIResource(ED_SEL))
+        ui.put("ScrollBar.track", javax.swing.plaf.ColorUIResource(ED_BG))
+        ui.put("ScrollBar.width", 12)
+    } catch (_: Exception) { }
+}
+
 /** Pabrik editor: satu tempat wiring tema + completion + parser. */
 fun newPythonEditor(
     fontSize: Int,
@@ -141,15 +250,29 @@ fun newPythonEditor(
     area.antiAliasingEnabled = true
     area.font = Font(Font.MONOSPACED, Font.PLAIN, fontSize)
     applyGithubDarkTheme(area)
+    // Paket editor 15 Sep sore: tanpa border, wrap kata, mark occurrences.
+    area.lineWrap = true
+    area.wrapStyleWord = true
+    area.markOccurrences = true
+    area.margin = java.awt.Insets(4, 6, 4, 6)
     area.text = initialText
     installPythonCompletion(area)
     area.addParser(PythonCompileParser())
+    area.addParser(PycodestyleParser())
+    styleDarkScrollbars()
     onReady(area)
     val pane = RTextScrollPane(area)
     // Anti-blink (temuan 15 Sep): viewport + gutter default terang ikut
     // repaint saat resize. Cat gelap eksplisit.
+    // Paket 15 Sep sore: border HILANG total (pane, viewport, gutter).
     pane.background = ED_BG
     pane.viewport.background = ED_BG
-    try { pane.gutter?.background = ED_BG } catch (_: Exception) { }
+    try { pane.border = javax.swing.BorderFactory.createEmptyBorder() } catch (_: Exception) { }
+    try { pane.viewport.border = null } catch (_: Exception) { }
+    try {
+        pane.gutter?.background = ED_BG
+        pane.gutter?.borderColor = ED_BG
+        pane.gutter?.setBorder(javax.swing.BorderFactory.createEmptyBorder())
+    } catch (_: Exception) { }
     return pane
 }

@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
-import androidx.compose.material.Button
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
@@ -93,14 +92,16 @@ private fun DrawerPanel(
 ) {
     AnimatedVisibility(
         visible = visible,
-        modifier = modifier.fillMaxHeight().background(Color(0xFF0A0E14)),
+        // Paket 15 Sep sore: alpha 0.92 (subtle, bukan tembus wallpaper —
+        // belakang drawer = background window sendiri).
+        modifier = modifier.fillMaxHeight().background(Color(0xEB0A0E14)),
         enter = slideInHorizontally(
             initialOffsetX = { it }, animationSpec = tween(150)),
         exit = slideOutHorizontally(
             targetOffsetX = { it }, animationSpec = tween(150))
     ) {
         Column(Modifier.width(420.dp).fillMaxHeight()
-            .background(Color(0xFF0A0E14))) {
+            .background(Color(0xEB0A0E14))) {
             Row(verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(4.dp)) {
                 Text("  Output", color = Color(0xFF8B949E), fontSize = 11.sp,
@@ -319,11 +320,18 @@ fun main() {
                 if (win != null) catGelap(win, hitam)
             } catch (_: Exception) { }
             // F5 global level AWT: shortcut tombol Run (jalan utama ada tombol).
+            // Paket 15 Sep sore: +Ctrl+S simpan +Ctrl+O buka (pengganti button
+            // yang dihapus — fungsi tetap punya jalan keyboard).
             val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
             val d = java.awt.KeyEventDispatcher { e ->
-                if (e.id == java.awt.event.KeyEvent.KEY_PRESSED &&
-                    e.keyCode == java.awt.event.KeyEvent.VK_F5) {
-                    doRun(); true
+                if (e.id == java.awt.event.KeyEvent.KEY_PRESSED) {
+                    val ctrl = e.isControlDown
+                    when {
+                        e.keyCode == java.awt.event.KeyEvent.VK_F5 -> { doRun(); true }
+                        ctrl && e.keyCode == java.awt.event.KeyEvent.VK_S -> { saveCurrent(); true }
+                        ctrl && e.keyCode == java.awt.event.KeyEvent.VK_O -> { openFileDialog(); true }
+                        else -> false
+                    }
                 } else false
             }
             mgr.addKeyEventDispatcher(d)
@@ -338,18 +346,12 @@ fun main() {
                     if (it.key == Key.F5) { doRun(); true }
                     else false
                 }) {
+                // Paket 15 Sep sore: SEMUA button dihapus (fokus editor+output).
+                // Jalan keyboard: F5 Run, Ctrl+S simpan, Ctrl+O buka (dispatcher AWT).
                 Row(Modifier.fillMaxWidth().height(48.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
-                        Text("▶ Run (F5)")
-                    }
-                    androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                    Button(onClick = { openFileDialog() }, Modifier.padding(end = 4.dp)) {
-                        Text("Buka")
-                    }
-                    Button(onClick = { saveCurrent() }, Modifier.padding(end = 8.dp)) {
-                        Text("Simpan")
-                    }
+                    Text("  ZCODE", color = TEXT, fontSize = 14.sp,
+                        modifier = Modifier.padding(start = 8.dp))
                 }
                 Divider(color = Color(0xFF30363D))
                 LaunchedEffect(outLines.size, outputOpen) {
