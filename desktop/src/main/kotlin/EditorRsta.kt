@@ -2,13 +2,14 @@ import org.fife.ui.autocomplete.AutoCompletion
 import org.fife.ui.autocomplete.BasicCompletion
 import org.fife.ui.autocomplete.DefaultCompletionProvider
 import org.fife.ui.autocomplete.TemplateCompletion
+import org.fife.ui.rsyntaxtextarea.RSyntaxDocument
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants
 import org.fife.ui.rsyntaxtextarea.Token
+import org.fife.ui.rsyntaxtextarea.parser.AbstractParser
 import org.fife.ui.rsyntaxtextarea.parser.DefaultParseResult
 import org.fife.ui.rsyntaxtextarea.parser.DefaultParserNotice
 import org.fife.ui.rsyntaxtextarea.parser.ParseResult
-import org.fife.ui.rsyntaxtextarea.parser.Parser
 import org.fife.ui.rtextarea.RTextScrollPane
 import java.awt.Color
 import java.awt.Font
@@ -68,7 +69,7 @@ private val PY_KEYWORDS = listOf(
 fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val p = DefaultCompletionProvider()
     for (kw in PY_KEYWORDS) p.addCompletion(BasicCompletion(p, kw))
-    p.addCompletion(TemplateCompletion(p, "def", "def ${name}(${args}):",
+    p.addCompletion(TemplateCompletion(p, "def", "def \${name}(\${args}):",
         "def \${name}(\${args}):\n    \${cursor}"))
     p.addCompletion(TemplateCompletion(p, "for", "for x in ...:",
         "for \${x} in \${iter}:\n    \${cursor}"))
@@ -92,13 +93,13 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
  * diam-diam tanpa notice (bukan error editor). Baris py_compile 1-based →
  * notice 0-based.
  */
-class PythonCompileParser : Parser {
-    override fun isEnabled(): Boolean = true
-    override fun getImageURL(): java.net.URL? = null
+class PythonCompileParser : AbstractParser() {
 
-    override fun getParseResult(textArea: RSyntaxTextArea, style: String): ParseResult {
+    override fun parse(doc: RSyntaxDocument, style: String): ParseResult {
         val res = DefaultParseResult(this)
-        val code = try { textArea.text } catch (_: Exception) { return res }
+        val code = try {
+            doc.getText(0, doc.length)
+        } catch (_: Exception) { return res }
         if (code.isBlank()) return res
         var tmp: File? = null
         try {
@@ -114,10 +115,10 @@ class PythonCompileParser : Parser {
                 val line1 = m.groupValues[1].toIntOrNull() ?: 1
                 val msgLine = err.lines().lastOrNull { it.isNotBlank() } ?: "syntax error"
                 val msg = msgLine.trim().take(300)
-                val notice = DefaultParserNotice(
-                    this, msg, (line1 - 1).coerceAtLeast(0))
-                notice.level = DefaultParserNotice.Level.ERROR
-                res.addNotice(notice)
+                // Default level ERROR + showInEditor true = squiggle + gutter.
+                // Notice 0-based (TaskTagParser), py_compile 1-based.
+                res.addNotice(DefaultParserNotice(
+                    this, msg, (line1 - 1).coerceAtLeast(0)))
             }
         } catch (_: Exception) {
             // Parser tak boleh meledak: sunyi = tanpa squiggle.
