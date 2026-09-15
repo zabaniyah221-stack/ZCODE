@@ -62,7 +62,24 @@ private val PY_KEYWORDS = listOf(
     "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
     "while", "with", "yield", "print", "len", "range", "str", "int",
     "float", "list", "dict", "set", "tuple", "open", "input", "super",
-    "self", "__init__", "__name__", "__main__"
+    "self", "__init__", "__name__", "__main__",
+)
+
+/** Builtin + stdlib umum (16 Sep): list 40 kata terlalu kecil buat kode
+ * beneran (os/sys/np tak match → popup sembunyi → terasa mati). */
+private val PY_BUILTINS = listOf(
+    "abs", "all", "any", "bool", "bytes", "callable", "chr",
+    "dir", "divmod", "enumerate", "eval", "exec", "filter",
+    "format", "frozenset", "getattr", "globals", "hasattr",
+    "hash", "help", "hex", "id", "isinstance", "issubclass",
+    "iter", "locals", "map", "max", "min", "next", "object",
+    "oct", "ord", "pow", "repr", "reversed", "round",
+    "setattr", "slice", "sorted", "sum", "type", "vars", "zip",
+    "os", "sys", "json", "math", "re", "time", "datetime",
+    "pathlib", "subprocess", "threading", "collections",
+    "itertools", "functools", "typing", "argparse", "logging",
+    "random", "string", "io", "shutil", "glob", "pickle",
+    "copy", "enum", "hashlib", "unittest",
 )
 
 /** Autocomplete: keyword + template blok (dipicu Ctrl+Spasi, popup jinak). */
@@ -70,6 +87,7 @@ private val PY_KEYWORDS = listOf(
 fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val p = JediCompletionProvider()
     for (kw in PY_KEYWORDS) p.addCompletion(BasicCompletion(p, kw))
+    for (kw in PY_BUILTINS) p.addCompletion(BasicCompletion(p, kw))
     p.addCompletion(TemplateCompletion(p, "def", "def \${name}(\${args}):",
         "def \${name}(\${args}):\n    \${cursor}"))
     p.addCompletion(TemplateCompletion(p, "for", "for x in ...:",
@@ -86,6 +104,9 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     ac.setTriggerKey(KeyStroke.getKeyStroke("ctrl SPACE"))
     ac.setAutoActivationEnabled(true)
     ac.setAutoActivationDelay(300)
+    // Popup selalu tampil walau 1 match (16 Sep): default RSTA
+    // silent auto-insert saat count==1 → terasa mati. Bukti source 3.3.2.
+    ac.setAutoCompleteSingleChoices(false)
     // Popup gelap (paket 15 Sep sore): renderer delegate + selection UIManager.
     try {
         val rend = org.fife.ui.autocomplete.CompletionCellRenderer()
