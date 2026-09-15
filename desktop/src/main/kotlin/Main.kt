@@ -130,6 +130,11 @@ fun main() {
     try {
         javax.swing.UIManager.put("Panel.background", java.awt.Color(0x0D, 0x11, 0x17))
     } catch (_: Exception) { }
+    // Splash launcher native: tampil detik pertama, tutup pas ready/Enter.
+    // Hidup di EDT sendiri; application{} di bawah tetap memblokir sampai exit.
+    try {
+        showNativeSplash()
+    } catch (_: Exception) { }
     application {
     val windowState = rememberWindowState()
     var showAbout by remember { mutableStateOf(false) }
@@ -286,6 +291,7 @@ fun main() {
         pyInfo = withContext(Dispatchers.IO) { Runner.pythonInfo() }
         logLine = "[OK] editor siap (RSyntaxTextArea)"
         showSplash = false
+        SplashGate.appReady.set(true)
         println("[SPIKE] RSTA_READY=true")
     }
 
@@ -370,7 +376,15 @@ fun main() {
                                     newPythonEditor(
                                         fontSize,
                                         openFiles[currentFile].orEmpty()
-                                    ) { rstaRef = it }
+                                    ) {
+                                        rstaRef = it
+                                        // Focus handoff saat splash native ditutup.
+                                        SplashGate.focusEditor = {
+                                            try {
+                                                it.requestFocusInWindow()
+                                            } catch (_: Exception) { }
+                                        }
+                                    }
                                 },
                                 modifier = Modifier.fillMaxSize(),
                                 update = { pane ->
