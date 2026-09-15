@@ -12,7 +12,7 @@ import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.ImageIcon
 import javax.swing.JComponent
-import javax.swing.JFrame
+import javax.swing.JDialog
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingUtilities
@@ -104,19 +104,22 @@ private fun statusLabel(text: String, size: Int, color: Color): JLabel =
  * fade, auto-dismiss) diatur timer internal — pemanggil cukup set
  * [SplashGate.appReady] dan [SplashGate.focusEditor].
  */
-fun showNativeSplash(): JFrame {
-    val holder = arrayOfNulls<JFrame>(1)
+fun showNativeSplash(): JDialog {
+    val holder = arrayOfNulls<JDialog>(1)
     SwingUtilities.invokeAndWait {
-        val frame = JFrame()
+        // JDialog ownerless + UTILITY (16 Sep, bukti probe TypeProbe2):
+        // JFrame+UTILITY diabaikan X11 (tetap NORMAL + slot taskbar),
+        // JDialog+UTILITY dapat SKIP_TASKBAR = 1 ikon panel.
+        val frame = JDialog(null as java.awt.Frame?)
         frame.isUndecorated = true
         frame.background = SPLASH_BG
         frame.isAlwaysOnTop = true
-        // Satu ikon panel (16 Sep): UTILITY = WM lewati slot taskbar,
-        // jadi panel hanya tampil ikon ZCODE. Wajib sebelum visible.
+        // UTILITY dipertahankan (ikut andil di SKIP_TASKBAR).
+        // Wajib sebelum visible.
         try {
             frame.setType(java.awt.Window.Type.UTILITY)
         } catch (_: Exception) { }
-        frame.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
+        frame.defaultCloseOperation = JDialog.DO_NOTHING_ON_CLOSE
 
         val root = JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -233,7 +236,7 @@ fun showNativeSplash(): JFrame {
     return holder[0]!!
 }
 
-private fun finishSplash(frame: JFrame) {
+private fun finishSplash(frame: JDialog) {
     try {
         val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
         (frame.rootPane.getClientProperty("splashKeys") as? java.awt.KeyEventDispatcher)
