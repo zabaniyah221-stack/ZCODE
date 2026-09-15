@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.window.WindowPosition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -136,7 +137,11 @@ fun main() {
         showNativeSplash()
     } catch (_: Exception) { }
     application {
-    val windowState = rememberWindowState()
+    // Posisi tengah eksplisit (15 Sep): jahit dengan splash 900x600 tengah —
+    // dua-duanya center = tepat tindih, bukan splash tengah + ZCODE kanan.
+    val windowState = rememberWindowState(
+        position = WindowPosition(Alignment.Center),
+        size = androidx.compose.ui.unit.DpSize(900.dp, 600.dp))
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var fontSize by remember { mutableStateOf(14) }
