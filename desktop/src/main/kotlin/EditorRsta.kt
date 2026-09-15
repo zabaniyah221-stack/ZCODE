@@ -98,32 +98,24 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
 }
 
 /**
- * Provider Jedi (paket 15 Sep sore): nama+signature asli dari analisis
- * jedi 0.19.1 via subprocess (hanya analisis, TANPA eksekusi kode user).
- * Guard: prefix <2 huruf → statis saja; timeout 4 dtk; gagal → statis.
+ * Cache Jedi async (opsi B, 15 Sep malam): jedi dingin 6.2 dtk / hangat 3.0 dtk
+ * di Celeron — subprocess di EDT = freeze tiap ketik. Pola: provider layani
+ * cache sinkron (tak pernah blokir), recompute jalan background single-flight.
+ * Bukti ukur: /tmp/jt.py 376 items. Hanya analisis, TANPA eksekusi kode user.
  */
-class JediCompletionProvider : DefaultCompletionProvider() {
+object JediCache {
+    @Volatile var items: List<Pair<String, String>> = emptyList()
+    @Volatile private var lastText: String? = null
+    private val running = java.util.concurrent.atomic.AtomicBoolean(false)
 
-    override fun getCompletions(comp: javax.swing.text.JTextComponent):
-            MutableList<org.fife.ui.autocomplete.Completion> {
-        val base = super.getCompletions(comp).toMutableList()
-        try {
-            val doc = comp.document
-            val caret = comp.caretPosition
-            val before = doc.getText(0, caret.coerceAtMost(doc.length))
-            val prefix = before.takeLastWhile { it.isLetterOrDigit() || it == '_' }
-            if (prefix.length < 2) return base
-            val line = before.count { it == '\n' } + 1
-            val col = caret - (before.lastIndexOf('\n') + 1)
-            val seen = base.mapNotNull {
-                (it as? BasicCompletion)?.replacementText }.toMutableSet()
-            for ((name, sig) in queryJedi(doc.getText(0, doc.length), line, col)) {
-                if (name in seen || !name.startsWith(prefix)) continue
-                seen.add(name)
-                base.add(BasicCompletion(this, name, sig, "(jedi) $name"))
-            }
-        } catch (_: Exception) { }
-        return base
+    fun request(text: String, line: Int, col: Int) {
+        if (!running.compareAndSet(false, true)) return
+        lastText = text
+        Thread({
+            try {
+                items = queryJedi(text, line, col)
+            } catch (_: Exception) { } finally { running.set(false) }
+        }, "zcode-jedi").apply { isDaemon = true; start() }
     }
 
     private fun queryJedi(code: String, line: Int, col: Int): List<Pair<String, String>> {
@@ -138,7 +130,8 @@ class JediCompletionProvider : DefaultCompletionProvider() {
             val proc = ProcessBuilder("python3", "-c", script)
                 .redirectErrorStream(true).start()
             val out = proc.inputStream.bufferedReader().readText()
-            if (!proc.waitFor(4, java.util.concurrent.TimeUnit.SECONDS)) {
+            // Background: boleh lama (dingin 6 dtk), UI tak diblokir.
+            if (!proc.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
                 proc.destroyForcibly(); return emptyList()
             }
             out.lines().mapNotNull { ln ->
@@ -148,6 +141,35 @@ class JediCompletionProvider : DefaultCompletionProvider() {
         } catch (_: Exception) { emptyList() } finally {
             try { tmp?.delete() } catch (_: Exception) { }
         }
+    }
+}
+
+class JediCompletionProvider : DefaultCompletionProvider() {
+
+    override fun getCompletions(comp: javax.swing.text.JTextComponent):
+            MutableList<org.fife.ui.autocomplete.Completion> {
+        val base = super.getCompletions(comp).toMutableList()
+        try {
+            val doc = comp.document
+            val caret = comp.caretPosition
+            val full = doc.getText(0, doc.length)
+            val before = full.substring(0, caret.coerceAtMost(full.length))
+            val prefix = before.takeLastWhile { it.isLetterOrDigit() || it == '_' }
+            val line = before.count { it == '\n' } + 1
+            val col = caret - (before.lastIndexOf('\n') + 1)
+            // Picu recompute background untuk ketikan BERIKUTNYA.
+            JediCache.request(full, line, col)
+            if (prefix.length < 2) return base
+            // Layani cache terakhir (sinkron, tanpa blokir).
+            val seen = base.mapNotNull {
+                (it as? BasicCompletion)?.replacementText }.toMutableSet()
+            for ((name, sig) in JediCache.items) {
+                if (name in seen || !name.startsWith(prefix)) continue
+                seen.add(name)
+                base.add(BasicCompletion(this, name, sig, "(jedi) $name"))
+            }
+        } catch (_: Exception) { }
+        return base
     }
 }
 
