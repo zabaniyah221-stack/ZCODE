@@ -286,15 +286,22 @@ class PycodestyleParser : AbstractParser() {
                 val t = ln.split(':', limit = 4)
                 if (t.size < 4) continue
                 // W391 (blank line at end) = noise saat mengetik — skip.
-                if (t[2] == "W391") continue
+                // W292 (no newline at end) = SELALU ada saat mengetik +
+                // span-nya di ujung dokumen → RSTA gambar full-width di
+                // bawah viewport, bukan di bawah baris salah (16 Sep).
+                if (t[2] == "W391" || t[2] == "W292") continue
                 val row = t[0].toIntOrNull() ?: continue
                 val col = t[1].toIntOrNull() ?: 1
                 // Span eksplisit (fix 15 Sep malam, sama akar py_compile):
                 // dari kolom lapor sampai akhir baris.
                 val line0 = (row - 1).coerceAtLeast(0)
-                val start = lineStart(doc, line0) + (col - 1).coerceAtLeast(0)
-                val len = (lineStart(doc, line0) + lineLen(doc, line0) - start)
-                    .coerceAtLeast(1)
+                val ls = lineStart(doc, line0)
+                val le = ls + lineLen(doc, line0)
+                // Clamp (16 Sep): kolom pelapor bisa di ujung/lewat akhir
+                // baris → offset liar = squiggle full-width bawah viewport.
+                val start = (ls + (col - 1).coerceAtLeast(0))
+                    .coerceIn(ls, (le - 1).coerceAtLeast(ls))
+                val len = (le - start).coerceAtLeast(1)
                 val notice = DefaultParserNotice(
                     this, "${t[2]} ${t[3].trim().take(200)}",
                     line0, start, len)
