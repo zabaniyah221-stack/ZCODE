@@ -111,6 +111,11 @@ fun showNativeSplash(): JFrame {
         frame.isUndecorated = true
         frame.background = SPLASH_BG
         frame.isAlwaysOnTop = true
+        // Satu ikon panel (16 Sep): UTILITY = WM lewati slot taskbar,
+        // jadi panel hanya tampil ikon ZCODE. Wajib sebelum visible.
+        try {
+            frame.setType(java.awt.Window.Type.UTILITY)
+        } catch (_: Exception) { }
         frame.defaultCloseOperation = JFrame.DO_NOTHING_ON_CLOSE
 
         val root = JPanel().apply {
@@ -141,27 +146,10 @@ fun showNativeSplash(): JFrame {
         fun closeSplash() {
             if (phase == 2) return
             phase = 2
+            // Blink spawn (16 Sep): fade 250ms translucency menyingkap frame
+            // Compose yang belum paint pertama = kilat putih. Dispose instan.
             try {
-                val dev = frame.graphicsConfiguration?.device
-                val canFade = dev?.isWindowTranslucencySupported(
-                    java.awt.GraphicsDevice.WindowTranslucency.TRANSLUCENT) == true
-                if (canFade) {
-                    var op = 1.0f
-                    Timer(25) { ev ->
-                        op -= 0.1f
-                        if (op <= 0f) {
-                            (ev.source as Timer).stop()
-                            finishSplash(frame)
-                        } else try {
-                            frame.opacity = op
-                        } catch (_: Exception) {
-                            (ev.source as Timer).stop()
-                            finishSplash(frame)
-                        }
-                    }.start()
-                } else {
-                    finishSplash(frame)
-                }
+                finishSplash(frame)
             } catch (_: Exception) {
                 finishSplash(frame)
             }
