@@ -410,7 +410,7 @@ fun main() {
                 }
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("  $pyInfo  ·  run#$runCount  ·  $logLine",
+                    Text("  $pyInfo  ·  run#$runCount  ·  $logLine  ·  Ctrl+Spasi lengkap",
                         fontSize = 11.sp, color = TEXT, maxLines = 1)
                 }
             }
