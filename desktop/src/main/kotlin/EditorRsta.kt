@@ -86,6 +86,13 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     ac.setTriggerKey(KeyStroke.getKeyStroke("ctrl SPACE"))
     ac.setAutoActivationEnabled(true)
     ac.setAutoActivationDelay(300)
+    // Popup gelap (paket 15 Sep sore): renderer delegate + selection UIManager.
+    try {
+        val rend = org.fife.ui.autocomplete.CompletionCellRenderer()
+        rend.delegateRenderer.background = ED_BG
+        rend.delegateRenderer.foreground = ED_FG
+        ac.setListCellRenderer(rend)
+    } catch (_: Exception) { }
     ac.install(area)
     return ac
 }
@@ -212,6 +219,8 @@ class PycodestyleParser : AbstractParser() {
             for (ln in out.lines().take(50)) {
                 val t = ln.split(':', limit = 4)
                 if (t.size < 4) continue
+                // W391 (blank line at end) = noise saat mengetik — skip.
+                if (t[2] == "W391") continue
                 val row = t[0].toIntOrNull() ?: continue
                 val notice = DefaultParserNotice(
                     this, "${t[2]} ${t[3].trim().take(200)}",
@@ -236,7 +245,39 @@ fun styleDarkScrollbars() {
         javax.swing.UIManager.put("ScrollBar.track",
             javax.swing.plaf.ColorUIResource(ED_BG))
         javax.swing.UIManager.put("ScrollBar.width", 12)
+        // Popup completion gelap (app tak punya Swing list lain — aman global).
+        javax.swing.UIManager.put("List.background",
+            javax.swing.plaf.ColorUIResource(ED_BG))
+        javax.swing.UIManager.put("List.foreground",
+            javax.swing.plaf.ColorUIResource(ED_FG))
+        javax.swing.UIManager.put("List.selectionBackground",
+            javax.swing.plaf.ColorUIResource(ED_SEL))
+        javax.swing.UIManager.put("List.selectionForeground",
+            javax.swing.plaf.ColorUIResource(java.awt.Color.WHITE))
     } catch (_: Exception) { }
+}
+
+/**
+ * ScrollBarUI gelap LAF-independen (paket 15 Sep sore): UIManager.put tak
+ * mempan bila LAF bukan Metal — delegate ini selalu menang.
+ */
+class DarkScrollBarUI : javax.swing.plaf.basic.BasicScrollBarUI() {
+
+    override fun configureScrollBarColors() {
+        thumbColor = ED_SEL
+        trackColor = ED_BG
+    }
+
+    override fun createDecreaseButton(orientation: Int): javax.swing.JButton =
+        zeroButton()
+
+    override fun createIncreaseButton(orientation: Int): javax.swing.JButton =
+        zeroButton()
+
+    private fun zeroButton() = javax.swing.JButton().apply {
+        val z = java.awt.Dimension(0, 0)
+        preferredSize = z; minimumSize = z; maximumSize = z
+    }
 }
 
 /** Pabrik editor: satu tempat wiring tema + completion + parser. */
@@ -274,6 +315,12 @@ fun newPythonEditor(
         pane.gutter?.background = ED_BG
         pane.gutter?.borderColor = ED_BG
         pane.gutter?.setBorder(javax.swing.BorderFactory.createEmptyBorder())
+    } catch (_: Exception) { }
+    // Scrollbar gelap pasti (paket 15 Sep sore): delegate langsung,
+    // tak tergantung LAF.
+    try {
+        pane.verticalScrollBar.ui = DarkScrollBarUI()
+        pane.horizontalScrollBar.ui = DarkScrollBarUI()
     } catch (_: Exception) { }
     return pane
 }
