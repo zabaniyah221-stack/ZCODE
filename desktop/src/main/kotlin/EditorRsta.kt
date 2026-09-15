@@ -201,10 +201,13 @@ class PythonCompileParser : AbstractParser() {
                 val line1 = m.groupValues[1].toIntOrNull() ?: 1
                 val msgLine = err.lines().lastOrNull { it.isNotBlank() } ?: "syntax error"
                 val msg = msgLine.trim().take(300)
-                // Default level ERROR + showInEditor true = squiggle + gutter.
-                // Notice 0-based (TaskTagParser), py_compile 1-based.
+                // Span EKSPILISIT (fix 15 Sep malam): notice 3-arg (offset-1)
+                // dirender ngawur full-width bawah viewport. Beri offset+length
+                // = baris penuh agar squiggle tepat di baris salah.
+                // Notice 0-based, py_compile 1-based.
+                val line0 = (line1 - 1).coerceAtLeast(0)
                 res.addNotice(DefaultParserNotice(
-                    this, msg, (line1 - 1).coerceAtLeast(0)))
+                    this, msg, line0, lineStart(doc, line0), lineLen(doc, line0)))
             }
         } catch (_: Exception) {
             // Parser tak boleh meledak: sunyi = tanpa squiggle.
@@ -213,6 +216,26 @@ class PythonCompileParser : AbstractParser() {
         }
         return res
     }
+}
+
+/**
+ * Offset awal + panjang baris dokumen (helper span notice eksplisit,
+ * fix 15 Sep malam). Guard penuh: dokumen bisa berubah saat parser jalan.
+ */
+private fun lineStart(doc: RSyntaxDocument, line0: Int): Int {
+    return try {
+        val root = doc.getDefaultRootElement()
+        val el = root.getElement(line0.coerceIn(0, (root.elementCount - 1).coerceAtLeast(0)))
+        el.startOffset
+    } catch (_: Exception) { 0 }
+}
+
+private fun lineLen(doc: RSyntaxDocument, line0: Int): Int {
+    return try {
+        val root = doc.getDefaultRootElement()
+        val el = root.getElement(line0.coerceIn(0, (root.elementCount - 1).coerceAtLeast(0)))
+        (el.endOffset - el.startOffset).coerceAtLeast(1)
+    } catch (_: Exception) { 1 }
 }
 
 /**
@@ -244,9 +267,16 @@ class PycodestyleParser : AbstractParser() {
                 // W391 (blank line at end) = noise saat mengetik — skip.
                 if (t[2] == "W391") continue
                 val row = t[0].toIntOrNull() ?: continue
+                val col = t[1].toIntOrNull() ?: 1
+                // Span eksplisit (fix 15 Sep malam, sama akar py_compile):
+                // dari kolom lapor sampai akhir baris.
+                val line0 = (row - 1).coerceAtLeast(0)
+                val start = lineStart(doc, line0) + (col - 1).coerceAtLeast(0)
+                val len = (lineStart(doc, line0) + lineLen(doc, line0) - start)
+                    .coerceAtLeast(1)
                 val notice = DefaultParserNotice(
                     this, "${t[2]} ${t[3].trim().take(200)}",
-                    (row - 1).coerceAtLeast(0))
+                    line0, start, len)
                 notice.level = org.fife.ui.rsyntaxtextarea.parser
                     .ParserNotice.Level.WARNING
                 res.addNotice(notice)
