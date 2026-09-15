@@ -15,6 +15,11 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "MainKt"
+        // Software rendering (15 Sep malam): Skiko OpenGL createContext HANG
+        // 2x di Celeron (AWT thread parkir di native, verified via SIGQUIT
+        // thread dump). UI kita statis (toolbar/drawer/status) — CPU render
+        // tak masalah; RSTA Swing tak tersentuh properti ini.
+        jvmArgs += listOf("-Dskiko.renderApi=SOFTWARE")
         // Paket .deb (diskusi 14 Sep): install sekali, klik dari menu.
         // RSTA Swing murni: tanpa runtime Chromium, .deb puluhan MB.
         nativeDistributions {
