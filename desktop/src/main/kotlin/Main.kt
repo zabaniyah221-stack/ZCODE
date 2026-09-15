@@ -49,7 +49,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants
 import org.fife.ui.rtextarea.RTextScrollPane
 import java.io.File
 
@@ -347,25 +346,16 @@ fun main() = application {
                                         .padding(6.dp))
                             }
                         }
-                        // Editor RSTA via SwingPanel (irisan 2): Swing native,
-                        // fokus klik otomatis, tanpa jembatan JS/CEF.
+                        // Editor RSTA via SwingPanel (irisan 4): wiring tema +
+                        // completion + parser terpusat di EditorRsta.kt.
+                        // Swing native: fokus klik otomatis, tanpa jembatan JS/CEF.
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             SwingPanel(
                                 factory = {
-                                    val area = RSyntaxTextArea()
-                                    area.syntaxEditingStyle = SyntaxConstants.SYNTAX_STYLE_PYTHON
-                                    area.isCodeFoldingEnabled = true
-                                    area.antiAliasingEnabled = true
-                                    area.font = java.awt.Font(
-                                        java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, fontSize)
-                                    area.background = java.awt.Color(0x0D, 0x11, 0x17)
-                                    area.foreground = java.awt.Color(0xC9, 0xD1, 0xD9)
-                                    area.currentLineHighlightColor =
-                                        java.awt.Color(0x16, 0x1B, 0x22)
-                                    area.selectionColor = java.awt.Color(0x26, 0x4A, 0x77)
-                                    area.text = openFiles[currentFile].orEmpty()
-                                    rstaRef = area
-                                    RTextScrollPane(area)
+                                    newPythonEditor(
+                                        fontSize,
+                                        openFiles[currentFile].orEmpty()
+                                    ) { rstaRef = it }
                                 },
                                 modifier = Modifier.fillMaxSize(),
                                 update = { pane ->
