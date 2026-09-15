@@ -1,7 +1,6 @@
 import java.awt.Color
 import java.awt.Dimension
 import java.awt.Font
-import java.awt.Frame
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -234,7 +233,11 @@ fun showNativeSplash(): JFrame {
         frame.rootPane.putClientProperty("splashKeys", keys)
         frame.rootPane.putClientProperty("splashTick", tick)
 
-        frame.extendedState = Frame.MAXIMIZED_BOTH
+        // Windowed seukuran ZCODE (bukan fullscreen): menutup ZCODE saja,
+        // bukan seluruh layar. Posisi tengah.
+        // (fix 15 Sep: MAXIMIZED_BOTH salah konfigurasi.)
+        frame.setSize(900, 600)
+        frame.setLocationRelativeTo(null)
         frame.isVisible = true
         frame.toFront()
         holder[0] = frame
