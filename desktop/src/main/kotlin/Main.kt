@@ -1,34 +1,31 @@
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material.Button
 import androidx.compose.material.Divider
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,74 +33,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
-import com.multiplatform.webview.jsbridge.IJsMessageHandler
-import com.multiplatform.webview.jsbridge.JsMessage
-import com.multiplatform.webview.jsbridge.rememberWebViewJsBridge
-import com.multiplatform.webview.web.WebContent
-import com.multiplatform.webview.web.WebView
-import com.multiplatform.webview.web.WebViewFactoryParam
-import com.multiplatform.webview.web.WebViewNavigator
-import com.multiplatform.webview.web.rememberWebViewNavigator
-import com.multiplatform.webview.web.rememberWebViewState
-import dev.datlag.kcef.KCEF
-import dev.datlag.kcef.KCEFBrowser
-import java.io.File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants
+import org.fife.ui.rtextarea.RTextScrollPane
+import java.io.File
 
 /**
- * Lokasi halaman editor. Urutan: folder dev (gradle run) → extract dari
- * resources/jar (versi installed/.deb) ke temp dir. Temuan 14 Sep: .deb
- * tak bawa zcode-www → halaman blank → bridge false → splash selamanya.
- */
-private fun resolveWebPage(): File {
-    val dev = File("zcode-www/index.html")
-    if (dev.isFile()) return dev
-    val alt = File("src/main/resources/zcode-www/index.html")
-    if (alt.isFile()) return alt
-    val names = listOf(
-        "zcode-www/index.html",
-        "zcode-www/codemirror.bundle.js",
-        "zcode-www/fonts/fira_code.ttf",
-        "zcode-www/fonts/jetbrains_mono.ttf",
-        "zcode-www/fonts/OFL_FiraCode.txt",
-        "zcode-www/fonts/OFL_JetBrainsMono.txt",
-        "zcode-www/fonts/OFL_SourceCodePro.txt",
-        "zcode-www/fonts/source_code_pro.ttf"
-    )
-    val dir = java.nio.file.Files.createTempDirectory("zcode-www").toFile()
-    val loader = object {}::class.java
-    for (n in names) {
-        val src = loader.getResourceAsStream("/$n") ?: continue
-        val dst = File(dir, n.removePrefix("zcode-www/"))
-        dst.parentFile?.mkdirs()
-        dst.outputStream().use { src.copyTo(it) }
-    }
-    return File(dir, "index.html")
-}
-
-private val webPageFile: File by lazy { resolveWebPage() }
-
-/**
- * Lokasi zcode_run.py. Sama pola resolveWebPage: dev → resources/jar.
+ * Lokasi zcode_run.py. Pola: dev → resources/jar.
  * Temuan 14 Sep: path "src/main/python" mati di versi installed.
  */
 private fun resolveRunnerFile(): File {
@@ -128,11 +79,9 @@ private val ACCENT = Color(0xFF58A6FF)
 private val TEXT = Color(0xFFC9D1D9)
 
 /**
- * Drawer output kanan OVERLAY (revisi 14 Sep): fungsi top-level agar
- * AnimatedVisibility tanpa receiver scope (konflik overload ColumnScope
- * saat dipanggil dalam Column — 3x CI merah). Menimpa editor TANPA
- * resize CEF = tanpa repaint putih. Tanpa focus handler (kecuali tombol
- * tutup) agar fokus editor aman.
+ * Drawer output kanan. Top-level agar AnimatedVisibility tanpa receiver
+ * scope (konflik overload ColumnScope saat dipanggil dalam Column —
+ * 3x CI merah, 14 Sep). Sibling kanan editor.
  */
 @Composable
 private fun DrawerPanel(
@@ -144,8 +93,6 @@ private fun DrawerPanel(
 ) {
     AnimatedVisibility(
         visible = visible,
-        // TANPA fade (temuan 14 Sep): fade = transparan sesaat = blink putih.
-        // Murni slide + area animasi dicat gelap.
         modifier = modifier.fillMaxHeight().background(Color(0xFF0A0E14)),
         enter = slideInHorizontally(
             initialOffsetX = { it }, animationSpec = tween(150)),
@@ -169,7 +116,6 @@ private fun DrawerPanel(
                         Text(line, color = TEXT, fontSize = 12.sp)
                     }
                 }
-                // Scrollbar dragable: jalan utama scroll via mouse.
                 VerticalScrollbar(
                     modifier = Modifier.fillMaxHeight().padding(end = 4.dp),
                     adapter = rememberScrollbarAdapter(listState)
@@ -181,14 +127,9 @@ private fun DrawerPanel(
 
 fun main() = application {
     val windowState = rememberWindowState()
-    var kcefReady by remember { mutableStateOf(false) }
-    // UI minimal Fase fokus (14 Sep): sidebar + tombol non-Run DIHAPUS sementara.
-    // Fungsi buka/simpan/tab dipertahankan untuk nanti; shortcut Ctrl+S/Ctrl+O
-    // ikut dimatikan karena tiap shortcut wajib punya tombol.
     var showAbout by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var fontSize by remember { mutableStateOf(14) }
-    // Muat preferensi (file config desktop, bukan SharedPreferences)
     LaunchedEffect(Unit) {
         val saved: Int? = withContext(Dispatchers.IO) {
             try {
@@ -212,23 +153,14 @@ fun main() = application {
             File(dir, "settings.properties").outputStream().use { p.store(it, null) }
         } catch (_: Exception) { }
     }
-    val navigator = rememberWebViewNavigator()
+    // Handle editor RSTA (migrasi irisan 2, 15 Sep): SwingPanel native,
+    // getText/setText sinkron — tanpa bridge, poll, splash-wait.
+    // SECURITY: setCode-escape JS dihapus (kelas injeksi hilang total).
+    var rstaRef by remember { mutableStateOf<RSyntaxTextArea?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    // Handle browser native (lift ke sini supaya terlihat dari Box editor):
-    // fokus Compose SAJA tidak sampai ke Chromium.
-    var cefBrowser by remember { mutableStateOf<KCEFBrowser?>(null) }
-    // Bridge siap? (lift agar doRun tak poll buta 5 detik saat editor kosong
-    // — temuan 14 Sep: "lama padahal kosong".)
-    var bridgeOk by remember { mutableStateOf(false) }
-    // Drawer = OVERLAY kanan (revisi 14 Sep): menimpa editor tanpa resize,
-    // persis logika ModalNavigationDrawer Android. Tanpa resize CEF =
-    // tanpa repaint putih = veil tak perlu. Tanpa focus handler/clickable
-    // di area overlay (kecuali tombol tutup) agar tak curi fokus editor.
-    // Splash (diskusi 14 Sep): layar hitam + logo {Z} sampai bridge OK.
-    // Fungsional (indikator load beneran), bukan sekadar nutupin blink.
+    // Splash: layar hitam + logo sampai editor siap. RSTA Swing itu
+    // lightweight (bukan heavyweight CEF) → overlay Compose BISA menutupnya.
     var showSplash by remember { mutableStateOf(true) }
-    // Pesan splash dinamis: progres download CEF saat run pertama installed.
-    var splashMsg by remember { mutableStateOf("memuat editor…") }
     val logoBmp: ImageBitmap? = remember {
         try {
             val bytes = object {}::class.java.getResourceAsStream("/zcode_logo.png")?.readBytes()
@@ -236,30 +168,19 @@ fun main() = application {
             org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap()
         } catch (_: Exception) { null }
     }
-    // JsBridge F5 (temuan 14 Sep): F5 di dalam CEF native tak sampai ke
-    // dispatcher AWT Compose → JS keydown panggil balik via callNative.
-    val jsBridge = rememberWebViewJsBridge(navigator)
 
     var logLine by remember { mutableStateOf("[>] ZCODE Desktop v0.0.1-desktop — siap") }
     var runCount by remember { mutableStateOf(0) }
     var outputText by remember { mutableStateOf("") }
     var outputOpen by remember { mutableStateOf(false) }
-    // State list output di level composable (bukan dalam Column) agar
-    // terlihat drawer overlay di root Box (revisi 14 Sep).
     val outLines = remember(outputText) { outputText.lines() }
     val outList = rememberLazyListState()
-    // Tab per file: nama → isi. Statistik: 1 tab = 1 file.
     var openFiles by remember { mutableStateOf(mapOf("workspace_tmp.py" to "")) }
     var currentFile by remember { mutableStateOf("workspace_tmp.py") }
     var currentPath by remember { mutableStateOf<String?>(null) }
 
     fun showInEditor(text: String) {
-        scope.launch {
-            delay(500)
-            val esc = text.replace("\\", "\\\\").replace("'", "\\'")
-                .replace("\n", "\\n")
-            navigator.evaluateJavaScript("setCode('$esc')") {}
-        }
+        try { rstaRef?.text = text } catch (_: Exception) { }
     }
 
     fun openFileDialog() {
@@ -281,21 +202,19 @@ fun main() = application {
     }
 
     fun switchTab(name: String) {
+        // Simpan isi tab lama dulu agar tak hilang saat pindah.
+        try {
+            val cur = rstaRef?.text
+            if (cur != null) openFiles = openFiles + (currentFile to cur)
+        } catch (_: Exception) { }
         currentFile = name
         showInEditor(openFiles[name].orEmpty())
     }
 
-    /** Ctrl+S: simpan isi editor ke file asal (atau workspace_tmp.py). */
+    /** Simpan isi editor ke file asal (atau workspace_tmp.py). */
     fun saveCurrent() {
         scope.launch {
-            var code = ""
-            var n = 0
-            while (code.isEmpty() && n++ < 50) {
-                val d = kotlinx.coroutines.CompletableDeferred<String>()
-                navigator.evaluateJavaScript("getCode()") { d.complete(it.toString()) }
-                code = d.await()
-                if (code.isEmpty()) delay(100)
-            }
+            val code = try { rstaRef?.text.orEmpty() } catch (_: Exception) { "" }
             val target = currentPath?.let { java.io.File(it) } ?: File("workspace_tmp.py")
             withContext(Dispatchers.IO) { target.writeText(code) }
             openFiles = openFiles + (target.name to code)
@@ -303,48 +222,33 @@ fun main() = application {
             logLine = "[OK] tersimpan ${target.name}"
         }
     }
-    /** Tutup drawer output + KEMBALIKAN fokus ke editor (temuan 14 Sep:
-     *  tutup panel tanpa refokus = editor tak bisa diedit). */
+
+    /** Tutup drawer output + kembalikan fokus ke editor RSTA. */
     fun closeOutput() {
         outputOpen = false
-        try { cefBrowser?.setFocus(true) } catch (_: Exception) { }
-        try {
-            navigator.evaluateJavaScript(
-                "document.querySelector('.cm-content')?.focus()") {}
-        } catch (_: Exception) { }
+        try { rstaRef?.requestFocusInWindow() } catch (_: Exception) { }
     }
     var pyInfo by remember { mutableStateOf("python3 …") }
 
     fun doRun() {
         runCount++
-        // Guard cepat (temuan 14 Sep): bridge belum siap = editor belum bisa
-        // dibaca. Batal LANGSUNG tanpa poll buta 5 detik.
-        if (!bridgeOk) {
-            outputText = "(tunggu editor siap — status bar belum [OK] editor siap)"
+        val area = rstaRef
+        if (area == null) {
+            outputText = "(tunggu editor siap)"
             outputOpen = true
             logLine = "[ERR] Run dibatalkan: editor belum siap"
-            println("[RUN-TIME] batal bridge-belum-siap")
+            println("[RUN-TIME] batal rsta-belum-siap")
             return
         }
         logLine = "[>] menjalankan…"
         scope.launch {
-            // F5 = drawer langsung buka + status tahap (temuan 14 Sep):
-            // feedback instan, hasil nyusul async. Tak ada momen sunyi.
             outputText = "[>] mengambil kode editor…"
             outputOpen = true
-            // Timer per tahap (temuan 14 Sep: Run lama, biang belum tahu).
             val t0 = System.currentTimeMillis()
-            var code = ""
-            navigator.evaluateJavaScript("getCode()") { code = it.toString() }
-            // Tunggu callback JS — SINGKAT (1 detik) karena bridge sudah OK.
-            withContext(Dispatchers.IO) {
-                var n = 0
-                while (code.isEmpty() && n++ < 10) Thread.sleep(100)
-            }
+            val code = try { area.text } catch (_: Exception) { "" }
             val tGet = System.currentTimeMillis() - t0
-            // Guard temuan 14 Sep: editor kosong/belum siap jangan dieksekusi sunyi.
             if (code.isBlank()) {
-                outputText = "(editor kosong atau belum siap — tunggu status bridge OK)"
+                outputText = "(editor kosong — ketik kode dulu)"
                 outputOpen = true
                 logLine = "[ERR] Run dibatalkan: editor kosong (ambil ${tGet}ms)"
                 println("[RUN-TIME] batal get=${tGet}ms")
@@ -353,8 +257,6 @@ fun main() = application {
             val t1 = System.currentTimeMillis()
             outputText = "[>] menjalankan python…"
             val res = withContext(Dispatchers.IO) {
-                // Simpan kembali ke file asal bila ada, else workspace di cache
-                // (cwd installed tak tentu — temuan 14 Sep).
                 val target = currentPath?.let { java.io.File(it) } ?: run {
                     val dir = File(System.getProperty("user.home"), ".cache/zcode")
                     dir.mkdirs()
@@ -367,65 +269,23 @@ fun main() = application {
             val tPy = System.currentTimeMillis() - t1
             val tTot = System.currentTimeMillis() - t0
             outputText = res.output.ifBlank { "(tanpa output)" }
-            outputOpen = true // auto-show saat Run pertama (keputusan UI/UX)
-            // Status bar RINGKAS (temuan 14 Sep): detail output di drawer,
-            // status satu baris tak boleh kepanjangan.
+            outputOpen = true
             logLine = if (res.exitCode == 0) "[OK] exit 0 · ambil ${tGet}ms · py ${tPy}ms · total ${tTot}ms"
                       else "[ERR] exit ${res.exitCode} · ambil ${tGet}ms · py ${tPy}ms"
             println("[RUN] exit=${res.exitCode} get=${tGet}ms py=${tPy}ms total=${tTot}ms out=${res.output.take(200)}")
         }
     }
 
-    // Registrasi handler JsBridge ZcodeRun — di sini (setelah doRun) agar
-    // forward-reference local fun tidak unresolved. Dipanggil dari JS keydown F5.
-    LaunchedEffect(jsBridge) {
-        jsBridge.register(object : IJsMessageHandler {
-            override fun methodName() = "ZcodeRun"
-            override fun handle(
-                message: JsMessage,
-                navigator: WebViewNavigator?,
-                callback: (String) -> Unit
-            ) {
-                doRun()
-            }
-        })
-    }
-
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            // backgroundColor hitam (riset 14 Sep): cat dasar CEF sebelum load,
-            // gantikan putih default. CefSettings().ColorType(a,r,g,b)=0D1117.
-            val cefTmp = org.cef.CefSettings()
-            val bgHitam = cefTmp.ColorType(255, 0x0D, 0x11, 0x17)
-            // Lokasi TETAP (temuan 14 Sep): installDir relatif ikut cwd peluncur
-            // → bundle tersebar + download ulang. Satu rumah di ~/.cache.
-            val kcefDir = File(System.getProperty("user.home"), ".cache/zcode/kcef-bundle")
-            KCEF.init(builder = {
-                installDir(kcefDir)
-                settings { backgroundColor = bgHitam }
-                // Progres download CEF → splash + log (run pertama installed
-                // unduh ~500MB; tanpa ini start diam dikira macet).
-                progress {
-                    onDownloading { splashMsg = "mengunduh Chromium ${it.toInt()}%…" }
-                    onExtracting { splashMsg = "menyiapkan Chromium…" }
-                    onInitialized { splashMsg = "memuat editor…" }
-                }
-            })
-        }
-        kcefReady = true
-        println("[SPIKE] KCEF_INIT_OK")
-        pyInfo = Runner.pythonInfo()
+        // RSTA instan: tanpa download 500MB, tanpa init CEF.
+        pyInfo = withContext(Dispatchers.IO) { Runner.pythonInfo() }
+        logLine = "[OK] editor siap (RSyntaxTextArea)"
+        showSplash = false
+        println("[SPIKE] RSTA_READY=true")
     }
 
     Window(onCloseRequest = ::exitApplication, state = windowState, title = "ZCODE") {
-        // Cat dasar hitam (temuan 14 Sep): blink putih = background default
-        // window AWT sebelum frame pertama + area CEF sebelum paint.
-        // F5 global level AWT (temuan 14 Sep): saat fokus di editor native CEF,
-        // key event tak sampai ke onKeyEvent Compose → tangkap di dispatcher.
-        // F5 = shortcut tombol Run (jalan utama ada) → sah.
         DisposableEffect(Unit) {
-            // Workaround CMP-7700 (riset 14 Sep): set window background DAN
-            // content pane background — keduanya, bukan salah satu.
             try {
                 val win = java.awt.Window.getWindows()
                     .firstOrNull { (it as? java.awt.Frame)?.title == "ZCODE" }
@@ -433,6 +293,7 @@ fun main() = application {
                 win?.background = hitam
                 (win as? javax.swing.JFrame)?.contentPane?.background = hitam
             } catch (_: Exception) { }
+            // F5 global level AWT: shortcut tombol Run (jalan utama ada tombol).
             val mgr = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
             val d = java.awt.KeyEventDispatcher { e ->
                 if (e.id == java.awt.event.KeyEvent.KEY_PRESSED &&
@@ -446,42 +307,36 @@ fun main() = application {
         MaterialTheme(colors = androidx.compose.material.darkColors(
             primary = ACCENT, surface = SURFACE, background = BG, onSurface = TEXT
         )) {
-            // Box pembungkus: splash overlay di atas segalanya TANPA recreate
-            // tree utama (recreate = WebView reload = blink + fokus hilang).
             Box(Modifier.fillMaxSize().background(BG)) {
             Column(Modifier.fillMaxSize()
                 .onKeyEvent {
                     if (it.key == Key.F5) { doRun(); true }
                     else false
                 }) {
-                // Toolbar minimal: hanya Run (+ judul). Buka/Simpan kembali
-                // saat UI lengkap (aturan: shortcut wajib punya tombol).
                 Row(Modifier.fillMaxWidth().height(48.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
                     Button(onClick = { doRun() }, Modifier.padding(start = 8.dp)) {
                         Text("▶ Run (F5)")
                     }
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    Button(onClick = { openFileDialog() }, Modifier.padding(end = 4.dp)) {
+                        Text("Buka")
+                    }
+                    Button(onClick = { saveCurrent() }, Modifier.padding(end = 8.dp)) {
+                        Text("Simpan")
+                    }
                 }
                 Divider(color = Color(0xFF30363D))
-                // Autoscroll output ke baris terakhir saat ada hasil baru.
                 LaunchedEffect(outLines.size, outputOpen) {
                     try {
                         if (outLines.isNotEmpty()) outList.scrollToItem(outLines.lastIndex)
                     } catch (_: Exception) { }
                 }
-                // Fase fokus: TANPA sidebar — editor + drawer output kanan.
-                // Drawer output (logika = drawer Android): hidden default,
-                // slide kanan→kiri 150ms (prinsip drawer: cepat, tutup-dulu-aksi),
-                // lebar TETAP 420dp, muncul via F5/Run, tutup via ✕.
                 androidx.compose.foundation.layout.Row(Modifier.weight(1f)) {
-                    // Editor CM6 (bundle SAMA persis) + breadcrumb dasar
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        // Breadcrumb dasar = path file aktif
-                    Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
+                        Text("  ${currentPath ?: currentFile}", fontSize = 11.sp, color = Color(0xFF8B949E),
                             modifier = Modifier.fillMaxWidth().background(SURFACE).padding(4.dp),
                             maxLines = 1)
-                        // Bar tab per file (Ctrl+Tab menyusul)
                         Row(modifier = Modifier.fillMaxWidth().background(SURFACE)) {
                             openFiles.keys.forEach { name ->
                                 val sel = name == currentFile
@@ -492,121 +347,51 @@ fun main() = application {
                                         .padding(6.dp))
                             }
                         }
-                        // Fokus klik (temuan 14 Sep): klik mouse TIDAK memindahkan
-                        // fokus ke Chromium (Tab bisa). Tiap Press: fokus Compose
-                        // + browser.setFocus(true) native, TANPA consume supaya
-                        // klik tetap sampai ke CEF (posisi kursor) + keyboard masuk.
-                        val editorFocus = remember { FocusRequester() }
-                        Box(Modifier.weight(1f)
-                            .focusRequester(editorFocus)
-                            .focusable()
-                            .pointerInput(Unit) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val ev = awaitPointerEvent()
-                                        if (ev.type == PointerEventType.Press) {
-                                            var fok = false
-                                            var brw = false
-                                            try { editorFocus.requestFocus(); fok = true }
-                                            catch (_: Exception) { }
-                                            try { cefBrowser?.setFocus(true); brw = cefBrowser != null }
-                                            catch (_: Exception) { }
-                                            println("[FOCUS] press fok=$fok browser=$brw")
+                        // Editor RSTA via SwingPanel (irisan 2): Swing native,
+                        // fokus klik otomatis, tanpa jembatan JS/CEF.
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            SwingPanel(
+                                factory = {
+                                    val area = RSyntaxTextArea()
+                                    area.syntaxEditingStyle = SyntaxConstants.SYNTAX_STYLE_PYTHON
+                                    area.isCodeFoldingEnabled = true
+                                    area.antiAliasingEnabled = true
+                                    area.font = java.awt.Font(
+                                        java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, fontSize)
+                                    area.background = java.awt.Color(0x0D, 0x11, 0x17)
+                                    area.foreground = java.awt.Color(0xC9, 0xD1, 0xD9)
+                                    area.currentLineHighlightColor =
+                                        java.awt.Color(0x16, 0x1B, 0x22)
+                                    area.selectionColor = java.awt.Color(0x26, 0x4A, 0x77)
+                                    area.text = openFiles[currentFile].orEmpty()
+                                    rstaRef = area
+                                    RTextScrollPane(area)
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                                update = { pane ->
+                                    try {
+                                        val sp = (pane as? RTextScrollPane)?.viewport?.view
+                                            as? RSyntaxTextArea
+                                        if (sp != null && sp.font.size != fontSize) {
+                                            sp.font = java.awt.Font(
+                                                java.awt.Font.MONOSPACED,
+                                                java.awt.Font.PLAIN, fontSize)
                                         }
-                                    }
-                                }
-                            }) {
-                        if (!kcefReady) {
-                            Text("Initializing KCEF…", Modifier.align(Alignment.Center), color = TEXT)
-                        } else {
-                            val state = rememberWebViewState("file://${webPageFile.absolutePath}")
-                            var done by remember { mutableStateOf(false) }
-                            WebView(state, Modifier.fillMaxSize(), navigator = navigator,
-                                webViewJsBridge = jsBridge,
-                                onCreated = fun(b: KCEFBrowser) { cefBrowser = b },
-                                onDispose = fun(_: KCEFBrowser) { cefBrowser = null },
-                                // Factory sendiri: defaultWebViewFactory crash
-                                // (createContext null saat race init, 14 Sep).
-                                // Kita tak butuh custom UA → tanpa requestContext.
-                                factory = fun(param: WebViewFactoryParam): KCEFBrowser {
-                                    val url = (param.state.content as? WebContent.Url)?.url
-                                        ?: KCEFBrowser.BLANK_URI
-                                    return param.client.createBrowser(
-                                        url, param.rendering, param.transparent)
-                                })
-                            // Indikator load TIDAK boleh overlay di atas WebView:
-                            // view yang muncul/hilang mencuri fokus keyboard
-                            // (temuan 14 Sep: ketikan mati setelah 2-3 huruf).
-                            // Status cukup di log + status bar.
-                            LaunchedEffect(state.loadingState) {
-                                if (done) return@LaunchedEffect
-                                logLine = "[>] memuat editor…"
-                                var ready = false
-                                for (i in 1..20) {
-                                    try {
-                                        var got: String? = null
-                                        navigator.evaluateJavaScript("(typeof getCode==='function')?'BRIDGE_OK':'NO_BRIDGE'") { got = it.toString() }
-                                        delay(1000)
-                                        if (got != null && "BRIDGE_OK" in got!!) { ready = true; break }
-                                    } catch (_: Exception) {
-                                        delay(1000)
-                                    }
-                                }
-                                println("[SPIKE] BRIDGE_READY=$ready")
-                                done = true
-                                bridgeOk = ready
-                                if (ready) {
-                                    // Tahan splash sampai paint (temuan 14 Sep): bridge OK
-                                    // != frame pertama ter-render. +800ms agar CEF
-                                    // sempat paint sebelum splash dibuka.
-                                    delay(800)
-                                    showSplash = false
-                                    logLine = "[OK] editor siap"
-                                    // Kembalikan fokus ke editor CM6
-                                    try {
-                                        navigator.evaluateJavaScript(
-                                            "document.querySelector('.cm-content')?.focus()") {}
                                     } catch (_: Exception) { }
-                                    // F5 dari dalam halaman → callNative ZcodeRun.
-                                    // preventDefault agar CEF tak reload.
-                                    try {
-                                        navigator.evaluateJavaScript(
-                                            "(function(){if(window.__zcodeF5)return;window.__zcodeF5=true;" +
-                                            "document.addEventListener('keydown',function(e){" +
-                                            "if(e.key==='F5'){e.preventDefault();" +
-                                            "if(window.kmpJsBridge&&window.kmpJsBridge.callNative)" +
-                                            "{window.kmpJsBridge.callNative('ZcodeRun','{}',null);}}" +
-                                            "},true);})()") {}
-                                    } catch (_: Exception) { }
-                                } else {
-                                    logLine = "[ERR] bridge editor tak siap"
                                 }
-                            }
+                            )
                         }
-                    } // tutup Box editor
-                    } // tutup Column editor
-                    // Drawer SIBLING kanan (revisi 14 Sep, final): overlay Compose
-                    // TAK BISA menimpa CEF native (heavyweight selalu di atas) —
-                    // itu akar splash tak nutup + drawer di bawah editor.
-                    // Sibling resize terbukti tampil penuh (v5). Blink resize
-                    // 150ms diterima sementara; DrawerPanel top-level tetap
-                    // (tanpa receiver scope).
+                    }
                     DrawerPanel(
                         Modifier.fillMaxHeight(),
                         outputOpen, outLines, outList, { closeOutput() })
                 }
-                // Status bar: interpreter + run (versi pindah ke About nanti).
                 Row(Modifier.fillMaxWidth().height(26.dp).background(SURFACE),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text("  $pyInfo  ·  run#$runCount  ·  $logLine",
                         fontSize = 11.sp, color = TEXT, maxLines = 1)
                 }
-            } // tutup Column utama
-            // Splash sibling TERAKHIR (overlay, bukan recreate): hitam + logo.
-            // VERDICT eksperimen merah 14 Sep: overlay Compose TAK BISA menutup
-            // area CEF native (heavyweight di atas). Splash tetap berguna untuk
-            // fase sebelum CEF ada + area non-editor; blink resize CEF tak bisa
-            // ditutup splash (saran teman gugur untuk area editor).
+            }
             if (showSplash) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF0D1117)),
                     contentAlignment = Alignment.Center) {
@@ -617,7 +402,7 @@ fun main() = application {
                         } else {
                             Text("{Z}", color = ACCENT, fontSize = 64.sp)
                         }
-                        Text(splashMsg, color = Color(0xFF8B949E),
+                        Text("memuat editor…", color = Color(0xFF8B949E),
                             fontSize = 12.sp, modifier = Modifier.padding(top = 12.dp))
                     }
                 }
