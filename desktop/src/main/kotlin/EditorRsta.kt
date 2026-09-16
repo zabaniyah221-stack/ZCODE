@@ -1,4 +1,6 @@
 import org.fife.ui.autocomplete.AutoCompletion
+import org.fife.ui.autocomplete.AutoCompletionEvent
+import org.fife.ui.autocomplete.AutoCompletionListener
 import org.fife.ui.autocomplete.BasicCompletion
 import org.fife.ui.autocomplete.DefaultCompletionProvider
 import org.fife.ui.autocomplete.TemplateCompletion
@@ -83,7 +85,7 @@ private val PY_BUILTINS = listOf(
 )
 
 /** Autocomplete: keyword + template blok (dipicu Ctrl+Spasi, popup jinak). */
-/** Auto-activation 200ms (16 Sep, mau user): popup muncul saat ketik. */
+/** Auto-activation 160ms (16 Sep, mau user): popup muncul saat ketik. */
 fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val p = JediCompletionProvider()
     // WAJIB (16 Sep, bukti source CompletionProviderBase:178): flag
@@ -108,7 +110,7 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val ac = AutoCompletion(p)
     ac.setTriggerKey(KeyStroke.getKeyStroke("ctrl SPACE"))
     ac.setAutoActivationEnabled(true)
-    ac.setAutoActivationDelay(200)
+    ac.setAutoActivationDelay(160)
     // Popup selalu tampil walau 1 match (16 Sep): default RSTA
     // silent auto-insert saat count==1 → terasa mati. Bukti source 3.3.2.
     ac.setAutoCompleteSingleChoices(false)
@@ -119,6 +121,21 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
         rend.delegateRenderer.foreground = ED_FG
         ac.setListCellRenderer(rend)
     } catch (_: Exception) { }
+    // Scrollbar popup gelap (16 Sep): styling saat POPUP_SHOWN, karena
+    // popup dibuat malas (lazy) setelah install — tak bisa dijangkau awal.
+    ac.addAutoCompletionListener(AutoCompletionListener { e ->
+        try {
+            if (e.eventType == AutoCompletionEvent.Type.POPUP_SHOWN) {
+                for (w in java.awt.Window.getWindows()) {
+                    try {
+                        if (w.isVisible && w.javaClass.name.contains("AutoCompletePopup")) {
+                            catGelapPopup(w)
+                        }
+                    } catch (_: Exception) { }
+                }
+            }
+        } catch (_: Exception) { }
+    })
     ac.install(area)
     return ac
 }
@@ -339,6 +356,20 @@ fun styleDarkScrollbars() {
             javax.swing.plaf.ColorUIResource(ED_SEL))
         javax.swing.UIManager.put("List.selectionForeground",
             javax.swing.plaf.ColorUIResource(java.awt.Color.WHITE))
+    } catch (_: Exception) { }
+}
+
+/**
+ * Scrollbar popup completion gelap (16 Sep): popup RSTA (JWindow +
+ * JScrollPane, scrollbar ALWAYS) tak kena delegate editor. Pasang saat
+ * event POPUP_SHOWN — tanpa API internal, via tree jendela.
+ */
+private fun catGelapPopup(c: java.awt.Component) {
+    try {
+        if (c is javax.swing.JScrollBar) {
+            c.ui = DarkScrollBarUI()
+        }
+        (c as? java.awt.Container)?.components?.forEach { catGelapPopup(it) }
     } catch (_: Exception) { }
 }
 
