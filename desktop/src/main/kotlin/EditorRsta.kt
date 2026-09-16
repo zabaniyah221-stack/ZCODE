@@ -244,13 +244,29 @@ class PythonCompileParser : AbstractParser() {
                 val line1 = m.groupValues[1].toIntOrNull() ?: 1
                 val msgLine = err.lines().lastOrNull { it.isNotBlank() } ?: "syntax error"
                 val msg = msgLine.trim().take(300)
-                // Span EKSPILISIT (fix 15 Sep malam): notice 3-arg (offset-1)
-                // dirender ngawur full-width bawah viewport. Beri offset+length
-                // = baris penuh agar squiggle tepat di baris salah.
-                // Notice 0-based, py_compile 1-based.
+                // Span PRESISI (16 Sep, bukti deterministik): span selebar
+                // baris penuh memicu fast-path painter RSTA
+                // (offs==span view → squiggle full-width di bawah viewport,
+                // terbukti hanya di dokumen 1 baris; multi-baris benar).
+                // py_compile 3.10+ mencetak baris caret '^' → pakai kolomnya.
                 val line0 = (line1 - 1).coerceAtLeast(0)
-                res.addNotice(DefaultParserNotice(
-                    this, msg, line0, lineStart(doc, line0), lineLen(doc, line0)))
+                val ls = lineStart(doc, line0)
+                val le = ls + lineLen(doc, line0)
+                val caretCol = err.lines().firstOrNull { ln ->
+                    ln.isNotBlank() && ln.trim() == "^" && '\t' !in ln
+                }?.let { (it.indexOf('^') - 4).coerceAtLeast(0) }
+                val start: Int
+                val len: Int
+                if (caretCol != null) {
+                    // Squiggle tepat di char penyebab (mau user).
+                    start = (ls + caretCol).coerceIn(ls, (le - 1).coerceAtLeast(ls))
+                    len = 1
+                } else {
+                    // Fallback lama: selebar baris (span eksplisit 15 Sep).
+                    start = ls
+                    len = (le - ls).coerceAtLeast(1)
+                }
+                res.addNotice(DefaultParserNotice(this, msg, line0, start, len))
             }
         } catch (_: Exception) {
             // Parser tak boleh meledak: sunyi = tanpa squiggle.
