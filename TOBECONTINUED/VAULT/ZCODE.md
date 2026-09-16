@@ -1,0 +1,13 @@
+# ZCODE
+
+IDE Python Android, offline-first (Chaquopy 3.11, AGP 8.2.2, Kotlin). v1.0.23.
+
+- Repo utama: ~/PROJECTS/ZCODE/ZCODE (upstream muzape28-blip/ZCODE, read-only). Playground: ~/PROJECTS/ZCODE-fork (zabaniyah221-stack).
+- Tema: GitHub Dark + Cobalt2 (palet asal NOTEZ). AGENTS.md honesty discipline berlaku.
+- Terpasang di HP (com.zaba.zcode). Uji ketik-agent: tertunda (ADB flapping).
+- Desktop Linux: repo cadangan zabaniyah221-stack/ZCODE ("update to desktop linux"), sync ke upstream 13 Sep 2026. Rencana: RENCANA_DESKTOP_V001 (Compose Desktop + KCEF, Fase 0 spike ukur RAM di Yoga).
+- SPIKE FASE 0 (13 Sep, repo zabaniyah221-stack/zcode_spike): KCEF render CM6 ✓, ketik + autocomplete manual ✓ (screenshot). RAM PSS: JVM 285MB + Chromium 284MB = 569MB < ambang 600MB → LULUS TIPIS. Syarat: JDK penuh (headless gagal), tutup aplikasi lain saat run. Round-trip JS otomatis BELUM (setCode tak mendarat).
+- FASE 0 DITUTUP: round-trip rev2 ROUNDTRIP_PASS=true (BRIDGE_READY poll, CI hijau) → KCEF RESMI jadi engine. Lanjut Fase 1 (skeleton, build di CI).
+- FASE 1 (14 Sep, branch `arena/zcode-desktop`): Workbench v0.0.1 minimal — editor CM6 bundle byte-exact + Run subprocess + output + tab + timer tahap. KLIK-TULIS ✓ via `browser.setFocus(true)` native. Crash createContext → factory custom. Aturan UX: shortcut wajib punya tombol. RAM: app JVM ~431MB + jcef ~280MB + gradle ~360MB (daemon dimatikan hemat 421MB).
+- Terkait: [[HERMES x ZAQI]], [[Proyek/NOTEZ]], [[Harian/2026-09-14]]
+Update 14 Sep sore. Branch arena/zcode-desktop commit 677bb42. Installed v4 verified 40-50 detik start, E2E requests OK 2.31.0. Drawer kini OVERLAY kanan tanpa resize CEF anti repaint putih. Splash tahan 800ms pasca-bridge. CI merah 2x sedang diperbaiki scope-align. Aturan ganti versi pkill plus hapus installed lama lalu install baru.Banding Android vs Desktop 14 Sep. Editor bundle SAMA persis md5 identik, host beda WebView vs KCEF Chromium 500MB. Output Android layer fullscreen streaming batcher 40ms buffer 10rb baris ANSI log disk, Desktop dump readText sekaligus. 3 beda terbesar eksekusi Chaquopy in-process vs subprocess buta, streaming virtualized vs dump, input interaktif ada vs tidak ada.Riset RSyntaxTextArea 15 Sep dini hari. Bundle CodeMirror TIDAK BISA Java vs JS beda teknologi. Python highlight SYNTAX_STYLE_PYTHON verified, Theme.java verified, 50 plus bahasa folding search-replace completion add-on, BSD Maven Central stars 1254 push Agu 2026. Pemakai Arduino IDE 1.x fork arduino slash RSyntaxTextArea PR 3019. UX proven jutaan user Arduino. Korban multi-cursor plus byte-exact parity, gain tanpa web tanpa blink fokus native F5 trivial jar 2MB start instan.
