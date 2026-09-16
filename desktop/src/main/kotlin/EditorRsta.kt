@@ -41,11 +41,6 @@ fun applyGithubDarkTheme(area: RSyntaxTextArea) {
     area.currentLineHighlightColor = ED_LINE
     area.selectionColor = ED_SEL
     area.caretColor = ED_FG
-    // Blok putih (16 Sep): markOccurrencesColor default 224,224,224 terang —
-    // tiap kata di bawah kursor dibungkus blok terang. Samakan tema gelap.
-    try {
-        area.markOccurrencesColor = Color(0x1F, 0x3A, 0x5F)
-    } catch (_: Exception) { }
     val s = area.syntaxScheme
     s.getStyle(Token.RESERVED_WORD)?.foreground = C_KEYWORD
     s.getStyle(Token.RESERVED_WORD_2)?.foreground = C_KEYWORD
@@ -382,10 +377,12 @@ fun newPythonEditor(
     area.antiAliasingEnabled = true
     area.font = Font(Font.MONOSPACED, Font.PLAIN, fontSize)
     applyGithubDarkTheme(area)
-    // Paket editor 15 Sep sore: tanpa border, wrap kata, mark occurrences.
+    // Paket editor 15 Sep sore: tanpa border, wrap kata.
+    // markOccurrences MATI (16 Sep, mau user): tanpa highlight blok
+    // terang maupun gelap di kata bawah kursor = transparan.
     area.lineWrap = true
     area.wrapStyleWord = true
-    area.markOccurrences = true
+    area.markOccurrences = false
     area.margin = java.awt.Insets(4, 6, 4, 6)
     area.text = initialText
     installPythonCompletion(area)
