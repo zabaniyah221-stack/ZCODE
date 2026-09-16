@@ -83,7 +83,7 @@ private val PY_BUILTINS = listOf(
 )
 
 /** Autocomplete: keyword + template blok (dipicu Ctrl+Spasi, popup jinak). */
-/** Auto-activation 300ms (paket 15 Sep sore): popup muncul saat ketik. */
+/** Auto-activation 200ms (16 Sep, mau user): popup muncul saat ketik. */
 fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val p = JediCompletionProvider()
     // WAJIB (16 Sep, bukti source CompletionProviderBase:178): flag
@@ -108,7 +108,7 @@ fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val ac = AutoCompletion(p)
     ac.setTriggerKey(KeyStroke.getKeyStroke("ctrl SPACE"))
     ac.setAutoActivationEnabled(true)
-    ac.setAutoActivationDelay(300)
+    ac.setAutoActivationDelay(200)
     // Popup selalu tampil walau 1 match (16 Sep): default RSTA
     // silent auto-insert saat count==1 → terasa mati. Bukti source 3.3.2.
     ac.setAutoCompleteSingleChoices(false)
