@@ -41,6 +41,11 @@ fun applyGithubDarkTheme(area: RSyntaxTextArea) {
     area.currentLineHighlightColor = ED_LINE
     area.selectionColor = ED_SEL
     area.caretColor = ED_FG
+    // Blok putih (16 Sep): markOccurrencesColor default 224,224,224 terang —
+    // tiap kata di bawah kursor dibungkus blok terang. Samakan tema gelap.
+    try {
+        area.markOccurrencesColor = Color(0x1F, 0x3A, 0x5F)
+    } catch (_: Exception) { }
     val s = area.syntaxScheme
     s.getStyle(Token.RESERVED_WORD)?.foreground = C_KEYWORD
     s.getStyle(Token.RESERVED_WORD_2)?.foreground = C_KEYWORD
@@ -86,6 +91,11 @@ private val PY_BUILTINS = listOf(
 /** Auto-activation 300ms (paket 15 Sep sore): popup muncul saat ketik. */
 fun installPythonCompletion(area: RSyntaxTextArea): AutoCompletion {
     val p = JediCompletionProvider()
+    // WAJIB (16 Sep, bukti source CompletionProviderBase:178): flag
+    // autoActivateAfterLetters default FALSE → tanpa baris ini timer
+    // auto-activation tak pernah restart → ketik tak pernah popup.
+    // Manual Ctrl+Spasi lolos karena bypass cek ini (temuan user).
+    p.setAutoActivationRules(true, null)
     for (kw in PY_KEYWORDS) p.addCompletion(BasicCompletion(p, kw))
     for (kw in PY_BUILTINS) p.addCompletion(BasicCompletion(p, kw))
     p.addCompletion(TemplateCompletion(p, "def", "def \${name}(\${args}):",
