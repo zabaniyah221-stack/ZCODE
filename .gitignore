@@ -7,3 +7,6 @@ node_modules/
 *.keystore
 *.p12
 *.pfx
+
+# Local authentication state; never commit
+arena/zcode-desktop/TOBECONTINUED/VAULT/auth.json
