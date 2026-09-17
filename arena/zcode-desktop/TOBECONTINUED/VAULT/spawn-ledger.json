@@ -1,0 +1,28 @@
+[
+  {
+    "pid": 225691,
+    "create_time": 1789622950.06,
+    "purpose": "mcp-helper",
+    "install": "b6773e1712cd",
+    "spawner_pid": 225659,
+    "spawner_create": 1789622938.58,
+    "registered_at": 1789622950.7597787,
+    "argv": "/home/zaqi/.hermes/node/bin/node /home/zaqi/obsidian-mcp/build/index.js /home/zaqi/vault",
+    "host": "",
+    "port": null,
+    "profile": ""
+  },
+  {
+    "pid": 230093,
+    "create_time": 1789624465.71,
+    "purpose": "mcp-helper",
+    "install": "b6773e1712cd",
+    "spawner_pid": 230054,
+    "spawner_create": 1789624455.97,
+    "registered_at": 1789624466.430086,
+    "argv": "/home/zaqi/.local/bin/node /home/zaqi/obsidian-mcp/build/index.js /home/zaqi/vault",
+    "host": "",
+    "port": null,
+    "profile": ""
+  }
+]
