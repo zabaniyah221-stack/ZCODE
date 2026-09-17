@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - "arena/**"
+      # Branch desktop (arena/zcode-desktop) tidak menjalankan gate Android:
+      # app/ sengaja dihapus, kontraknya desktop-only (lihat desktop/).
+      - "!arena/zcode-desktop"
       # RC/production branches own optimized/release pipelines; never emit a
       # competing Debug APK from those pushes.
       - "!arena/v1020-rc1"
