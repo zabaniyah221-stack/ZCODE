@@ -14,3 +14,5 @@ Dibaca sebelum eksekusi destruktif. Semua pernah kejadian sungguhan.
 10. **xfdesktop zombie** (proses hidup, jendela Desktop hilang) → kill PID + jalankan fresh.
 11. **Ikon wifi hilang** = nm-applet tak ada di autostart sesi. Fix: Settings → Sesi → Aplikasi mulai otomatis → centang NetworkManager + `xfce4-panel -r`. Jangan restart applet manual (tak persisten).
 12. **Monitor timeout JANGAN dirangkai aksi destruktif** — loop pantau yang habis batas lalu jatuh ke purge/kill = eksekusi buta (kejadian 15 Sep: purge Epiphany jalan padahal download 64M). Destruktif wajib guard verifikasi selesai dulu, atau pisah jadi job kedua setelah ACC.
+
+13. **m-banking (Livin) + automation = RTP-02.** Zerotap MCP jalan via Accessibility Service → Livin anggap lingkungan tak aman, tolak buka/QRIS (RTP-02). TERKONFIRMASI orang dalam IT Livin (17 Sep): RTP-02 = flag root / system-control-navigate leak / app sideload non-PlayStore — intinya Livin menolak proses yang terlihat seperti bot atau screen-stealth. SOP sebelum buka Livin: matikan MCP Server + Accessibility zerotap, disconnect ADB, force-stop Livin (clear cache saja, JANGAN clear data), buka ulang. Masih bandel → reboot.
